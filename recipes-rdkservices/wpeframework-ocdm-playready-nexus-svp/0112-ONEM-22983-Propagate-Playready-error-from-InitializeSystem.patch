@@ -1,0 +1,24 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 2 Nov 2021 11:05:39 +0100
+Subject: [PATCH] ONEM-22983: Propagate Playready error code from
+ InitializeSystem
+
+---
+ MediaSystem.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index de79e1e..570a227 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -303,6 +303,7 @@ public:
+         if (DRM_FAILED(dr))
+         {
+             LOGGER(LERROR_, "Playready System Initialize failed (error: 0x%08X)", static_cast<unsigned int>(dr));
++            if (dr == DRM_E_BRCM_PLATFORM_ALREADY_INITIALIZED) cr = CDMi_BUSY_CANNOT_INITIALIZE;
+         }
+ 
+         return cr;
+-- 
+2.25.1
+

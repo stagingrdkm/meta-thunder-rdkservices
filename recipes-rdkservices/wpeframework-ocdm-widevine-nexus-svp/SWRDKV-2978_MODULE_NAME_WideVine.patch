@@ -1,0 +1,23 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a93fb6d..9ae26c5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -74,6 +74,7 @@ target_compile_definitions(${DRM_PLUGIN_NAME}
+     PRIVATE
+         USE_CENC${CENC_VERSION}
+         CENC_VERSION=${CENC_VERSION}
++        MODULE_NAME=${DRM_PLUGIN_NAME}
+ )
+ 
+ target_link_libraries(${DRM_PLUGIN_NAME} 
+--- a/MediaSystem.cpp	2021-07-30 11:47:27.546364915 -0400
++++ b/MediaSystem.cpp	2021-07-30 11:47:22.330323872 -0400
+@@ -58,6 +58,8 @@
+ 
+ using namespace WPEFramework;
+ 
++MODULE_NAME_DECLARATION(BUILD_REFERENCE)
++
+ namespace CDMi {
+ 
+ class WideVine : public IMediaKeys, public widevine::Cdm::IEventListener

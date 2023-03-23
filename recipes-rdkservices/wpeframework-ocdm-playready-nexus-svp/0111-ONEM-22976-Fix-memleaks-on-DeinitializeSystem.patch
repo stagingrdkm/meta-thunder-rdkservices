@@ -1,0 +1,137 @@
+From: Lukasz Wasylyk <lukasz.wasylyk@redembedded.com>
+Date: Tue, 28 Oct 2021 10:50:00 +0100
+Subject: ONEM-22976: Fix memleaks on DeinitializeSystem and Filedesc leaks on LoadRevocationList.
+
+Index: OCDM-Playready-Nexus-SVP/MediaSystem.cpp
+===================================================================
+--- OCDM-Playready-Nexus-SVP.orig/MediaSystem.cpp
++++ OCDM-Playready-Nexus-SVP/MediaSystem.cpp
+@@ -153,6 +153,7 @@ public:
+         , m_meteringCertificate(nullptr)
+         , m_meteringCertificateSize(0)
+         , m_mediaKeySessionsCount(0)
++        , m_dstrHDSPath(DRM_EMPTY_DRM_STRING)
+     {
+         NxClient_JoinSettings joinSettings;
+         NxClient_AllocSettings nxAllocSettings;
+@@ -188,9 +189,9 @@ public:
+             delete [] m_meteringCertificate;
+             m_meteringCertificate = nullptr;
+         }
+-        delete drmdir_;
+-        delete m_oemSettings.binFileName;
+-        delete m_oemSettings.defaultRWDirName;
++        delete [] drmdir_;
++        delete [] m_oemSettings.binFileName;
++        delete [] m_oemSettings.defaultRWDirName;
+         ASSERT(m_poAppContext.get() == nullptr);
+         NxClient_Free(&m_nxAllocResults);
+         NxClient_Uninit();
+@@ -260,8 +261,8 @@ public:
+             DeinitializeSystem();
+         }
+ 
+-        delete m_oemSettings.binFileName;
+-        delete m_oemSettings.defaultRWDirName;
++        delete [] m_oemSettings.binFileName;
++        delete [] m_oemSettings.defaultRWDirName;
+         m_oemSettings.binFileName = nullptr;
+         m_oemSettings.defaultRWDirName = nullptr;
+ 
+@@ -337,10 +338,19 @@ public:
+         }
+ 
+         Drm_Platform_Uninitialize(m_drmOemContext);
+-        delete m_oemSettings.binFileName;
+-        delete m_oemSettings.defaultRWDirName;
+-        m_oemSettings.binFileName = nullptr;
++        if (m_poAppContext.get() != nullptr) delete m_poAppContext.get();
++        if (drmdir_ != nullptr) delete [] drmdir_;
++        if (m_oemSettings.binFileName != nullptr) delete [] m_oemSettings.binFileName;
++        if (m_oemSettings.defaultRWDirName != nullptr ) delete [] m_oemSettings.defaultRWDirName;
++        drmdir_ = nullptr;
++        m_oemSettings.binFileName = nullptr;
+         m_oemSettings.defaultRWDirName = nullptr;
++        if (m_pbOpaqueBuffer != NULL) SAFE_OEM_FREE(m_pbOpaqueBuffer);
++        m_pbOpaqueBuffer = NULL;
++        if (m_pbRevocationBuffer != NULL) SAFE_OEM_FREE(m_pbRevocationBuffer);
++        m_pbRevocationBuffer = NULL;
++        if (m_dstrHDSPath.pwszString != nullptr ) delete [] m_dstrHDSPath.pwszString;
++        m_dstrHDSPath.pwszString = nullptr;
+     }
+ 
+     CDMi_RESULT CreateMediaKeySession(
+@@ -618,8 +628,8 @@ public:
+         fseek(fRev, 0, SEEK_END);
+         fileSize = ftell(fRev);
+         fseek(fRev, 0, SEEK_SET);
+-
+-        revBuf = (uint8_t *)BKNI_Malloc(fileSize);
++        /* mind that ftell can return -1 or 0 in some cases */
++        if (fileSize > 0 ) revBuf = (uint8_t *)BKNI_Malloc(fileSize);
+         if( revBuf == nullptr)
+         {
+             goto ErrorExit;
+@@ -644,13 +654,13 @@ public:
+ 
+         if( revBuf != nullptr)
+             BKNI_Free(revBuf);
+-
++        fclose(fRev);
+         return true;
+ 
+     ErrorExit:
+         if( revBuf != nullptr)
+             BKNI_Free(revBuf);
+-
++        fclose(fRev);
+         return false;
+     }
+ 
+@@ -792,8 +802,6 @@ public:
+         CDMi_RESULT cr = CDMi_SUCCESS;
+         DRM_RESULT dr = DRM_SUCCESS;
+ 
+-        DRM_CONST_STRING dstrHDSPath = DRM_EMPTY_DRM_STRING;
+-        
+         DRMFILETIME               ftSystemTime; /* Initialized by Drm_SecureTime_GetValue */
+         DRM_SECURETIME_CLOCK_TYPE eClockType;   /* Initialized by Drm_SecureTime_GetValue */
+ 
+@@ -817,14 +825,14 @@ public:
+         m_cbOpaqueBuffer = MINIMUM_APPCONTEXT_OPAQUE_BUFFER_SIZE;
+         
+         // Store store location
+-        dstrHDSPath.pwszString =  createDrmWchar(m_storeLocation);
+-        dstrHDSPath.cchString = m_storeLocation.length();
++        m_dstrHDSPath.pwszString =  createDrmWchar(m_storeLocation);
++        m_dstrHDSPath.cchString = m_storeLocation.length();
+ 
+         dr  = Drm_Initialize(m_poAppContext.get(), 
+                             m_drmOemContext,
+                             m_pbOpaqueBuffer,
+                             m_cbOpaqueBuffer,
+-                            &dstrHDSPath);
++                            &m_dstrHDSPath);
+ 
+         if(DRM_FAILED(dr)) {
+             LOGGER(LERROR_, "Error in Drm_Initialize: 0x%08lX\n", dr);
+@@ -913,7 +921,6 @@ public:
+             cr =  CDMi_S_FALSE;
+             LOGGER(LERROR_,  "Error in creating system ext,  0x%08lX", dr);
+         }
+-        delete dstrHDSPath.pwszString;
+ 
+         return cr;
+     }
+@@ -980,10 +987,10 @@ private:
+ 
+     std::string m_readDir;
+     std::string m_storeLocation;
+-
+     DRM_BYTE* m_meteringCertificate;
+     uint32_t m_meteringCertificateSize;
+     int32_t m_mediaKeySessionsCount;
++    DRM_CONST_STRING m_dstrHDSPath;
+ };
+ 
+ static SystemFactoryType<PlayReady> g_instance({"video/x-h264", "audio/mpeg"});

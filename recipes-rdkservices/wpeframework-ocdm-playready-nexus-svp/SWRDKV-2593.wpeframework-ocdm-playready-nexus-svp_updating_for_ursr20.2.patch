@@ -1,0 +1,65 @@
+--- old/MediaSessionExt.cpp	2020-10-05 14:35:34.919057449 -0400
++++ new/MediaSessionExt.cpp	2020-10-05 14:44:52.136096967 -0400
+@@ -84,17 +84,17 @@
+     } 
+ 
+     MediaKeySession::DecryptContext * const decryptContext = const_cast<MediaKeySession::DecryptContext *>(static_cast<const MediaKeySession::DecryptContext*>(data));
+-    const DRM_PLAY_OPL_EX2 * const opl = static_cast<const DRM_PLAY_OPL_EX2 *>(outputLevels);
++    const DRM_PLAY_OPL_LATEST * const opl = static_cast<const DRM_PLAY_OPL_LATEST *>(outputLevels);
+ 
+     ASSERT(opl->dwVersion == 0);
+ 
+     decryptContext->outputProtection.setOutputLevels(opl->minOPL);
+ 
+     // MaxRes Decode
+-    const DRM_VIDEO_OUTPUT_PROTECTION_IDS_EX &dvopi = opl->dvopi;
++    const DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_IDS_LATEST &dvopi = opl->dvopi;
+     for (size_t i = 0; i < dvopi.cEntries; ++i)
+     {
+-        const DRM_OUTPUT_PROTECTION_EX &dope = dvopi.rgVop[i];
++        const DRM_ANALOG_VIDEO_OUTPUT_PROTECTION_LATEST &dope = dvopi.rgVop[i];
+         if (DRM_IDENTICAL_GUIDS(&dope.guidId, &g_guidMaxResDecode))
+         {
+             ASSERT(dope.dwVersion == 3);
+@@ -225,7 +225,7 @@
+     // response. There is always only a single BID per server response.
+ 
+     // BID
+-    mBatchId = drmLicenseResponse.m_oBatchID; 
++    mBatchId = drmLicenseResponse.m_idSession; 
+     PrintBase64(sizeof(mBatchId.rgb), mBatchId.rgb, "BatchId/SecureStopId");
+ 
+     // Microsoft says that a batch ID of all zeros indicates some sort of error
+--- old/MediaSession.cpp	2020-10-09 15:24:22.694528387 -0400
++++ new/MediaSession.cpp	2020-10-12 16:34:41.594217761 -0400
+@@ -269,7 +269,7 @@
+ {
+     /*!+!hla fix this, implement for something. */
+     DRM_RESULT dr = DRM_SUCCESS;
+-    const DRM_PLAY_OPL_EX2 *oplPlay = NULL;
++    const DRM_PLAY_OPL_LATEST *oplPlay = NULL;
+ 
+     BSTD_UNUSED(f_pKID);
+     BSTD_UNUSED(f_pLID);
+@@ -280,7 +280,7 @@
+         case DRM_PLAY_OPL_CALLBACK:
+             printf("  Got DRM_PLAY_OPL_CALLBACK from Bind:\r\n");
+             ChkArg( f_pvPolicyCallbackData != NULL );
+-            oplPlay = (const DRM_PLAY_OPL_EX2*)f_pvPolicyCallbackData;
++            oplPlay = (const DRM_PLAY_OPL_LATEST*)f_pvPolicyCallbackData;
+ 
+             printf("    minOPL:\r\n");
+             printf("    wCompressedDigitalVideo   = %d\r\n", oplPlay->minOPL.wCompressedDigitalVideo);
+@@ -362,6 +362,12 @@
+             printf("\r\n\r\n");
+         }
+             break;
++        case DRM_ENABLE_LICENSE_REJECTION_CALLBACK:
++        {
++            printf("  Got DRM_ENABLE_LICENSE_REJECTION_CALLBACK from Bind:\r\n");
++            dr = DRM_SUCCESS;
++        }
++            break;
+         default:
+             printf("  Callback from Bind with unknown callback type of %d.\r\n", f_dwCallbackType);
+ 

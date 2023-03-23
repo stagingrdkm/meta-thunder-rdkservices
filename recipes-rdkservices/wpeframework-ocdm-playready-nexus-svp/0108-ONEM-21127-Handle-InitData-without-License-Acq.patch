@@ -1,0 +1,60 @@
+From 1e94d255738068d4e85cecae12a82e690805a3ac Mon Sep 17 00:00:00 2001
+From: Maciej Kolanski <maciej.kolanski@consult.red>
+Date: Thu, 1 Jul 2021 10:53:07 +0200
+Subject: [PATCH] ONEM-21127: Handle InitData without License Acquisition URL
+
+---
+ MediaSession.cpp | 30 ++++++++++++++++++++++++++++--
+ 1 file changed, 28 insertions(+), 2 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 29c82a8..3a5ac62 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -511,6 +511,32 @@ bool MediaKeySession::playreadyGenerateKeyRequest() {
+                                             nullptr,
+                                             &cbChallenge,
+                                             nullptr);
++
++        if (dr == DRM_E_NO_URL)
++        {
++            // InitData does not contain License Acquisition URL - let's try to initialize challenge without the URL.
++
++            // Allocate one byte for the empty URL.
++            // Passing nullptr to |OnKeyMessage| leads to segfault during RPC conversion to std::string.
++            ChkMem(pchSilentURL = (DRM_CHAR *)Oem_MemAlloc(1));
++            pchSilentURL[0] = 0;
++            cchSilentURL = 0;
++
++            dr = Drm_LicenseAcq_GenerateChallenge(m_poAppContext,
++                                            g_rgpdstrRights,
++                                            DRM_NO_OF(g_rgpdstrRights),
++                                            nullptr,
++                                            !m_customData.empty() ? m_customData.c_str() : nullptr,
++                                            m_customData.size(),
++                                            nullptr,
++                                            nullptr,
++                                            nullptr,
++                                            nullptr,
++                                            nullptr,
++                                            &cbChallenge,
++                                            nullptr);
++        }
++
+         if (dr == DRM_E_BUFFERTOOSMALL)
+         {
+             if (cchSilentURL > 0)
+@@ -540,8 +566,8 @@ bool MediaKeySession::playreadyGenerateKeyRequest() {
+                                             nullptr,
+                                             !m_customData.empty() ? m_customData.c_str() : nullptr,
+                                             m_customData.size(),
+-                                            pchSilentURL,
+-                                            &cchSilentURL,
++                                            (cchSilentURL > 0 ? pchSilentURL : nullptr),
++                                            (cchSilentURL > 0 ? &cchSilentURL : nullptr),
+                                             nullptr,
+                                             nullptr,
+                                             pbChallenge,
+-- 
+2.32.0
+

@@ -1,0 +1,83 @@
+From: Krzysztof Siwek <krzysztof.siwek@consult.red>
+Date: Mon, 20 Mar 2023 09:56:56 +0000
+Subject: [PATCH] [OMWAPPI-1492] Implement Widewine settings in WideVine DRM module
+
+---
+ MediaSystem.cpp | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 84a9bdb..6e45eeb 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -80,26 +80,30 @@ private:
+             , Company()
+             , Model()
+             , Device()
++            , BuildInfo()
++            , CertScope()
+         {
+             Add(_T("certificate"), &Certificate);
+             Add(_T("product"), &Product);
+             Add(_T("company"), &Company);
+             Add(_T("model"), &Model);
+             Add(_T("device"), &Device);
++            Add(_T("buildinfo"), &BuildInfo);
++            Add(_T("certscope"), &CertScope);
+         }
+         ~Config()
+         {
+         }
+-
+     public:
+         Core::JSON::String Certificate;
+         Core::JSON::String Product;
+         Core::JSON::String Company;
+         Core::JSON::String Model;
+         Core::JSON::String Device;
++        Core::JSON::String BuildInfo;
++        Core::JSON::String CertScope;
+     };
+ 
+-
+ public:
+     WideVine()
+         : _adminLock()
+@@ -176,8 +180,14 @@ public:
+ #else
+         client_info.device_name = "Unknown";
+ #endif
+-        client_info.build_info = __DATE__;
+-
++        if (config.BuildInfo.IsSet()) {
++            client_info.build_info = config.BuildInfo.Value();
++        } else {
++            client_info.build_info = __DATE__;
++        }
++        if (config.CertScope.IsSet()) {
++            _certScope = config.CertScope.Value();
++        }
+         // widevine::Cdm::DeviceCertificateRequest cert_request;
+ 
+         if (config.Certificate.IsSet() == true) {
+@@ -223,6 +233,9 @@ public:
+                 //   so the requests can be encrypted. Currently badly supported
+                 // in the EME tests, so turn of for now :-)
+                 _cdm = widevine::Cdm::create(this, &_host, false);
++                if(!_certScope.empty()) {
++                    _cdm->setAppParameter("youtube_cert_scope", _certScope);
++                }
+             }
+         }
+ 
+@@ -364,6 +377,7 @@ private:
+     widevine::Cdm::ClientInfo client_info;
+     HostImplementation _host;
+     SessionMap _sessions;
++    std::string _certScope;
+ };
+ 
+ constexpr char WideVine::_certificateFilename[];
+-- 
+2.30.0
+

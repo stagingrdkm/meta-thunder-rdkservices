@@ -1,0 +1,11 @@
+diff -auNrd old/MediaSystem.cpp new/MediaSystem.cpp
+--- old/MediaSystem.cpp	2020-06-11 09:35:30.520003126 -0400
++++ new/MediaSystem.cpp	2020-06-11 09:35:18.079005136 -0400
+@@ -50,6 +50,7 @@
+         snprintf(joinSettings.name, NXCLIENT_MAX_NAME, "widevine");
+         rc = NxClient_Join(&joinSettings);
+         assert (rc == 0);
++        NxClient_UnregisterAcknowledgeStandby(NxClient_RegisterAcknowledgeStandby());
+         DEBUG_VARIABLE(rc);
+         // Set client info that denotes this as the test suite:
+         client_info.product_name = "WPEFramework";

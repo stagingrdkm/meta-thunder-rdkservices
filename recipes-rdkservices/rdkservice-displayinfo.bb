@@ -1,0 +1,36 @@
+SUMMARY = "RDK services DisplayInfo plugin"
+
+
+# plugin directory in rdkservices repository
+PLUGINDIR="DisplayInfo"
+
+include rdkservices-common/common_plugin.inc
+
+EXTERNALSRC = ""
+SRC_URI += "${DEFAULT_NEXT_SRC_URI}"
+SRCREV_${PN}="${DEFAULT_NEXT_SRC_URI_REVISION}"
+
+PACKAGECONFIG ?= "displayinfo"
+PACKAGECONFIG[displayinfo]  = "-DPLUGIN_DISPLAYINFO=ON -DUSE_DEVICESETTINGS=1,-DPLUGIN_DISPLAYINFO=OFF,"
+
+CXXFLAGS += "${@onemw_rdkversion ( \
+    '3..9','-DdsDISPLAY_QUANTIZATIONRANGE_LIMITED=dsDISPLAY_QUANTIZATION_RANGE_LIMITED \
+            -DdsDISPLAY_QUANTIZATIONRANGE_FULL=dsDISPLAY_QUANTIZATION_RANGE_FULL \
+            -DdsDISPLAY_QUANTIZATIONRANGE_UNKNOWN=dsDISPLAY_QUANTIZATION_RANGE_DEFAULT \
+            ', \
+    d)}"
+
+EXTRA_OECMAKE += " \
+    -DPLUGIN_DISPLAYINFO_AUTOSTART=true \
+    -DPLUGIN_DISPLAYINFO_OUTOFPROCESS=false \
+    -DPLUGIN_DISPLAYINFO_MODE=Off \
+    -DPLUGIN_STATEOBSERVER=off \
+    -DPLUGIN_WAREHOUSE=off \
+    -DPLUGIN_CONTINUEWATCHING=off \
+    -DPLUGIN_FRAMERATE=off \
+    -DPLUGIN_DEVICEDIAGNOSTICS=off \
+ "
+
+RDEPENDS_${PN} += "devicesettings"
+DEPENDS += "devicesettings iarmmgrs"
+

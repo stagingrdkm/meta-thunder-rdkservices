@@ -1,0 +1,39 @@
+diff --git a/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp b/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp
+index 3dda3d5..0a770a3 100644
+--- a/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp
++++ b/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp
+@@ -42,10 +42,18 @@ inline bool mappedBuffer(GstBuffer *buffer, bool writable, uint8_t **data, uint3
+     return true;
+ }
+
++
+ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSampleBuffer, const uint32_t subSampleCount,
+                                                GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15)
++{
++    return opencdm_gstreamer_session_decrypt_ex(session, buffer, subSampleBuffer, subSampleCount, IV, keyID, initWithLast15, NULL);
++}
++
++OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSampleBuffer, const uint32_t subSampleCount,
++                                               GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15, GstCaps* caps)
+ {
+     OpenCDMError result (ERROR_INVALID_SESSION);
++    (void) caps;
+
+     if (session != nullptr) {
+         GstMapInfo dataMap;
+diff --git a/Source/ocdm/adapter/open_cdm_adapter.h b/Source/ocdm/adapter/open_cdm_adapter.h
+index e48858d..77e12d4 100644
+--- a/Source/ocdm/adapter/open_cdm_adapter.h
++++ b/Source/ocdm/adapter/open_cdm_adapter.h
+@@ -58,6 +58,9 @@ extern "C" {
+     EXTERNAL OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
+                                                    GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15);
+
++    EXTERNAL OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
++                                                   GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15, GstCaps* caps=NULL);
++
+ /**
+  * \brief Performs decryption based on adapter implementation.
+  *
+
+ 

@@ -1,0 +1,214 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Fri, 5 Nov 2021 16:30:25 +0100
+Subject: [PATCH] [ONEM-15903] Error reporting for OCDM
+
+---
+ CMakeLists.txt          |  8 ++++++++
+ MediaSession.cpp        | 10 +++++++---
+ MediaSession.h          |  6 ++++++
+ MediaSessionExt.cpp     |  6 +++++-
+ MediaSystem.cpp         | 12 ++++++++---
+ ReportPlayreadyErrors.h | 44 +++++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 79 insertions(+), 7 deletions(-)
+ create mode 100644 ReportPlayreadyErrors.h
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4991ca7..9c13fbd 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -61,5 +61,13 @@ target_link_libraries(${DRM_PLUGIN_NAME}
+         NexusPlayready::NexusPlayready
+ )
+ 
++find_path(LIBODHERR_INCLUDE_DIR "rdk/libodherr/odherr.h")
++if (LIBODHERR_INCLUDE_DIR)
++  message(STATUS "ODH Error reporting support enabled (path: ${LIBODHERR_INCLUDE_DIR})")
++  target_compile_definitions(${DRM_PLUGIN_NAME} PRIVATE -DHAVE_LIBODHERR_ODHERR_H -DODH_SOURCE_NAME="OCDM.Playready")
++  target_include_directories(${DRM_PLUGIN_NAME} PRIVATE ${LIBODHERR_INCLUDE_DIR})
++  target_link_libraries(${DRM_PLUGIN_NAME} PRIVATE odherr jansson)
++endif(LIBODHERR_INCLUDE_DIR)
++
+ install(TARGETS ${DRM_PLUGIN_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX}/share/${NAMESPACE}/OCDM)
+ 
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index cc72819..680451a 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -41,6 +41,8 @@
+ #include <prdy_http.h>
+ #include <drm_data.h>
+ 
++#include "ReportPlayreadyErrors.h"
++
+ using SafeCriticalSection = WPEFramework::Core::SafeSyncType<WPEFramework::Core::CriticalSection>;
+ extern WPEFramework::Core::CriticalSection drmAppContextMutex_;
+ 
+@@ -363,10 +365,10 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+         }
+             break;
+         default:
+-            printf("  Callback from Bind with unknown callback type of %d.\r\n", f_dwCallbackType);
++            LOGGER_NO_THIS(LERROR_, "Callback from Bind with unknown callback type of %d.", f_dwCallbackType);
+ 
+             /* Report that this callback type is not implemented */
+-            ChkDR( DRM_E_NOTIMPL );
++            dr = DRM_E_NOTIMPL;
+     }
+ 
+     ErrorExit:
+@@ -669,6 +671,8 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+                 ToggleKeyIdFormat(DRM_ID_SIZE, oLicenseResponse.m_rgoAcks[i].m_oKID.rgb);
+                 
+                 m_piCallback->OnKeyStatusUpdate("KeyUsable", oLicenseResponse.m_rgoAcks[i].m_oKID.rgb, DRM_ID_SIZE);
++            } else {
++                LOGGER(LERROR_, "Drm_LicenseAcq_ProcessResponse error: [%d]: 0x%08X)", i, (unsigned int)oLicenseResponse.m_rgoAcks[i].m_dwResult);
+             }
+         }
+         m_piCallback->OnKeyStatusesUpdated();
+@@ -766,7 +770,7 @@ CDMi_RESULT MediaKeySession::Decrypt(
+         if( f_pcbOpaqueClearContent == nullptr || f_ppbOpaqueClearContent == nullptr )
+         {
+             dr = DRM_E_INVALIDARG;
+-            goto ErrorExit;
++            ChkDR(dr);
+         }
+ 
+         {
+diff --git a/MediaSession.h b/MediaSession.h
+index fb1d64f..d1c3ba5 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -52,6 +52,12 @@ const DRM_DWORD MAX_NUM_LICENSES = 200;    // max number of licenses (ask the Re
+             fflush(stdout); \
+         }while( 0 )
+ 
++#define LOGGER_NO_THIS(lvl, fmt , ... )    \
++        do{ \
++            fprintf(stdout, "\033[1;%dm[%s:%d](%s) " fmt "\n\033[0m", lvl, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);    \
++            fflush(stdout); \
++        }while( 0 )
++
+ struct OutputProtection {
+     uint16_t compressedDigitalVideoLevel;   //!< Compressed digital video output protection level.
+     uint16_t uncompressedDigitalVideoLevel; //!< Uncompressed digital video output protection level.
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index a9c8666..f3121ca 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -28,6 +28,8 @@
+ #include <sstream>
+ #include <byteswap.h>
+ 
++#include "ReportPlayreadyErrors.h"
++
+ using SafeCriticalSection = WPEFramework::Core::SafeSyncType<WPEFramework::Core::CriticalSection>;
+ extern WPEFramework::Core::CriticalSection drmAppContextMutex_;
+ 
+@@ -184,6 +186,8 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
+             if (DRM_SUCCEEDED(drmLicenseResponse.m_rgoAcks[i].m_dwResult)) {
+                 ToggleKeyIdFormat(DRM_ID_SIZE, drmLicenseResponse.m_rgoAcks[i].m_oKID.rgb);
+                 m_piCallback->OnKeyStatusUpdate("KeyUsable", drmLicenseResponse.m_rgoAcks[i].m_oKID.rgb, DRM_ID_SIZE);
++            } else {
++                LOGGER(LERROR_, "Drm_LicenseAcq_ProcessResponse error: [%d]: 0x%08X)", i, (unsigned int)drmLicenseResponse.m_rgoAcks[i].m_dwResult);
+             }
+         }
+         m_piCallback->OnKeyStatusesUpdated();
+@@ -219,7 +223,7 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
+             // Special handling for DRM_E_DST_STORE_FULL. If this error is
+             // detected for any license, reset the DRM appcontext and return error.
+             if (drmLicenseResponse.m_rgoAcks[i].m_dwResult == DRM_E_DST_STORE_FULL) {
+-                LOGGER(LINFO_, "Found DRM_E_DST_STORE_FULL error in license %d, reinitializing!", i);
++                LOGGER(LERROR_, "Found DRM_E_DST_STORE_FULL error in license %d, reinitializing!", i);
+                 
+                 err = Drm_Reinitialize(m_poAppContext);
+                 if (DRM_FAILED(err))
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 1d6533f..71e7309 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -34,6 +34,8 @@
+ 
+ #include <time.h>
+ 
++#include "ReportPlayreadyErrors.h"
++
+ using namespace WPEFramework;
+ 
+ using SafeCriticalSection = Core::SafeSyncType<WPEFramework::Core::CriticalSection>;
+@@ -293,7 +295,8 @@ public:
+         m_oemSettings.binFileName = createDrmWchar(playreadyPath);
+         m_oemSettings.defaultRWDirName = createDrmWchar(m_readDir);
+ 
+-        ChkDR(Drm_Platform_Initialize((void *)&m_oemSettings));
++        dr = Drm_Platform_Initialize((void *)&m_oemSettings);
++        if (DRM_FAILED(dr)) goto ErrorExit;
+         
+         m_drmOemContext = m_oemSettings.f_pOEMContext;
+         ChkMem(m_drmOemContext);
+@@ -302,8 +305,11 @@ public:
+     ErrorExit:
+         if (DRM_FAILED(dr))
+         {
+-            LOGGER(LERROR_, "Playready System Initialize failed (error: 0x%08X)", static_cast<unsigned int>(dr));
+-            if (dr == DRM_E_BRCM_PLATFORM_ALREADY_INITIALIZED) cr = CDMi_BUSY_CANNOT_INITIALIZE;
++            if (dr == DRM_E_BRCM_PLATFORM_ALREADY_INITIALIZED) {
++                cr = CDMi_BUSY_CANNOT_INITIALIZE;
++            } else {
++                LOGGER(LERROR_, "Playready System Initialize failed (error: 0x%08X)", static_cast<unsigned int>(dr));
++            }
+         }
+ 
+         return cr;
+diff --git a/ReportPlayreadyErrors.h b/ReportPlayreadyErrors.h
+new file mode 100644
+index 0000000..ae8e1c2
+--- /dev/null
++++ b/ReportPlayreadyErrors.h
+@@ -0,0 +1,44 @@
++#ifdef HAVE_LIBODHERR_ODHERR_H
++
++#include <rdk/libodherr/odherr.hpp>
++
++#ifdef ExamineDRValue
++#undef ExamineDRValue
++#endif
++
++#define ExamineDRValue(_drval_,_file_,_line_,_expr_)                                                                   \
++do {                                                                                                                   \
++    if (_drval_ != DRM_SUCCESS) ODH_ERROR_REPORT_CTX_ERROR(_drval_, "Playready internal error", __FUNCTION__, _expr_); \
++} while (false)
++
++#ifdef LOGGER
++#undef LOGGER
++#endif
++
++#ifdef LOGGER_NO_THIS
++#undef LOGGER_NO_THIS
++#endif
++
++#define LOGGER(lvl, fmt , ... )                                                                                     \
++    do {                                                                                                            \
++        fprintf(stdout, "[%s:%d](%s){object=%p} " fmt "\n", __FILE__, __LINE__, __FUNCTION__, this, ##__VA_ARGS__); \
++        fflush(stdout);                                                                                             \
++        if (lvl == LERROR_) {                                                                                       \
++            char *msg = odh_error_report_sprintf(fmt, ##__VA_ARGS__);                                               \
++            ODH_ERROR_REPORT_CTX_ERROR(0, msg, __FUNCTION__);                                                       \
++            free(msg);                                                                                              \
++        }                                                                                                           \
++    } while( 0 )
++
++#define LOGGER_NO_THIS(lvl, fmt, ...)                                                                               \
++    do {                                                                                                            \
++        fprintf(stdout, "[%s:%d](%s) " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);                  \
++        fflush(stdout);                                                                                             \
++        if (lvl == LERROR_) {                                                                                       \
++            char *msg = odh_error_report_sprintf(fmt, ##__VA_ARGS__);                                               \
++            ODH_ERROR_REPORT_CTX_ERROR(0, msg, __FUNCTION__);                                                       \
++            free(msg);                                                                                              \
++        }                                                                                                           \
++    } while( 0 )
++
++#endif
+-- 
+2.25.1
+

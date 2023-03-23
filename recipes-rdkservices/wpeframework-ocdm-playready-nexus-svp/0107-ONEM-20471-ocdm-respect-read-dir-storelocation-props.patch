@@ -1,0 +1,75 @@
+From 366a082c9a77fdc3dbe7c6e3a0096ece76755748 Mon Sep 17 00:00:00 2001
+From: Michal Kucharczyk <mkucharczyk.contractor@libertyglobal.com>
+Date: Thu, 20 May 2021 08:01:00 +0200
+Subject: [PATCH] ONEM-20471: ocdm: respect read-dir/storelocation props
+
+---
+ MediaSystem.cpp | 29 ++++++++++++++++++++++++-----
+ 1 file changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index a2b8dc1..59add66 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -101,8 +101,12 @@ private:
+         Config()
+             : Core::JSON::Container()
+             , MeteringCertificate()
++            , ReadDir()
++            , StoreLocation()
+         {
+             Add(_T("metering"), &MeteringCertificate);
++            Add(_T("read-dir"), &ReadDir);
++            Add(_T("store-location"), &StoreLocation);
+         }
+         ~Config()
+         {
+@@ -110,6 +114,8 @@ private:
+ 
+     public:
+         Core::JSON::String MeteringCertificate;
++        Core::JSON::String ReadDir;
++        Core::JSON::String StoreLocation;
+     };
+ 
+ public:
+@@ -170,18 +176,31 @@ public:
+ 
+     void Initialize(const WPEFramework::PluginHost::IShell * shell, const std::string& configline)
+     {
++        Config config;
++        config.FromString(configline);
++
++        LOGGER(LINFO_,  "configline: %s", configline.c_str());
++
+         string persistentPath = shell->PersistentPath() + string("playready/");
+-        m_readDir = persistentPath;
+-        m_storeLocation = persistentPath + "drmstore";
++
++        if (config.ReadDir.IsSet() == true) {
++          m_readDir = config.ReadDir.Value();
++        } else {
++          m_readDir = persistentPath;
++        }
++
++        if (config.StoreLocation.IsSet() == true) {
++          m_storeLocation = config.StoreLocation.Value();
++        } else {
++          m_storeLocation = persistentPath + "drmstore";
++        }
++
+ 
+         LOGGER(LINFO_,  "m_readDir: %s", m_readDir.c_str());
+         LOGGER(LINFO_,  "m_storeLocation: %s", m_storeLocation.c_str());
+         
+         WPEFramework::Core::SystemInfo::SetEnvironment(_T("HOME"), persistentPath);  
+ 
+-        Config config;
+-        config.FromString(configline);
+-
+         if (config.MeteringCertificate.IsSet() == true) {
+             Core::DataElementFile dataBuffer(config.MeteringCertificate.Value(), Core::File::USER_READ | Core::File::GROUP_READ);
+             
+-- 
+2.7.4
+

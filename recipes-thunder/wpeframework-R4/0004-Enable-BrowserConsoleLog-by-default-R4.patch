@@ -1,0 +1,46 @@
+From 53758afccfc690597999d270ee592a416411e0d9 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 7 Apr 2021 14:20:43 -0400
+Subject: [PATCH] Enable BrowserConsoleLog by default
+
+---
+ Source/WPEFramework/GenericConfig.cmake | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/Source/WPEFramework/GenericConfig.cmake b/Source/WPEFramework/GenericConfig.cmake
+index 048e8e80..d57a81b8 100644
+--- a/Source/WPEFramework/GenericConfig.cmake
++++ b/Source/WPEFramework/GenericConfig.cmake
+@@ -158,6 +158,20 @@ if (PLUGIN_WEBSERVER OR PLUGIN_WEBKITBROWSER OR PLUGIN_ESPIAL)
+     endif (PLUGIN_WEBSERVER)
+ endif()
+
++map()
++    kv(category "BrowserConsoleLog")
++    kv(module "Plugin_WebKitBrowser")
++    kv(enabled true)
++end()
++ans(PLUGIN_WEBKITBROWSER_TRACING)
++
++map()
++    kv(category "BrowserConsoleLog")
++    kv(module "Plugin_WebKitBrowserExtension")
++    kv(enabled true)
++end()
++ans(PLUGIN_WEBKITBROWSEREXTENSION_TRACING)
++
+
+ if(NOT VIRTUALINPUT)
+     map()
+@@ -286,6 +300,8 @@ else()
+     map_append(${CONFIG} tracing ${PLUGIN_STARTUP_TRACING})
+     map_append(${CONFIG} tracing ${PLUGIN_SHUTDOWN_TRACING})
+     map_append(${CONFIG} tracing ${PLUGIN_NOTIFICATION_TRACING})
++    map_append(${CONFIG} tracing ${PLUGIN_WEBKITBROWSER_TRACING})
++    map_append(${CONFIG} tracing ${PLUGIN_WEBKITBROWSEREXTENSION_TRACING})
+     map_append(${CONFIG} tracing ${PLUGIN_FATAL_TRACING})
+     endif(TRACE_SETTINGS)
+ endif()
+
+
+

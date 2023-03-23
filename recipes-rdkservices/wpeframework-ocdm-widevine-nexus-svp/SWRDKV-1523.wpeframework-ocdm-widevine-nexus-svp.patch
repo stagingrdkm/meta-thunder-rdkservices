@@ -1,0 +1,107 @@
+--- old/MediaSession.cpp	2019-02-13 10:22:59.405627218 -0500
++++ new/MediaSession.cpp	2019-02-13 10:27:25.974310478 -0500
+@@ -27,6 +27,12 @@
+ #include <string.h>
+ #include <sys/utsname.h>
+ 
++#define HANDLE_DEVICE_PROVISIONING_REQUEST
++#ifdef HANDLE_DEVICE_PROVISIONING_REQUEST
++// has to use curl for posting provision request
++#include <curl/curl.h>
++#endif
++
+ #include <core/core.h>
+ 
+ #define NYI_KEYSYSTEM "keysystem-placeholder"
+@@ -68,6 +74,49 @@
+     }
+ }
+ 
++#ifdef HANDLE_DEVICE_PROVISIONING_REQUEST
++static const std::string kProvisioningServerUrl =
++    "https://www.googleapis.com/"
++    "certificateprovisioning/v1/devicecertificates/create"
++    "?key=AIzaSyB-5OLKTx2iU5mko18DfdwK5611JIjbUhE";
++
++static std::string msgBuffer;
++static size_t curl_writeback(void *ptr, size_t size, size_t nmemb, void *stream)
++{
++    msgBuffer.append((char*)ptr, size * nmemb);
++    return size * nmemb;
++}
++
++// Presume that only one CDM instance runs, otherwise move this into object 
++std::string _cdm_request;
++
++static void sendPostRequest(std::string& request,
++std::string& response)
++{
++    std::string server_url = kProvisioningServerUrl;
++
++    response.clear();
++
++    msgBuffer.clear();
++    server_url += "&signedRequest=";
++    server_url += request;
++    CURL *curl;
++    CURLcode res;
++    curl = curl_easy_init();
++
++    if (curl) {
++        curl_easy_setopt(curl, CURLOPT_URL, server_url.c_str());
++        curl_easy_setopt(curl, CURLOPT_HTTPPOST, 0);
++        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writeback);
++        res = curl_easy_perform(curl);
++        response = msgBuffer;
++        curl_easy_cleanup(curl);
++    } else {
++    }
++
++}
++#endif
++ 
+ void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCallback) {
+ 
+   if (f_piMediaKeySessionCallback) {
+@@ -76,6 +125,20 @@
+     widevine::Cdm::Status status = m_cdm->generateRequest(m_sessionId, m_initDataType, m_initData);
+     if (widevine::Cdm::kSuccess != status) {
+        printf("generateRequest failed\n");
++#ifdef HANDLE_DEVICE_PROVISIONING_REQUEST
++       while(!_cdm_request.empty()) {
++           std::string request = _cdm_request;
++           std::string response;
++
++           _cdm_request.clear();
++           sendPostRequest(request, response);
++           if (widevine::Cdm::kSuccess != m_cdm->update(m_sessionId, response)) {
++               printf("updating response failed\n");
++           } else {
++               printf("device provisioned.\n");
++           }
++       }
++#endif
+        m_piCallback->OnKeyMessage((const uint8_t *) "", 0, "");
+     }
+   }
+@@ -204,6 +267,9 @@
+ void MediaKeySession::onDirectIndividualizationRequest(
+         const std::string& session_id,
+         const std::string& request) {
++#ifdef HANDLE_DEVICE_PROVISIONING_REQUEST 
++        _cdm_request = request;
++#endif
+ }
+ 
+ CDMi_RESULT MediaKeySession::Load(void) {
+--- old/CMakeLists.txt	2021-10-05 14:44:36.585209957 -0400
++++ new/CMakeLists.txt	2021-10-05 14:44:20.225141244 -0400
+@@ -78,6 +78,8 @@
+ )
+ 
+ target_link_libraries(${DRM_PLUGIN_NAME} 
++    PUBLIC
++        curl
+     PRIVATE
+         ${NAMESPACE}Core::${NAMESPACE}Core
+         NEXUS::NEXUS
