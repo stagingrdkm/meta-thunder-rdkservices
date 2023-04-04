@@ -1,0 +1,527 @@
+From 259e0388c60184561352213471eeed675b5079be Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Fri, 3 Feb 2023 17:49:58 +0100
+Subject: [PATCH] [OMWAPPI-1119] Cobalt vault implementation on BCM StarboardTL
+ library
+
+---
+ CMakeLists.txt           |   3 +
+ CobaltSecurity/HMAC.cpp  | 174 ++++++++++++++++++++++++++++++++
+ CobaltSecurity/Vault.cpp | 207 +++++++++++++++++++++++++++++++++++++++
+ Implementation.cpp       |  12 ++-
+ Platform.h               |   9 +-
+ SageNetflix/Vault.cpp    |  20 ++++
+ 6 files changed, 420 insertions(+), 5 deletions(-)
+ create mode 100644 CobaltSecurity/HMAC.cpp
+ create mode 100644 CobaltSecurity/Vault.cpp
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b11fde5..38fb730 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -58,6 +58,8 @@ add_library(${TARGET} STATIC
+     SageNetflix/AES.cpp
+     SageNetflix/DiffieHellman.cpp
+     SageNetflix/NetflixSecurity.cpp
++    CobaltSecurity/Vault.cpp
++    CobaltSecurity/HMAC.cpp
+ )
+ 
+ target_link_libraries(${TARGET}
+@@ -71,6 +73,7 @@ target_link_libraries(${TARGET}
+         -lcmndrm_tl
+         -ldrmrootfs
+         -lbcrypt
++        -lutility
+ )
+ 
+ target_include_directories(${TARGET}
+diff --git a/CobaltSecurity/HMAC.cpp b/CobaltSecurity/HMAC.cpp
+new file mode 100644
+index 0000000..02b50df
+--- /dev/null
++++ b/CobaltSecurity/HMAC.cpp
+@@ -0,0 +1,174 @@
++/*
++ * ============================================================================
++ * RDK MANAGEMENT, LLC CONFIDENTIAL AND PROPRIETARY
++ * ============================================================================
++ * This file (and its contents) are the intellectual property of RDK Management, LLC.
++ * It may not be used, copied, distributed or otherwise  disclosed in whole or in
++ * part without the express written permission of RDK Management, LLC.
++ * ============================================================================
++ * Copyright (c) 2020 RDK Management, LLC. All rights reserved.
++ * ============================================================================
++ * Copyright (C) 2020 Broadcom. The term "Broadcom" refers to Broadcom Limited and/or its subsidiaries.
++ * ============================================================================
++ # This program is the proprietary software of Broadcom and/or its licensors,
++ # and may only be used, duplicated, modified or distributed pursuant to the terms and
++ # conditions of a separate, written license agreement executed between you and Broadcom
++ # (an "Authorized License").  Except as set forth in an Authorized License, Broadcom grants
++ # no license (express or implied), right to use, or waiver of any kind with respect to the
++ # Software, and Broadcom expressly reserves all rights in and to the Software and all
++ # intellectual property rights therein.  IF YOU HAVE NO AUTHORIZED LICENSE, THEN YOU
++ # HAVE NO RIGHT TO USE THIS SOFTWARE IN ANY WAY, AND SHOULD IMMEDIATELY
++ # NOTIFY BROADCOM AND DISCONTINUE ALL USE OF THE SOFTWARE.
++ # Except as expressly set forth in the Authorized License,
++ # 1.     This program, including its structure, sequence and organization, constitutes the valuable trade
++ #    1. secrets of Broadcom, and you shall use all reasonable efforts to protect the confidentiality thereof,
++ # and to use this information only in connection with your use of Broadcom integrated circuit products.
++ # 2.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS PROVIDED "AS IS"
++ # AND WITH ALL FAULTS AND BROADCOM MAKES NO PROMISES, REPRESENTATIONS OR
++ # WARRANTIES, EITHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, WITH RESPECT TO
++ # THE SOFTWARE.  BROADCOM SPECIFICALLY DISCLAIMS ANY AND ALL IMPLIED WARRANTIES
++ # OF TITLE, MERCHANTABILITY, NONINFRINGEMENT, FITNESS FOR A PARTICULAR PURPOSE,
++ # LACK OF VIRUSES, ACCURACY OR COMPLETENESS, QUIET ENJOYMENT, QUIET POSSESSION
++ # OR CORRESPONDENCE TO DESCRIPTION. YOU ASSUME THE ENTIRE RISK ARISING OUT OF
++ # USE OR PERFORMANCE OF THE SOFTWARE.
++ #
++ # 3.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL BROADCOM OR ITS
++ # LICENSORS BE LIABLE FOR  CONSEQUENTIAL, INCIDENTAL, SPECIAL, INDIRECT, OR
++ # EXEMPLARY DAMAGES WHATSOEVER ARISING OUT OF OR IN ANY WAY RELATING TO YOUR
++ # USE OF OR INABILITY TO USE THE SOFTWARE EVEN IF BROADCOM HAS BEEN ADVISED OF
++ # THE POSSIBILITY OF SUCH DAMAGES; OR (ii) ANY AMOUNT IN EXCESS OF THE AMOUNT
++ # ACTUALLY PAID FOR THE SOFTWARE ITSELF OR U.S. $1, WHICHEVER IS GREATER. THESE
++ # LIMITATIONS SHALL APPLY NOTWITHSTANDING ANY FAILURE OF ESSENTIAL PURPOSE OF
++ # ANY LIMITED REMEDY.
++ ###############################################################################
++*/
++
++#include <nexus_config.h>
++#include <starboard_tl.h>
++#include "../../../Module.h"
++
++#include "../Administrator.h"
++
++namespace Implementation {
++
++namespace Platform {
++
++namespace Cobalt {
++
++    class HMAC : public Platform::IHashImplementation {
++    public:
++        HMAC(const HMAC&) = delete;
++        HMAC& operator=(const HMAC) = delete;
++        HMAC() = delete;
++
++        HMAC(const hash_type type, const uint32_t secretId)
++            : m_secret_id(secretId)
++            , m_hash_type(type)
++            , m_buffer()
++        {
++        }
++
++        ~HMAC() override = default;
++
++    public:
++        uint32_t Ingest(const uint32_t length, const uint8_t data[]) override
++        {
++            uint32_t ingested = 0;
++
++            if (length > 0) {
++                m_buffer.append(reinterpret_cast<const char*>(data), length);
++                ingested = length;
++            }
++
++            return (ingested);
++        }
++
++        uint8_t Calculate(const uint8_t maxLength, uint8_t data[]) override
++        {
++            uint32_t out_length = 0;
++            uint8_t result = 0;
++            if (m_buffer.length() == 0)
++            {
++                TRACE_L1(_T("Calculate invoked with 0 length input buffer"));
++            }
++            if (m_hash_type == hash_type::HASH_TYPE_SHA256)
++            {
++                out_length = STARBOARD_TL_HMAC_SHA256_SIG_SIZE;
++                if (maxLength >= static_cast<uint8_t>(out_length))
++                {
++                    uint32_t key_idx = getKeyIndex();
++                    if (key_idx >= 0 && key_idx < 3) // the index of key, the valid value is from 0 to 2
++                    {
++                        TRACE_L1(_T("use key_idx: %u"), key_idx);
++                        BERR_Code ret = StarBoardTl_SignWithCertKey((StarBoardTl_Handle)m_secret_id,
++                                                                    reinterpret_cast<const uint8_t*>(m_buffer.data()),
++                                                                    m_buffer.length(),
++                                                                    key_idx,
++                                                                    data, (uint32_t)maxLength);
++                        if (ret != BERR_SUCCESS)
++                        {
++                            TRACE_L1(_T("StarBoardTl_SignWithCertKey failed: %d input buffer length: %d"), ret, m_buffer.length());
++                        }
++                        result = ret == BERR_SUCCESS ? static_cast<uint8_t>(out_length) : 0;
++                    }
++                    else
++                    {
++                        TRACE_L1(_T("Invalid key index: %d"), key_idx);
++                    }
++                }
++                else
++                {
++                    TRACE_L1(_T("Too small data buffer, size: %d expected min: %d"), maxLength, STARBOARD_TL_HMAC_SHA256_SIG_SIZE);
++                }
++            }
++            else
++            {
++                ASSERT(false);
++            }
++            return result;
++        }
++
++    private:
++        uint32_t getKeyIndex()
++        {
++            uint32_t result = 0xFF;
++            const char * internal_key_index = getenv("COBALT_CERT_KEY_INDEX");
++            if (internal_key_index)
++            {
++                char *end;
++                long index_value = strtol(internal_key_index, &end, 10);
++                if (*end == '\0' && index_value >= 0 && index_value < 3)
++                {
++                    result = (uint32_t)index_value;
++                }
++            }
++            return result;
++        }
++        uint32_t m_secret_id;   // for this implementation value is the StarBoardTl_Handle
++        hash_type m_hash_type;  // type of Hash for thie implementation only hash_type::HASH_TYPE_SHA256/hashtype::SHA256 is supported
++        std::string m_buffer;   // calculation input buffer
++    }; // class HMAC
++
++    class HMACFactory : public HMACFactoryType<cryptographyvault::CRYPTOGRAPHY_VAULT_COBALT, HMAC> {
++        Platform::IHashImplementation* Create(const hash_type type, const uint32_t secret_id) override
++        {
++            Platform::IHashImplementation* impl = nullptr;
++
++            if (type == hash_type::HASH_TYPE_SHA256) {
++                impl = new HMAC(type, secret_id);
++            } else {
++                TRACE_L1(_T("Hash type not supported for HMAC [%i]"), type);
++            }
++
++            return (impl);
++        }
++    }; // class HMACFactory
++
++} // namespace Netflix
++
++
++static PlatformRegistrationType<IHMACFactory, Cobalt::HMACFactory> registration;
++
++} // namespace Platform
++
++} // namespace Implementation
+diff --git a/CobaltSecurity/Vault.cpp b/CobaltSecurity/Vault.cpp
+new file mode 100644
+index 0000000..09a3219
+--- /dev/null
++++ b/CobaltSecurity/Vault.cpp
+@@ -0,0 +1,207 @@
++/*
++ * ============================================================================
++ * RDK MANAGEMENT, LLC CONFIDENTIAL AND PROPRIETARY
++ * ============================================================================
++ * This file (and its contents) are the intellectual property of RDK Management, LLC.
++ * It may not be used, copied, distributed or otherwise  disclosed in whole or in
++ * part without the express written permission of RDK Management, LLC.
++ * ============================================================================
++ * Copyright (c) 2020 RDK Management, LLC. All rights reserved.
++ * ============================================================================
++ * Copyright (C) 2020 Broadcom. The term "Broadcom" refers to Broadcom Limited and/or its subsidiaries.
++ * ============================================================================
++ # This program is the proprietary software of Broadcom and/or its licensors,
++ # and may only be used, duplicated, modified or distributed pursuant to the terms and
++ # conditions of a separate, written license agreement executed between you and Broadcom
++ # (an "Authorized License").  Except as set forth in an Authorized License, Broadcom grants
++ # no license (express or implied), right to use, or waiver of any kind with respect to the
++ # Software, and Broadcom expressly reserves all rights in and to the Software and all
++ # intellectual property rights therein.  IF YOU HAVE NO AUTHORIZED LICENSE, THEN YOU
++ # HAVE NO RIGHT TO USE THIS SOFTWARE IN ANY WAY, AND SHOULD IMMEDIATELY
++ # NOTIFY BROADCOM AND DISCONTINUE ALL USE OF THE SOFTWARE.
++ # Except as expressly set forth in the Authorized License,
++ # 1.     This program, including its structure, sequence and organization, constitutes the valuable trade
++ #    1. secrets of Broadcom, and you shall use all reasonable efforts to protect the confidentiality thereof,
++ # and to use this information only in connection with your use of Broadcom integrated circuit products.
++ # 2.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS PROVIDED "AS IS"
++ # AND WITH ALL FAULTS AND BROADCOM MAKES NO PROMISES, REPRESENTATIONS OR
++ # WARRANTIES, EITHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, WITH RESPECT TO
++ # THE SOFTWARE.  BROADCOM SPECIFICALLY DISCLAIMS ANY AND ALL IMPLIED WARRANTIES
++ # OF TITLE, MERCHANTABILITY, NONINFRINGEMENT, FITNESS FOR A PARTICULAR PURPOSE,
++ # LACK OF VIRUSES, ACCURACY OR COMPLETENESS, QUIET ENJOYMENT, QUIET POSSESSION
++ # OR CORRESPONDENCE TO DESCRIPTION. YOU ASSUME THE ENTIRE RISK ARISING OUT OF
++ # USE OR PERFORMANCE OF THE SOFTWARE.
++ #
++ # 3.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL BROADCOM OR ITS
++ # LICENSORS BE LIABLE FOR  CONSEQUENTIAL, INCIDENTAL, SPECIAL, INDIRECT, OR
++ # EXEMPLARY DAMAGES WHATSOEVER ARISING OUT OF OR IN ANY WAY RELATING TO YOUR
++ # USE OF OR INABILITY TO USE THE SOFTWARE EVEN IF BROADCOM HAS BEEN ADVISED OF
++ # THE POSSIBILITY OF SUCH DAMAGES; OR (ii) ANY AMOUNT IN EXCESS OF THE AMOUNT
++ # ACTUALLY PAID FOR THE SOFTWARE ITSELF OR U.S. $1, WHICHEVER IS GREATER. THESE
++ # LIMITATIONS SHALL APPLY NOTWITHSTANDING ANY FAILURE OF ESSENTIAL PURPOSE OF
++ # ANY LIMITED REMEDY.
++ ###############################################################################
++*/
++#include <cstring>
++#include <nexus_config.h>
++#include <starboard_tl.h>
++#include <unistd.h>
++
++#include "../../../Module.h"
++#include "../Administrator.h"
++#include "../Nexus.h"
++
++namespace Implementation {
++
++namespace Platform {
++
++namespace Cobalt {
++
++    class Vault : public Platform::IVaultImplementation {
++    private:
++        Vault(const Vault&) = delete;
++        Vault& operator=(const Vault) = delete;
++        Vault() {}
++        ~Vault() { Flush();}
++
++    public:
++        static Vault& Instance()
++        {
++            static Vault instance;
++            return (instance);
++        }
++
++        cryptographyvault Id() const override
++        {
++            return cryptographyvault::CRYPTOGRAPHY_VAULT_COBALT;
++        }
++
++        uint16_t Size(const uint32_t id) const override
++        {
++            return 0;
++        }
++
++        uint32_t Import(const uint16_t length, const uint8_t data[]) override
++        {
++            return 0;
++        }
++
++        uint16_t Export(const uint32_t id, const uint16_t max_length, uint8_t data[]) const override
++        {
++            return 0;
++        }
++
++        uint32_t Set(const uint16_t length, const uint8_t data[]) override
++        {
++            return 0;
++        }
++
++        uint16_t Get(const uint32_t id, const uint16_t max_length, uint8_t data[]) const override
++        {
++            return 0;
++        }
++
++        bool Delete(const uint32_t id) override
++        {
++            return false;
++        }
++
++        uint32_t Exists(const char locator[],bool* result) override
++        {
++            return WPEFramework::Core::ERROR_UNAVAILABLE;
++        }
++
++        uint32_t Load(const char locator[], uint32_t* id) override
++        {
++            if (m_loaded == true)
++            {
++                TRACE_L1(_T("already initialized - return previous initialization handle"));
++                *id = (uint32_t)m_handle;
++                return WPEFramework::Core::ERROR_NONE;
++            }
++            int len = strlen(locator);
++            if (len > 255)
++            {
++                TRACE_L1(_T("locator/file name too long"));
++                return WPEFramework::Core::ERROR_GENERAL;
++            }
++            int r = access(locator, R_OK);
++            if (r != 0)
++            {
++                TRACE_L1(_T("locator/file not accessible"));
++                return WPEFramework::Core::ERROR_GENERAL;
++            }
++            if (Nexus::Initialized() == true)
++            {
++                TRACE_L1(_T("NEXUS Initialized"));
++            }
++            else
++            {
++                TRACE_L1(_T("could not initialize nexus"));
++                return WPEFramework::Core::ERROR_GENERAL;
++            }
++
++            std::memset(&m_settings, 0, sizeof(m_settings));
++            StarBoardTl_GetDefaultSettings(&m_settings);
++            memcpy(m_settings.drm_binfile_path, locator, len);
++            m_settings.drm_binfile_path[len] = 0;
++            BERR_Code ret = StarBoardTl_Init(&m_handle, &m_settings);
++            uint32_t result = WPEFramework::Core::ERROR_NONE;
++            if (ret == BERR_SUCCESS)
++            {
++                TRACE_L1(_T("Starboard initialized m_handle=%p"), m_handle);
++                *id = (uint32_t)m_handle; // propagate StarBoardTl_Handle
++                m_loaded = true;
++            }
++            else
++            {
++                TRACE_L1(_T("Starboard initialization failed m_handle=%p ret=%d"), m_handle, ret);
++                m_loaded = false;
++                result = WPEFramework::Core::ERROR_GENERAL;
++            }
++            return result;
++        }
++
++        uint32_t Create(const char locator[],const key_type keyType,uint32_t* id) override
++        {
++            return WPEFramework::Core::ERROR_UNAVAILABLE;
++        }
++
++        uint32_t Flush() override
++        {
++            uint32_t result = WPEFramework::Core::ERROR_NONE;
++            if (m_loaded == true && m_handle != 0)
++            {
++                StarBoardTl_Uninit(m_handle);
++                m_handle = 0;
++                m_loaded = false;
++            }
++            else
++            {
++                TRACE_L1(_T("StarBoardTl not initialized"));
++            }
++            return result;
++        }
++
++        private:
++            StarBoardTl_Handle m_handle = 0;
++            StarBoardSettings m_settings;
++            bool m_loaded = false;
++    }; // class VaultImplementation
++
++    class VaultFactory : public VaultFactoryType<cryptographyvault::CRYPTOGRAPHY_VAULT_COBALT, Vault> {
++        Platform::IVaultImplementation* Create(const cryptographyvault id) override
++        {
++            ASSERT(id == cryptographyvault::CRYPTOGRAPHY_VAULT_COBALT);
++            return (&Vault::Instance());
++        }
++    }; // class VaultFactory
++
++} // namespace Netflix
++
++
++static PlatformRegistrationType<IVaultFactory, Cobalt::VaultFactory> registration(false);
++
++} // namespace Platform
++
++} // namespace Implementation
+diff --git a/Implementation.cpp b/Implementation.cpp
+index 1464c38..cc9c1bd 100644
+--- a/Implementation.cpp
++++ b/Implementation.cpp
+@@ -258,22 +258,26 @@ uint32_t diffiehellman_derive(struct VaultImplementation* vault,
+ 
+ uint32_t persistent_key_exists(struct VaultImplementation* vault, const char locator[], bool* result)
+ {
+-    return(WPEFramework::Core::ERROR_UNAVAILABLE);
++    ASSERT(vault != nullptr);
++    return Platform::Implementation(vault)->Exists(locator, result);
+ }
+ 
+ uint32_t persistent_key_load(struct VaultImplementation* vault, const char locator[], uint32_t* id)
+ {
+-    return(WPEFramework::Core::ERROR_UNAVAILABLE);
++    ASSERT(vault != nullptr);
++    return Platform::Implementation(vault)->Load(locator, id);
+ }
+ 
+ uint32_t persistent_key_create(struct VaultImplementation* vault, const char locator[], const key_type keyType, uint32_t* id)
+ {
+-    return(WPEFramework::Core::ERROR_UNAVAILABLE);
++    ASSERT(vault != nullptr);
++    return Platform::Implementation(vault)->Create(locator, keyType, id);
+ }
+ 
+ uint32_t persistent_flush(struct VaultImplementation* vault)
+ {
+-    return(WPEFramework::Core::ERROR_UNAVAILABLE);
++    ASSERT(vault != nullptr);
++    return Platform::Implementation(vault)->Flush();
+ }
+ 
+ } // extern "C"
+diff --git a/Platform.h b/Platform.h
+index fb6a2b4..1825184 100644
+--- a/Platform.h
++++ b/Platform.h
+@@ -51,7 +51,7 @@
+ #include <hash_implementation.h>
+ #include <cipher_implementation.h>
+ #include <diffiehellman_implementation.h>
+-
++#include <persistent_implementation.h>
+ 
+ namespace Implementation {
+ 
+@@ -68,6 +68,13 @@ namespace Platform {
+         virtual uint32_t Set(const uint16_t length, const uint8_t data[]) = 0;
+         virtual uint16_t Get(const uint32_t id, const uint16_t max_length, uint8_t data[]) const = 0;
+         virtual bool Delete(const uint32_t id) = 0;
++
++        // IPersistent like interface
++        virtual uint32_t Exists(const char locator[],bool* result) = 0;
++        virtual uint32_t Load(const char locator[],uint32_t*  id) = 0;
++        virtual uint32_t Create(const char locator[],const key_type keyType,uint32_t* id) = 0;
++        virtual uint32_t Flush() = 0;
++
+     };
+ 
+     inline VaultImplementation* Handle(IVaultImplementation* impl) { return reinterpret_cast<VaultImplementation*>(impl); }
+diff --git a/SageNetflix/Vault.cpp b/SageNetflix/Vault.cpp
+index 95ceb56..105f999 100644
+--- a/SageNetflix/Vault.cpp
++++ b/SageNetflix/Vault.cpp
+@@ -219,6 +219,26 @@ namespace Netflix {
+ 
+             return (result);
+         }
++
++        uint32_t Exists(const char locator[],bool* result) override
++        {
++            return WPEFramework::Core::ERROR_UNAVAILABLE;
++        }
++
++        uint32_t Load(const char locator[],uint32_t*  id) override
++        {
++            return WPEFramework::Core::ERROR_UNAVAILABLE;
++        }
++
++        uint32_t Create(const char locator[],const key_type keyType,uint32_t* id) override
++        {
++            return WPEFramework::Core::ERROR_UNAVAILABLE;
++        }
++
++        uint32_t Flush() override
++        {
++            return WPEFramework::Core::ERROR_UNAVAILABLE;
++        }
+     }; // class VaultImplementation
+ 
+     class VaultFactory : public VaultFactoryType<TEE::ID, Vault> {
+-- 
+2.25.1
+

@@ -1,0 +1,20 @@
+From a23fe0143cda8ea896d313cd873e523bd3e30542 Mon Sep 17 00:00:00 2001
+From: Venkataprasad Karna <Venkataprasad_Karna@comcast.com>
+Date: Thu, 17 Dec 2020 19:40:12 +0000
+Subject: [PATCH] Adding the VoiceCommand API for Netflix plugin to process
+
+---
+ interfaces/INetflix.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/interfaces/INetflix.h b/interfaces/INetflix.h
+index 913fdaa..91bb3b9 100644
+--- a/interfaces/INetflix.h
++++ b/interfaces/INetflix.h
+@@ -45,6 +45,7 @@ namespace Exchange {
+         virtual void Unregister(INetflix::INotification* netflix) = 0;
+
+         virtual void SystemCommand(const string& command) = 0;
++        virtual void VoiceCommand(const string& command) = 0;
+     };
+

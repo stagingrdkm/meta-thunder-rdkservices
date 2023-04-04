@@ -1,0 +1,52 @@
+diff --git a/Source/cryptography/implementation/SecApi/CipherNetflix.cpp b/Source/cryptography/implementation/SecApi/CipherNetflix.cpp
+index 875d014..6ea899a 100644
+--- a/Source/cryptography/implementation/SecApi/CipherNetflix.cpp
++++ b/Source/cryptography/implementation/SecApi/CipherNetflix.cpp
+@@ -117,7 +117,8 @@ namespace Implementation {
+
+         if (inputLength % AES_128_BLOCK_SIZE != 0) {
+             outputbuf.resize(inputLength + (AES_128_BLOCK_SIZE - (inputLength % AES_128_BLOCK_SIZE)));
+-            TRACE_L2(_T("SecNetflix_Aescbc adding pad to output buffer %d\n", outputbuf.size()));
++           fprintf(stdout, "SecNetflix_Aescbc adding pad to output buffer %d\n",outputbuf.size());
++           // TRACE_L2(_T("SecNetflix_Aescbc adding pad to output buffer %d\n", outputbuf.size()));
+         }
+         else {
+             outputbuf.resize(inputLength + AES_128_BLOCK_SIZE);
+@@ -131,14 +132,17 @@ namespace Implementation {
+                 input, inputLength, out_buf, outputbuf.size(), &bytesWritten);
+
+             if (result != SEC_RESULT_SUCCESS) {
+-                TRACE_L1(_T("SecNetflix_Aescbc FAILED : retVal = %d\n", result));
++                fprintf(stdout,"SecNetflix_Aescbc FAILED : retVal = %d\n", result);
++                //TRACE_L1(_T("SecNetflix_Aescbc FAILED : retVal = %d\n", result));
+             }
+         }
+         else {
+-            TRACE_L1(_T("FindKey did not find key handle = %d\n", keyHandle));
++               fprintf(stdout,"FindKey did not find key handle = %d\n", keyHandle);
++                //TRACE_L1(_T("FindKey did not find key handle = %d\n", keyHandle));
+         }
+
+-        TRACE_L2(_T("Encrypted message: encdatalen=%u\n", bytesWritten));
++        fprintf(stdout,"Encrypted message: encdatalen=%u\n",bytesWritten);
++       //TRACE_L2(_T("Encrypted message: encdatalen=%u\n", bytesWritten));
+         memcpy(output, out_buf, bytesWritten);
+         retVal = bytesWritten;
+
+diff --git a/Source/cryptography/implementation/SecApi/DiffieHellman.cpp b/Source/cryptography/implementation/SecApi/DiffieHellman.cpp
+index 0024629..2660369 100644
+--- a/Source/cryptography/implementation/SecApi/DiffieHellman.cpp
++++ b/Source/cryptography/implementation/SecApi/DiffieHellman.cpp
+@@ -124,7 +124,8 @@ namespace Implementation {
+                 hmacKeyId = _vault->AddKey(hKeyHMAC);
+                 wrappingKeyId = _vault->AddKey(hKeyWrap);
+                 result = RET_OK;
+-                TRACE_L2(_T("SEC:Netflix Derive  enc %d  hmac %d  wrapping handle %d \n", encryptionKeyId, hmacKeyId, wrappingKeyId));
++               fprintf(stdout,"SEC:Netflix Derive  enc %d  hmac %d  wrapping handle %d \n",encryptionKeyId, hmacKeyId, wrappingKeyId);
++               // TRACE_L2(_T("SEC:Netflix Derive  enc %d  hmac %d  wrapping handle %d \n", encryptionKeyId, hmacKeyId, wrappingKeyId));
+             }
+             else {
+                 TRACE_L1(_T("SEC:SecNetflix_NetflixDHDerive failed ,retval = %d \n"),result_sec);
+
+
+ 

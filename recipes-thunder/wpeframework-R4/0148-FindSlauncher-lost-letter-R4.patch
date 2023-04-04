@@ -1,0 +1,26 @@
+From 47bf3959ffb19ab44bf228f8286fe4bd350c731c Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Thu, 26 May 2022 10:25:48 +0200
+Subject: [PATCH] FindSlauncher.cmake lost letter (#964)
+
+---
+ cmake/modules/FindSlauncher.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/cmake/modules/FindSlauncher.cmake b/cmake/modules/FindSlauncher.cmake
+index 60b665a7..8a8690ba 100644
+--- a/cmake/modules/FindSlauncher.cmake
++++ b/cmake/modules/FindSlauncher.cmake
+@@ -33,7 +33,7 @@ if(${PC_AWC_FOUND})
+         )
+ 
+     include(FindPackageHandleStandardArgs)
+-    find_package_handle_standard_args(Slauncher DEFAULT_MSG AWC_LIBRARY AWC_INCLUD)
++    find_package_handle_standard_args(Slauncher DEFAULT_MSG AWC_LIBRARY AWC_INCLUDE)
+ 
+     mark_as_advanced(AWC_LIBRARY AWC_INCLUDE)
+ 
+-- 
+2.25.1
+
+

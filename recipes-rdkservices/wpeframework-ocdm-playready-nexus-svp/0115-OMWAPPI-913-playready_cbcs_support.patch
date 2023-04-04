@@ -1,0 +1,194 @@
+(2023.02.27) Jacek Manko (jmanko.contractor@libertyglobal.com)
+[OMWAPPI-913] Implement OCDM-Playready-Nexus-SVP DRM Module changes for CBCS support
+
+This patch originates from the following pull request:
+https://code.rdkcentral.com/r/c/soc/broadcom/components/rdkcentral/OCDM-Playready-Nexus-SVP/+/77967
+---
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 3eb0137..ac85848 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -451,14 +451,12 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+             playreadyInitData = initData;
+         }
+ 
+-        mDrmHeader.assign(playreadyInitData.begin(), playreadyInitData.end());
+-        ChkDR(Drm_Content_SetProperty(m_poAppContext,
+-                                      DRM_CSP_AUTODETECT_HEADER,
+-                                      reinterpret_cast<const uint8_t *>(mDrmHeader.data()),
+-                                      mDrmHeader.size()));
++        mDrmHeader.assign(playreadyInitData.cbegin(), playreadyInitData.cend());
++
++        ChkDR(SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()));
+ 
+         // Generate a random media session ID.
+-        ChkDR(Oem_Random_GetBytes(f_pOEMContext, (DRM_BYTE *)&oSessionID, sizeof(oSessionID)));
++        ChkDR(Oem_Random_GetBytes(m_poAppContext, (DRM_BYTE *)&oSessionID, sizeof(oSessionID)));
+         ZEROMEM(m_rgchSessionID, sizeof(m_rgchSessionID));
+         // Store the generated media session ID in base64 encoded form.
+         ChkDR(DRM_B64_EncodeA((DRM_BYTE *)&oSessionID,
+@@ -522,12 +520,6 @@ bool MediaKeySession::playreadyGenerateKeyRequest() {
+     DRM_DWORD cchSilentURL = 0;
+ 
+     if(m_eKeyState == KEY_INIT){
+-
+-        // Set this session's DMR header in the PR3 app context.
+-        if (SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()) != CDMi_SUCCESS) {
+-            return false;
+-        }
+-
+         // Try to figure out the size of the license acquisition
+         // challenge to be returned.
+         dr = Drm_LicenseAcq_GenerateChallenge(m_poAppContext,
+@@ -590,6 +582,8 @@ bool MediaKeySession::playreadyGenerateKeyRequest() {
+             ChkDR(dr);
+         }
+ 
++        ChkDR(SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()));
++
+         // Supply a buffer to receive the license acquisition challenge.
+         ChkDR(Drm_LicenseAcq_GenerateChallenge(m_poAppContext,
+                                             g_rgpdstrRights,
+@@ -648,8 +642,7 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+ 
+     BKNI_Memset(&oLicenseResponse, 0, sizeof(oLicenseResponse));
+ 
+-    // Set this session's DMR header in the PR3 app context.
+-    SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data());
++    ChkDR(SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()));
+ 
+     LOGGER(LINFO_, "Processing license acquisition response...");
+     ChkDR(Drm_LicenseAcq_ProcessResponse(m_poAppContext,
+@@ -764,11 +757,11 @@ CDMi_RESULT MediaKeySession::Close(void)
+ CDMi_RESULT MediaKeySession::Decrypt(
+         const uint8_t *f_pbSessionKey,
+         uint32_t f_cbSessionKey,
+-        const uint32_t *f_pdwSubSampleMapping,
+-        uint32_t f_cdwSubSampleMapping,
++        const EncryptionScheme encryptionScheme,
++        const EncryptionPattern& pattern,
+         const uint8_t *f_pbIV,
+         uint32_t f_cbIV,
+-        const uint8_t *payloadData,
++        uint8_t *payloadData,
+         uint32_t payloadDataSize,
+         uint32_t *f_pcbOpaqueClearContent,
+         uint8_t **f_ppbOpaqueClearContent,
+@@ -884,9 +877,10 @@ CDMi_RESULT MediaKeySession::Decrypt(
+ 
+     cr = CDMi_SUCCESS;
+ 
+-    // Return clear content.
++    // Copy and Return the Memory token in the incoming payload buffer.
+     *f_pcbOpaqueClearContent = sizeof(m_TokenHandle);
+-    *f_ppbOpaqueClearContent = reinterpret_cast<uint8_t*>(&m_TokenHandle);
++    *f_ppbOpaqueClearContent = payloadData;
++    memcpy(*f_ppbOpaqueClearContent, reinterpret_cast<uint8_t*>(&m_TokenHandle), sizeof(m_TokenHandle));
+ 
+     NEXUS_MemoryBlock_Unlock(pNexusMemoryBlock);
+     NEXUS_MemoryBlock_Free(pNexusMemoryBlock);
+diff --git a/MediaSession.h b/MediaSession.h
+index 23d1dc5..0f46385 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -46,8 +46,9 @@
+ #pragma once
+ 
+ #include "Module.h"
+-#include "cdmi.h"
+-#include <core/core.h>
++
++#include <interfaces/IDRM.h>
++
+ #include <vector>
+ 
+ #include <nexus_config.h>
+@@ -157,11 +158,11 @@ public:
+     virtual CDMi_RESULT Decrypt(
+         const uint8_t *f_pbSessionKey,
+         uint32_t f_cbSessionKey,
+-        const uint32_t *f_pdwSubSampleMapping,
+-        uint32_t f_cdwSubSampleMapping,
++        const EncryptionScheme encryptionScheme,
++        const EncryptionPattern& pattern,
+         const uint8_t *f_pbIV,
+         uint32_t f_cbIV,
+-        const uint8_t *f_pbData,
++        uint8_t *f_pbData,
+         uint32_t f_cbData,
+         uint32_t *f_pcbOpaqueClearContent,
+         uint8_t **f_ppbOpaqueClearContent,
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index a063988..3036cc1 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -76,6 +76,10 @@ static void * PlayLevelUpdateCallback(void * data)
+ {
+     CallbackInfo * callbackInfo = static_cast<CallbackInfo *>(data);
+ 
++    // When a detached thread terminates, its resources are automatically released back to the system 
++    // (i.e. without the need for another thread to join with it).
++    pthread_detach(pthread_self());
++
+     std::stringstream keyMessage;
+     keyMessage << "{";
+     keyMessage << "\"compressed-video\": " << callbackInfo->_compressedVideo << ",";
+@@ -90,11 +94,9 @@ static void * PlayLevelUpdateCallback(void * data)
+     std::string keyMessageStr = keyMessage.str();
+     const uint8_t * messageBytes = reinterpret_cast<const uint8_t *>(keyMessageStr.c_str());
+ 
+-    char urlBuffer[64];
+-    strcpy(urlBuffer, "properties");
+-    callbackInfo->_callback->OnKeyMessage(messageBytes, keyMessageStr.length() + 1, urlBuffer);
+-
++    callbackInfo->_callback->OnKeyMessage(messageBytes, keyMessageStr.length() + 1, "properties");
+     delete callbackInfo;
++
+     return nullptr;
+ }
+ 
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index f6f0a6e..b7850d0 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -43,10 +43,11 @@
+  ###############################################################################
+ */
+ 
+-#include "cdmi.h"
++#include "Module.h"
++
+ #include "MediaSession.h"
+ 
+-#include <core/core.h>
++#include <interfaces/IDRM.h>
+ #include <cryptalgo/cryptalgo.h>
+ #include <plugins/plugins.h>
+ 
+diff --git a/Module.cpp b/Module.cpp
+index 7504749..560b367 100644
+--- a/Module.cpp
++++ b/Module.cpp
+@@ -18,6 +18,5 @@
+  */
+ 
+ #include "Module.h"
+-#include <core/SystemInfo.h>
+ 
+ MODULE_NAME_DECLARATION(BUILD_REFERENCE)
+diff --git a/Module.h b/Module.h
+index 8fe9c51..e260f80 100644
+--- a/Module.h
++++ b/Module.h
+@@ -20,5 +20,10 @@
+ #pragma once
+ 
+ #ifndef MODULE_NAME
+-#define MODULE_NAME PlayReady
++#define MODULE_NAME OCDM_Playready
+ #endif
++
++#include <com/com.h>
++#include <core/core.h>
++#include <tracing/tracing.h>
++#include <websocket/websocket.h>

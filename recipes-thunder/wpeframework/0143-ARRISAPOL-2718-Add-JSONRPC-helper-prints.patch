@@ -1,0 +1,36 @@
+From babc4d8bd228a254d834f691a614a0dd41cc5749 Mon Sep 17 00:00:00 2001
+From: Marcin Mielczarczyk <marcin.mielczarczyk@redembedded.com>
+Date: Thu, 11 Aug 2022 15:20:53 +0200
+Subject: [PATCH] [ARRISAPOL-2718] Add JSONRPC helper prints
+
+During investigation of ARRISAPOL-2718 there was a suspicion that
+wpeframework don't maintain client list properly. Additional logs where
+added which are helpful to understand how many clients and what events
+are registered.
+---
+ Source/core/JSONRPC.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Source/core/JSONRPC.h b/Source/core/JSONRPC.h
+index a3eecf37..c2407235 100644
+--- a/Source/core/JSONRPC.h
++++ b/Source/core/JSONRPC.h
+@@ -1075,13 +1075,14 @@ namespace Core {
+                     ObserverList& clients = index->second;
+                     ObserverList::iterator loop = clients.begin();
+ 
++                    TRACE_L1("Number of clients: %d", clients.size());
+                     result = Core::ERROR_NONE;
+ 
+                     while (loop != clients.end()) {
+                         const string& designator(loop->Designator());
+ 
+                         if (!sendifmethod || sendifmethod(designator)) {
+-
++                            TRACE_L1("designator: %s, event: %s, parameters: %s", designator.c_str(), event.c_str(), parameters.c_str());
+                             _notificationFunction(loop->Id(), (designator.empty() == false ? designator + '.' + event : event), parameters);
+                         }
+ 
+-- 
+2.25.1
+

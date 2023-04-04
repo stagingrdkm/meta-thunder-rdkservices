@@ -1,0 +1,55 @@
+--- old/MediaSession.cpp	2019-05-08 15:55:01.459705025 -0400
++++ new/MediaSession.cpp	2019-05-08 15:56:17.409615806 -0400
+@@ -395,4 +395,25 @@
+ 
+   if (widevine::Cdm::kSuccess == m_cdm->getKeyStatuses(m_sessionId, &map)) {
+     widevine::Cdm::KeyStatusMap::iterator it = map.begin();
++    /* AD HOC patch to find out a rigth keyID, enable webkitcenc to print keyid of a stream */
++    if(((*(uint64_t*)m_IV) & (uint64_t)0x000000000000ffff) == (uint64_t)0x00000000000060d4 ||
++       ((*(uint64_t*)m_IV) & (uint64_t)0x000000000000ffff) == (uint64_t)0x0000000000003cf1 ||
++       ((*(uint64_t*)m_IV) & (uint64_t)0x000000000000ffff) == (uint64_t)0x000000000000a5e7 ) {
++        /* use the first for YouTube video */
++    } else if(((*(uint64_t*)m_IV) & (uint64_t)0x000000000000ffff) == (uint64_t)0x000000000000fb3b ) {
++        /* use the third for EME video */
++       ++it; ++it;
++    } else if(((*(uint64_t*)m_IV) & (uint64_t)0x000000000000ffff) == (uint64_t)0x00000000000060ed) { /* BladeRunner audio */
++        /* use the second for BladeRunner video */
++       ++it;
++    } else if(((*(uint64_t*)m_IV) & (uint64_t)0x000000000000ffff) == (uint64_t)0x0000000000002029) { /* BladeRunner video*/
++        /* use the first for BladeRunner video */
++    } else {
++        /* Dump all keyid and use the first for audio */
++        fprintf(stderr, ":MediaKeySession::Decrypt(%p): predefined IV2Kid mapping is not found, IV 0x%016llx, size %d\n", this, *(uint64_t*)m_IV, pRPCsecureBufferInfo->size);
++        for(it = map.begin(); it != map.end(); ++it) {
++            fprintf(stderr, ":MediaKeySession::Decrypt(%p): key_id: 0x%016llx\n", this, *(reinterpret_cast<const uint64_t*>(it->first.c_str())));
++        }
++        it = map.begin();
++    }
+     // FIXME: We just check the first key? How do we know that's the Widevine key and not, say, a PlayReady one?
+@@ -396,7 +396,7 @@
+   if (widevine::Cdm::kSuccess == m_cdm->getKeyStatuses(m_sessionId, &map)) {
+     widevine::Cdm::KeyStatusMap::iterator it = map.begin();
+     // FIXME: We just check the first key? How do we know that's the Widevine key and not, say, a PlayReady one?
+-    //if (widevine::Cdm::kUsable == it->second) 
++    if (widevine::Cdm::kUsable == it->second) 
+     {
+       widevine::Cdm::OutputBuffer output;
+ 
+@@ -411,8 +411,15 @@
+         widevine::Cdm::InputBuffer input;
+         input.data = reinterpret_cast<uint8_t*>(pOpaqueDataEnc)+inTotal+inClear;
+         input.data_length = output.data_length;
+-        input.key_id = keyId;
+-        input.key_id_length = keyIdLength;
++
++        if(keyIdLength != 0) {
++            input.key_id = keyId;
++            input.key_id_length = keyIdLength;
++        } else {
++            input.key_id = reinterpret_cast<const uint8_t*>((it->first).c_str());
++            input.key_id_length = (it->first).size();
++        }
++
+         input.iv = m_IV;
+         input.iv_length = sizeof(m_IV);
+ 

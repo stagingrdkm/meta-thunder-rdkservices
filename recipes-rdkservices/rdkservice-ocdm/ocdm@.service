@@ -1,0 +1,23 @@
+[Unit]
+Description=OCDM service - instance name = %I
+After=nxserver.service dbus.socket keyconverter.service
+Requisite=wpeframework.service
+Requires=nxserver.service dbus.socket keyconverter.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+Environment="PLAYREADYKEY_PATH=/mnt/secure_storage/infieldcertificates/playready/Playready.key"
+ExecStartPre=/usr/bin/ocdm_store_check.sh
+#ExecStart=-/usr/bin/WPEProcess ${CMD%i} # to make it working correctly need to introduce script in the middle, for example:
+# /usr/bin/wpeprocesslaunch.sh and invoke: /usr/bin/WPEProcess $1 inside that script - it allows to correctly pass all the parameters
+# without redundant patching of WPEProcess
+ExecStart=/container/OCDM/launcher/ocdm.sh start ${CMD%i}
+# stop for container launch case
+ExecStop=/usr/bin/container_rdk_service_stop.sh OCDM 2
+ExecStartPost=/usr/bin/cpid -m appstart -p $MAINPID -n "/usr/bin/WPEProcess" -i %i -t 10000
+# OP_STATUS_SYSTEMD_STOP 99
+ExecStopPost=/usr/bin/cpid -m appstop -i %i -s 99
+KillMode=none
+Delegate=yes

@@ -1,0 +1,128 @@
+{
+    "assign": [
+        {
+            "url": "*://localhost",
+            "role": "local"
+        },
+        {
+            "url": "*://localhost:*",
+            "role": "local"
+        },
+        {
+            "url": "*://127.0.0.1",
+            "role": "local"
+        },
+        {
+            "url": "*://127.0.0.1:*",
+            "role": "local"
+        },
+        {
+            "url": "*://[::1]",
+            "role": "local"
+        },
+        {
+            "url": "*://[::1]:*",
+            "role": "local"
+        },
+        {
+            "url": "*://[0:0:0:0:0:0:0:1]",
+            "role": "local"
+        },
+        {
+            "url": "*://[0:0:0:0:0:0:0:1]:*",
+            "role": "local"
+        },
+        {
+            "url": "file://*",
+            "role": "local"
+        },
+        {
+            "url": "*://*.comcast.com",
+            "role": "comcast"
+        },
+        {
+            "url": "*://*.comcast.com:*",
+            "role": "comcast"
+        },
+        {
+            "url": "*://*.comcast.net",
+            "role": "comcast"
+        },
+        {
+            "url": "*://*.comcast.net:*",
+            "role": "comcast"
+        },
+        {
+            "url": "*.x1.xcal.tv",
+            "role": "comcast"
+        },
+        {
+            "url": "*.x1.xcal.tv:*",
+            "role": "comcast"
+        },
+        {
+            "url": "*.x1-app.xcr.comcast.net",
+            "role": "comcast"
+        },
+        {
+            "url": "*.x1-app.xcr.comcast.net:*",
+            "role": "comcast"
+        },
+        {
+            "url": "*://px-apps.sys.comcast.net",
+            "role": "comcast"
+        },
+        {
+            "url": "*://px-apps.sys.comcast.net:*",
+            "role": "comcast"
+        },
+        {
+            "url": "*://texttospeechclient",
+            "role": "comcast"
+        },
+        {
+            "url": "*://*.xreapps.net",
+            "role": "xreapps.net"
+        },
+        {
+            "url": "*://tvxcts-c5-c00001-b.ch.tvx.comcast.com",
+            "role": "cts"
+        },
+        {
+            "url": "*://tvxcts-c5-c00001-b.ch.tvx.comcast.com:*",
+            "role": "cts"
+        },
+        {
+            "url": "*://metrological.com",
+            "role": "metrological"
+        },
+        {
+            "url": "*",
+            "role": "default"
+        }
+    ],
+    "roles": {
+        "default" : {
+          "default" : "blocked"
+        },
+        "local" : {
+            "default" : "allowed"
+        },
+        "xreapps.net" : {
+          "default" : "allowed",
+            "org.rdk.TextToSpeech" : { "default" : "allowed", "methods" : [ "enabletts" ] }
+        },
+        "comcast" : {
+            "default" : "allowed",
+            "org.rdk.TextToSpeech" : { "default" : "allowed", "methods" : [ "enabletts" ] }
+        },
+        "metrological" : {
+              "default" : "allowed",
+              "org.rdk.TextToSpeech" : { "default" : "allowed", "methods" : [ "enabletts" ] }
+        },
+        "cts" : {
+            "default" : "allowed",
+            "org.rdk.TextToSpeech" : { "default" : "allowed", "methods" : [ "enabletts" ] }
+        }
+    }
+}
