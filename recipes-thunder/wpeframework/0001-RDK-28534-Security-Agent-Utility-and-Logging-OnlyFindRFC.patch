@@ -1,0 +1,39 @@
+From c2e88c53edc7432b5dff2353ed526c0ab9cf8ee8 Mon Sep 17 00:00:00 2001
+From: Venkataprasad Karna <Venkataprasad_Karna@comcast.com>
+Date: Thu, 17 Dec 2020 18:34:43 +0000
+Subject: [PATCH] RDK:28534: Security Agent Utility and Logging
+
+only FindRFC.cmake part
+
+diff --git a/cmake/modules/FindRFC.cmake b/cmake/modules/FindRFC.cmake
+new file mode 100644
+index 00000000..57426f59
+--- /dev/null
++++ b/cmake/modules/FindRFC.cmake
+@@ -0,0 +1,23 @@
++# - Try to find RFC components
++# Once done this will define
++#  RFC_FOUND - System has RFC
++#  RFC_LIBRARIES - The libraries needed to use  RFC
++#  RFC_INCLUDE_DIRS - The headers needed to use RFC
++
++find_package(PkgConfig)
++
++find_library(RFC_LIBRARIES NAMES rfcapi)
++find_path(RFC_INCLUDE_DIRS NAMES rfcapi.h )
++find_path(WDMP_INCLUDE_DIRS NAMES wdmp-c.h PATH_SUFFIXES wdmp-c)
++
++set(RFC_INCLUDE_DIRS ${RFC_INCLUDE_DIRS} ${WDMP_INCLUDE_DIRS} )
++set(RFC_INCLUDE_DIRS ${RFC_INCLUDE_DIRS} ${WDMP_INCLUDE_DIRS} CACHE PATH "Path to RFC include")
++
++include(FindPackageHandleStandardArgs)
++FIND_PACKAGE_HANDLE_STANDARD_ARGS(RFC DEFAULT_MSG RFC_INCLUDE_DIRS RFC_LIBRARIES)
++
++mark_as_advanced(
++    RFC_FOUND
++    RFC_INCLUDE_DIRS
++    RFC_LIBRARIES)
++
+-- 
+2.24.0
+

@@ -1,0 +1,160 @@
+From: Lukasz Wasylyk <lukasz.wasylyk@redembedded.com>
+Date: Mon, 15 Nov 2021 09:00:00 +0100
+Subject: ONEM-22977: aggressive drm cleanup strategy implementation.
+
+Cleanup of licenses with removal date instead of removal+expired date to optimize time of deinit.
+Full cleanup in case of  process response failure.
+Cleanup of removal licenses in case of reference count did not reach 0 for 20 nonTemporary license
+sessions. Printf based tracing of cleanup process.
+Redundant delete for m_poAppContext removed.
+
+
+Index: OCDM-Playready-Nexus-SVP/MediaSession.cpp
+===================================================================
+--- OCDM-Playready-Nexus-SVP.orig/MediaSession.cpp
++++ OCDM-Playready-Nexus-SVP/MediaSession.cpp
+@@ -607,10 +607,17 @@ CDMi_RESULT MediaKeySession::Load(void)
+   return CDMi_S_FALSE;
+ }
+ 
+-void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_cbKeyMessageResponse)
++
++static DRM_RESULT DRM_API ReportProgress( const DRM_VOID *pvCallerData, DRM_DWORD cPercent, DRM_DWORD cLicenses)
+ {
++    printf("%d percent progressed, %d licenses left\n", cPercent, cLicenses );
++    return DRM_SUCCESS;
++}
+ 
+-    DRM_RESULT dr = DRM_SUCCESS;    
++
++void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_cbKeyMessageResponse)
++{
++  DRM_RESULT dr = DRM_SUCCESS, drProcessResponse;
+     DRM_LICENSE_RESPONSE oLicenseResponse;
+ 
+     ChkArg(f_pbKeyMessageResponse != nullptr && f_cbKeyMessageResponse > 0);
+@@ -621,12 +628,29 @@ void MediaKeySession::Update(const uint8
+     SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data());
+ 
+     LOGGER(LINFO_, "Processing license acquisition response...");
+-    ChkDR(Drm_LicenseAcq_ProcessResponse(m_poAppContext,
++
++   drProcessResponse = Drm_LicenseAcq_ProcessResponse(m_poAppContext,
+                                         DRM_PROCESS_LIC_RESPONSE_SIGNATURE_NOT_REQUIRED,
+                                         const_cast<DRM_BYTE *>(f_pbKeyMessageResponse),
+                                         f_cbKeyMessageResponse,
+-                                        &oLicenseResponse));
++                                        &oLicenseResponse);
++
++    ChkDR(drProcessResponse);
+ 
++    if (drProcessResponse != DRM_SUCCESS) {
++         if (drProcessResponse == DRM_E_FAILED_TO_STORE_LICENSE) {
++           DRM_RESULT dr = Drm_StoreMgmt_CleanupStore(m_poAppContext,
++                                            DRM_STORE_CLEANUP_ALL,
++                                            this, 20, ReportProgress);
++
++         if(DRM_FAILED(dr))
++             LOGGER(LERROR_,  "Warning, Drm_StoreMgmt_CleanupStore returned 0x%08lX", dr);
++
++        }
++        else
++          LOGGER(LINFO_, "unhandled process response error");
++
++    }
+ 
+     LOGGER(LINFO_, "Binding License...");
+     while ((dr = Drm_Reader_Bind(m_poAppContext,
+Index: OCDM-Playready-Nexus-SVP/MediaSystem.cpp
+===================================================================
+--- OCDM-Playready-Nexus-SVP.orig/MediaSystem.cpp
++++ OCDM-Playready-Nexus-SVP/MediaSystem.cpp
+@@ -154,6 +154,8 @@ public:
+         , m_meteringCertificateSize(0)
+         , m_mediaKeySessionsCount(0)
+         , m_dstrHDSPath(DRM_EMPTY_DRM_STRING)
++        , m_persistentKeyCount(0)
++        , m_persistentCountThreshold(20)
+     {
+         NxClient_JoinSettings joinSettings;
+         NxClient_AllocSettings nxAllocSettings;
+@@ -313,33 +315,48 @@ public:
+     {
+     }
+ 
++    static DRM_RESULT DRM_API ReportProgress( const DRM_VOID *pvCallerData,  DRM_DWORD cPercent, DRM_DWORD cLicenses) {
++         printf("%d percent progressed, %d licenses left\n", cPercent, cLicenses );
++         return DRM_SUCCESS;
++    }
++  
+     void DeinitializeSystemRefCounted() {
+         if (--m_mediaKeySessionsCount == 0) {
+             Stopwatch sw;
+             DeinitializeSystem();
+             LOGGER(LINFO_, "DeinitializeSystem() took %.03f", sw.elapsed());
+         }
++        else {
++           if (m_persistentKeyCount > m_persistentCountThreshold) {
++              m_persistentKeyCount = 0;
++              CleanupStore();
++          }
++        }
+     }
+ 
+-    void DeinitializeSystem() { 
+-        LOGGER(LINFO_, "Deinitialize PlayReady System, Build: %s", __TIMESTAMP__ );
++    void CleanupStore() {
++      LOGGER(LINFO_, "CleanupStore. Nontemporary sessions count: %u. Current sessions %u\n",m_persistentKeyCount, m_mediaKeySessionsCount );
+         if(m_poAppContext.get()) {
+-            // Deletes all expired licenses from the license store and perform maintenance
+-            DRM_RESULT dr = Drm_StoreMgmt_CleanupStore(m_poAppContext.get(),
+-                                            DRM_STORE_CLEANUP_ALL,
+-                                            nullptr, 0, nullptr);
+-            if(DRM_FAILED(dr))
++            DRM_RESULT dr = Drm_StoreMgmt_CleanupStore(m_poAppContext.get(),
++                                            DRM_STORE_CLEANUP_DELETE_REMOVAL_DATE_LICENSES,
++                                            nullptr, 20, ReportProgress);
++            if(DRM_FAILED(dr))
+             {
+                 LOGGER(LERROR_,  "Warning, Drm_StoreMgmt_CleanupStore returned 0x%08lX", dr);
+             }
++        }
++  }
+ 
+-            // Uninitialize drm context
+-            Drm_Uninitialize(m_poAppContext.get());
+-            m_poAppContext.reset();
+-        }
++  void DeinitializeSystem() {
++        LOGGER(LINFO_, "Deinitialize PlayReady System, Build: %s", __TIMESTAMP__ );
++        CleanupStore();
++        if (m_poAppContext.get()) {
++           // Uninitialize drm context
++           Drm_Uninitialize(m_poAppContext.get());
++           m_poAppContext.reset();
++        }
+ 
+         Drm_Platform_Uninitialize(m_drmOemContext);
+-        if (m_poAppContext.get() != nullptr) delete m_poAppContext.get();
+         if (drmdir_ != nullptr) delete [] drmdir_;
+         if (m_oemSettings.binFileName != nullptr) delete [] m_oemSettings.binFileName;
+         if (m_oemSettings.defaultRWDirName != nullptr ) delete [] m_oemSettings.defaultRWDirName;
+@@ -380,6 +397,9 @@ public:
+             InitializeSystem();
+         }
+ 
++       // count permanent licenses
++       if (licenseType != Temporary) m_persistentKeyCount++;
++
+         *f_ppiMediaKeySession = new CDMi::MediaKeySession(
+             f_pbInitData, f_cbInitData, 
+             f_pbCDMData, f_cbCDMData, 
+@@ -992,6 +1012,8 @@ private:
+     uint32_t m_meteringCertificateSize;
+     int32_t m_mediaKeySessionsCount;
+     DRM_CONST_STRING m_dstrHDSPath;
++    uint32_t m_persistentKeyCount;
++    uint32_t m_persistentCountThreshold;
+ };
+ 
+ static SystemFactoryType<PlayReady> g_instance({"video/x-h264", "audio/mpeg"});

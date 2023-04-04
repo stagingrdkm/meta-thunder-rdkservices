@@ -1,0 +1,74 @@
+From 109618b73d6075b76162b328326d899d7d402c83 Mon Sep 17 00:00:00 2001
+From: Piotr Marcinkowski <piotr.marcinkowski@redembedded.com>
+Date: Thu, 28 Jul 2022 20:16:59 +0000
+Subject: [PATCH] HUMAXEOS-4773 Fix wpeframework crashes during reboot loop
+
+Root cause of the crash:
+WorkerPoolImplementation class has a single Dispatcher member that is
+shared by all objects of class Minion. One of these Minion objects is
+hosted by WorkerPool class (parent class of WorkerPoolImplementation).
+This single Minion is used to 'join' the WorkerPool by calling
+WorkerPool::Join and make it operational. Since there is one Dispatcher
+whose life is tied to WorkerPoolImplementation's life it must not be
+interacted with after WorkerPoolImplementation instance was relased.
+
+This was previously ensured by call to WorkerPool::Stop which was
+stopping ThreadPool and all Minions. WorkerPool joins one of the Minions
+in its Join method. That Minion wasn't getting stopped on time and
+it could have happened that it out-lived WorkerPool. If that happened
+that delayed Minion was calling methods on Dispatcher object which
+was already freed together with WorkerPool instance.
+
+This fix ensures that WorkerPool object gets unjoined and all
+Minion objects that were using WorkerPool's shared Dispatcher object
+were stopped and won't be interacting with that Dispatcher anymore
+so it can be safely released.
+
+Detailed analysis of this case can be found at
+https://jira.lgi.io/browse/HUMAXEOS-4773
+---
+ Source/WPEFramework/PluginServer.h |  6 +++++-
+ Source/core/WorkerPool.h           | 10 ++++++++++
+ 2 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
+index 96feaabf..d62b582e 100644
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -128,7 +128,11 @@ namespace PluginHost {
+             {
+                 Run();
+             }
+-            ~WorkerPoolImplementation() override = default;
++            ~WorkerPoolImplementation() override {
++                // Disable the queue so the minions can stop, even if they are processing and waiting for work..
++                Stop();
++                WaitIfJoined();
++            }
+ 
+         private:
+             Dispatcher _dispatch;
+diff --git a/Source/core/WorkerPool.h b/Source/core/WorkerPool.h
+index 58b631b7..5f4e657c 100644
+--- a/Source/core/WorkerPool.h
++++ b/Source/core/WorkerPool.h
+@@ -254,6 +254,16 @@ namespace Core {
+         {
+             _threadPool.Queue().Disable();
+         }
++        /**
++         * @brief Stops until this object remains joined by call to WorkerPool::Join()
++         */
++        void WaitIfJoined() {
++            // TODO: 'Joining' to thread with id stored in _joined wasn't working too well. Using 'sleep' instead.
++            while (_joined) {
++                TRACE_L1("WorkerPool::WaitIfJoined() sleep");
++                SleepMs(10);
++            }
++        }
+ 
+     private:
+         ThreadPool _threadPool;
+-- 
+2.37.0
+

@@ -1,0 +1,182 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 4 May 2021 16:36:39 +0200
+Subject: ONEM-18296: Use direct output only for tracing modules
+
+Configurable through cmake flag: TRACING_ONLY_DIRECT_OUTPUT
+---
+ Source/tracing/CMakeLists.txt |  7 ++++
+ Source/tracing/TraceUnit.cpp  | 77 ++++++++++++++++++++++++++++++++++-
+ Source/tracing/TraceUnit.h    | 23 ++++-------
+ 3 files changed, 89 insertions(+), 18 deletions(-)
+
+diff --git a/Source/tracing/CMakeLists.txt b/Source/tracing/CMakeLists.txt
+index 0f1f2171..4b801316 100644
+--- a/Source/tracing/CMakeLists.txt
++++ b/Source/tracing/CMakeLists.txt
+@@ -15,6 +15,13 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
++option(TRACING_ONLY_DIRECT_OUTPUT
++        "Only direct output for tracing." OFF)
++
++if(TRACING_ONLY_DIRECT_OUTPUT)
++    SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -DTRACING_ONLY_DIRECT_OUTPUT")
++endif()
++
+ set(TARGET ${NAMESPACE}Tracing)
+ 
+ add_library(${TARGET} SHARED
+diff --git a/Source/tracing/TraceUnit.cpp b/Source/tracing/TraceUnit.cpp
+index 441ba51a..bf5cae49 100644
+--- a/Source/tracing/TraceUnit.cpp
++++ b/Source/tracing/TraceUnit.cpp
+@@ -34,6 +34,9 @@ namespace Trace {
+         , m_Admin()
+         , m_OutputChannel(nullptr)
+         , m_DirectOut(false)
++#ifdef TRACING_ONLY_DIRECT_OUTPUT
++        , m_OnlyDirectOutEvent(false, true)
++#endif
+     {
+     }
+ 
+@@ -98,6 +101,46 @@ namespace Trace {
+         m_Admin.Unlock();
+     }
+ 
++#ifdef TRACING_ONLY_DIRECT_OUTPUT
++
++    uint32_t TraceUnit::Open(const uint32_t identifier)
++    {
++        m_OutputChannel = nullptr;
++        return Core::ERROR_NONE;
++    }
++
++    uint32_t TraceUnit::Open(const string& pathName)
++    {
++        m_OutputChannel = nullptr;
++        return Core::ERROR_NONE;
++    }
++
++    uint32_t TraceUnit::Close()
++    {
++        return Core::ERROR_NONE;
++    }
++
++    void TraceUnit::Announce()
++    {
++        m_OnlyDirectOutEvent.SetEvent();
++    }
++
++    void TraceUnit::Acknowledge()
++    {
++        m_OnlyDirectOutEvent.ResetEvent();
++    }
++
++    uint32_t TraceUnit::Wait (const uint32_t waitTime)
++    {
++        return m_OnlyDirectOutEvent.Lock(waitTime);
++    }
++
++    void TraceUnit::Relinquish()
++    {
++    }
++
++#else
++
+     uint32_t TraceUnit::Open(const uint32_t identifier)
+     {
+         uint32_t result = Core::ERROR_UNAVAILABLE;
+@@ -151,6 +194,32 @@ namespace Trace {
+         return (Core::ERROR_NONE);
+     }
+ 
++    void TraceUnit::Announce()
++    {
++        ASSERT (m_OutputChannel != nullptr);
++        m_OutputChannel->Ring();
++    }
++
++    void TraceUnit::Acknowledge()
++    {
++        ASSERT (m_OutputChannel != nullptr);
++        m_OutputChannel->Acknowledge();
++    }
++
++    uint32_t TraceUnit::Wait(const uint32_t waitTime)
++    {
++        ASSERT (m_OutputChannel != nullptr);
++        return (m_OutputChannel->Wait(waitTime));
++    }
++
++    void TraceUnit::Relinquish()
++    {
++        ASSERT(m_OutputChannel != nullptr);
++        return (m_OutputChannel->Relinquish());
++    }
++
++#endif
++
+     void TraceUnit::Announce(ITraceControl& Category)
+     {
+         m_Admin.Lock();
+@@ -347,8 +416,12 @@ namespace Trace {
+                 }
+             }
+         }
+-
+-        if (m_DirectOut == true) {
++#ifdef TRACING_ONLY_DIRECT_OUTPUT
++        bool directOutput = true;
++#else
++        bool directOutput = m_DirectOut;
++#endif
++        if (directOutput == true) {
+             string time(Core::Time::Now().ToRFC1123(true));
+             Core::TextFragment cleanClassName(Core::ClassNameOnly(className));
+ 
+diff --git a/Source/tracing/TraceUnit.h b/Source/tracing/TraceUnit.h
+index 78429124..c4b01385 100644
+--- a/Source/tracing/TraceUnit.h
++++ b/Source/tracing/TraceUnit.h
+@@ -224,22 +224,10 @@ namespace Trace {
+         {
+             m_DirectOut = enabled;
+         }
+-        inline void Announce() {
+-            ASSERT (m_OutputChannel != nullptr);
+-            m_OutputChannel->Ring();
+-        }
+-        inline void Acknowledge() {
+-            ASSERT (m_OutputChannel != nullptr);
+-            m_OutputChannel->Acknowledge();
+-        }
+-        inline uint32_t Wait (const uint32_t waitTime) {
+-            ASSERT (m_OutputChannel != nullptr);
+-            return (m_OutputChannel->Wait(waitTime));
+-        }
+-        inline void Relinquish() {
+-            ASSERT(m_OutputChannel != nullptr);
+-            return (m_OutputChannel->Relinquish());
+-        }
++        void Announce();
++        void Acknowledge();
++        uint32_t Wait(const uint32_t waitTime);
++        void Relinquish();
+ 
+     private:
+         inline uint32_t Open(const string& doorBell, const string& fileName) 
+@@ -259,6 +247,9 @@ namespace Trace {
+         TraceBuffer* m_OutputChannel;
+         Settings m_EnabledCategories;
+         bool m_DirectOut;
++#ifdef TRACING_ONLY_DIRECT_OUTPUT
++        Core::Event m_OnlyDirectOutEvent;
++#endif
+     };
+ }
+ } // namespace Trace
+-- 
+2.25.1
+

@@ -1,0 +1,52 @@
+From fbaca4e1acbbf533704772a7e79bcfb2609f41d4 Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Wed, 15 Mar 2023 09:45:12 +0100
+Subject: [PATCH] [OMWAPPI-1315] Extend ocdm rdkservice for metrics API
+
+---
+ interfaces/IDRM.h | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/interfaces/IDRM.h b/interfaces/IDRM.h
+index 7d7c6b0..ba39bcf 100644
+--- a/interfaces/IDRM.h
++++ b/interfaces/IDRM.h
+@@ -208,6 +208,7 @@ typedef enum {
+     CDMi_SERVER_INTERNAL_ERROR = 0x8004C600,
+     CDMi_SERVER_INVALID_MESSAGE = 0x8004C601,
+     CDMi_SERVER_SERVICE_SPECIFIC = 0x8004C604,
++    CDMi_BUFFER_TOO_SMALL = 0x8004C605,
+     CDMi_BUSY_CANNOT_INITIALIZE = 0x8004DD00,
+ } CDMi_RESULT;
+ 
+@@ -520,9 +521,16 @@ public:
+         = 0;
+ };
+ 
++struct IMediaSystemMetrics {
++    IMediaSystemMetrics() = default;
++    virtual ~IMediaSystemMetrics() = default;
++    virtual CDMi_RESULT GetMetrics (uint32_t bufferLength, uint8_t buffer[], uint32_t &count) = 0;
++};
++
+ struct ISystemFactory {
+     virtual ~ISystemFactory() = default;
+     virtual IMediaKeys* Instance() = 0;
++    virtual IMediaSystemMetrics* MetricsInstance() = 0;
+     virtual const char* KeySystem() const = 0;
+     virtual const std::vector<std::string>& MimeTypes() const = 0;
+     virtual void Initialize(const WPEFramework::PluginHost::IShell * shell, const std::string& configline) = 0;
+@@ -551,6 +559,10 @@ public:
+     {
+         return (&_instance);
+     }
++    IMediaSystemMetrics* MetricsInstance() override
++    {
++        return (&_instance);
++    }
+     const std::vector<std::string>& MimeTypes() const override
+     {
+         return (_mimes);
+-- 
+2.25.1
+

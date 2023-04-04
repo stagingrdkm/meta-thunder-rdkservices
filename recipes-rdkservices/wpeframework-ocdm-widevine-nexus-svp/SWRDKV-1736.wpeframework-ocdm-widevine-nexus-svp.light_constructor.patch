@@ -1,0 +1,68 @@
+# WideVine initialization stuck at pthread_join in the context of dlopen. Moving WideVine init out of constructor
+#  to avoid the stuck  
+#
+# #0  __libc_do_syscall () at ../sysdeps/unix/sysv/linux/arm/libc-do-syscall.S:46
+# #1  0xb6f96376 in pthread_join (threadid=2471490640, thread_return=0xbec849e0)
+#     at /usr/src/debug/glibc/2.24-r0/git/nptl/pthread_join.c:90
+# #2  0xb6f69f94 in _srai_enter () from /usr/lib/libsrai.so
+# ...
+# #10 0xb542f7d4 in widevine::(anonymous namespace)::VerifyL1 () at ../../../cdm/src/cdm.cpp:1411
+# #11 0xb542f888 in widevine::Cdm::initialize 
+# #12 0xb580a8fc in CDMi::WideVine::WideVine
+# #13 0xb5808b62 in CDMi::SystemFactoryType<CDMi::WideVine>::SystemFactoryType 
+# ...
+# #25 0xb60c1b14 in __dlopen at /usr/src/debug/glibc/2.24-r0/git/dlfcn/dlopen.c:87
+# #26 0xb6ee90ba in WPEFramework::Core::Library::Library (this=0xbec863d4,
+# #27 0xb60b321c in WPEFramework::Plugin::OCDMImplementation::Configure 
+#
+--- old/MediaSystem.cpp	2019-03-04 10:44:26.892408083 -0500
++++ new/MediaSystem.cpp	2019-03-04 09:47:00.198083882 -0500
+@@ -137,7 +137,5 @@
+         rc = NxClient_Join(&joinSettings);
+         assert (rc == 0);
+         DEBUG_VARIABLE(rc);
+-        widevine::Cdm::ClientInfo client_info;
+-
+         Config config;
+         config.FromString(configline);
+@@ -191,12 +189,14 @@
+             }
+         }
+ 
++#if 0 // Move WideVine initialization out of constructor
+         if (widevine::Cdm::kSuccess == widevine::Cdm::initialize(
+                 widevine::Cdm::kOpaqueHandle, client_info, &_host, &_host, &_host, static_cast<widevine::Cdm::LogLevel>(-1))) {
+ 	    // Setting the last parameter to true, requres serviceCertificates so the requests can be encrypted. Currently badly supported
+             // in the EME tests, so turn of for now :-)
+             _cdm = widevine::Cdm::create(this, &_host, false);
+         }     
++#endif
+     }
+ 
+     CDMi_RESULT CreateMediaKeySession(
+@@ -212,6 +212,17 @@
+         CDMi_RESULT dr = CDMi_S_FALSE;
+         *f_ppiMediaKeySession = nullptr;
+ 
++        if (_cdm == nullptr) {
++            if (widevine::Cdm::kSuccess == widevine::Cdm::initialize(
++                    widevine::Cdm::kOpaqueHandle, client_info, &_host, &_host, &_host, 
++                    static_cast<widevine::Cdm::LogLevel>(-1))) {
++                // Setting the last parameter to true, requres serviceCertificates 
++                //   so the requests can be encrypted. Currently badly supported
++                // in the EME tests, so turn of for now :-)
++                _cdm = widevine::Cdm::create(this, &_host, false);
++            }
++        }
++
+         MediaKeySession* mediaKeySession = new MediaKeySession(_cdm, licenseType);
+ 
+         dr = mediaKeySession->Init(licenseType,
+@@ -229,6 +240,7 @@
+ private:
+     WPEFramework::Core::CriticalSection _adminLock;
+     widevine::Cdm* _cdm;
++    widevine::Cdm::ClientInfo client_info;
+     HostImplementation _host;
+     SessionMap _sessions;
+ };

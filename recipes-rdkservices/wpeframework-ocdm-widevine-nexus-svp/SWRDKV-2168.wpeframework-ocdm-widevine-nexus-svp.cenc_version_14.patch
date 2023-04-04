@@ -1,0 +1,11 @@
+--- old/CMakeLists.txt	2020-01-27 17:47:33.836386139 -0500
++++ new/CMakeLists.txt	2020-01-27 17:47:41.997052820 -0500
+@@ -6,7 +6,7 @@
+ 
+ set(DRM_PLUGIN_NAME "WideVine")
+ 
+-set(CENC_VERSION 3 CACHE STRING "Defines version of CENC is used.")
++set(CENC_VERSION 14 CACHE STRING "Defines version of CENC is used.")
+ 
+ find_package(WPEFramework)
+ find_package(${NAMESPACE}Core)

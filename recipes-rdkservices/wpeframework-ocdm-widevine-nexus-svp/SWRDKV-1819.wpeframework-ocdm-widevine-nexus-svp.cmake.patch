@@ -1,0 +1,11 @@
+--- old/cmake/FindNexusWidevine.cmake	2019-05-02 17:41:12.081487150 -0400
++++ new/cmake/FindNexusWidevine.cmake	2019-05-02 17:40:58.328475627 -0400
+@@ -27,7 +27,7 @@
+ # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ 
+ find_path(LIBNexusWidevine_INCLUDE_DIR cdm.h
+-        PATH_SUFFIXES widevine refsw)
++        PATH_SUFFIXES widevine refsw openssl)
+ 
+ find_path(LIBNexusSVP_INCLUDE_DIR b_secbuf.h
+         PATH_SUFFIXES refsw)

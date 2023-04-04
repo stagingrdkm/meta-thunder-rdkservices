@@ -1,0 +1,55 @@
+From 013e9c7ad27fb74121acc5fed4ef5c89645152ce Mon Sep 17 00:00:00 2001
+From: Piotr Marcinkowski <piotr.marcinkowski@redembedded.com>
+Date: Fri, 10 Feb 2023 19:03:18 +0000
+Subject: [PATCH] OMWAPPI-912 Switch to opencdm_session_decrypt_v2
+
+---
+ .../adapter/broadcom-svp/open_cdm_adapter.cpp | 32 +++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+index 570dfda..f6cc2dc 100644
+--- a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
++++ b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+@@ -195,8 +195,36 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+             gst_structure_get_uint(protectionMeta->info, "skip_byte_block", &pattern.clear_blocks);
+         }
+ 
+-        result = opencdm_session_decrypt(session, encryptedData, bufferSize, encScheme, pattern, mappedIV, mappedIVSize,
+-                                         mappedKeyID, mappedKeyIDSize, initWithLast15);
++        //Create a SubSampleInfo Array with mapping
++        SubSampleInfo * subSampleInfoPtr = nullptr;
++        if (subSample != nullptr) {
++            GstByteReader* reader = gst_byte_reader_new(mappedSubSample, mappedSubSampleSize);
++            subSampleInfoPtr = reinterpret_cast<SubSampleInfo*>(malloc(subSampleCount * sizeof(SubSampleInfo)));
++            for (unsigned int position = 0; position < subSampleCount; position++) {
++                gst_byte_reader_get_uint16_be(reader, &subSampleInfoPtr[position].clear_bytes);
++                gst_byte_reader_get_uint32_be(reader, &subSampleInfoPtr[position].encrypted_bytes);
++            }
++            gst_byte_reader_set_pos(reader, 0);
++            gst_byte_reader_free(reader);
++        }
++
++        SampleInfo sampleInfo;
++        sampleInfo.subSample = subSampleInfoPtr;
++        sampleInfo.subSampleCount = subSampleCount;
++        sampleInfo.scheme = encScheme;
++        sampleInfo.pattern.clear_blocks = pattern.clear_blocks;
++        sampleInfo.pattern.encrypted_blocks = pattern.encrypted_blocks;
++        sampleInfo.iv = mappedIV;
++        sampleInfo.ivLength = mappedIVSize;
++        sampleInfo.keyId = mappedKeyID;
++        sampleInfo.keyIdLength = mappedKeyIDSize;
++
++        result = opencdm_session_decrypt_v2(session, encryptedData, bufferSize, &sampleInfo, nullptr);
++      
++        //Clean up
++        if(subSampleInfoPtr != nullptr) {
++            free(subSampleInfoPtr);
++        }
+            
+         if (result != ERROR_NONE) {
+             TRACE_L1("adapter_session_decrypt: opencdm_session_decrypt failed!");
+-- 
+2.25.1
+

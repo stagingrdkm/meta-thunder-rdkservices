@@ -1,0 +1,144 @@
+From 7c3c0d4e741b250b79d260caff6362abcaf66767 Mon Sep 17 00:00:00 2001
+From: Marcin Mielczarczyk <marcin.mielczarczyk@redembedded.com>
+Date: Thu, 19 Jan 2023 13:17:12 +0100
+Subject: [PATCH] [OMWAPPI-930] Add Widevine v16 support to OCDM
+
+Add Widevine v16 support to OCDM and enable it.
+---
+ CMakeLists.txt                |  6 +++++-
+ MediaSession.cpp              | 38 +++++++++++++++++++++++++++++++++++
+ MediaSystem.cpp               |  6 ++++--
+ cmake/FindNexusWidevine.cmake |  6 +++++-
+ 4 files changed, 52 insertions(+), 4 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c53dd54..8ec1f58 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -49,7 +49,11 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+ 
+ set(DRM_PLUGIN_NAME "WideVine")
+ 
+-set(CENC_VERSION 15 CACHE STRING "Defines version of CENC is used.")
++if (WIDEVINE_VERSION EQUAL 16)
++  set(CENC_VERSION 16 CACHE STRING "Defines version of CENC is used.")
++else ()
++  set(CENC_VERSION 15 CACHE STRING "Defines version of CENC is used.")
++endif()
+ 
+ find_package(WPEFramework)
+ find_package(${NAMESPACE}Core)
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 26aedc9..e41e147 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -523,6 +523,43 @@ CDMi_RESULT MediaKeySession::Decrypt(
+     widevine::Cdm::KeyStatusMap::iterator it = map.begin();
+     // FIXME: We just check the first key? How do we know that's the Widevine key and not, say, a PlayReady one?
+     if (widevine::Cdm::kUsable == it->second) {
++#if defined (USE_CENC16)
++      widevine::Cdm::Subsample subsample;
++      subsample.protected_bytes = f_cbData;
++
++      widevine::Cdm::Sample sample;
++      sample.input.data = reinterpret_cast<uint8_t*>(m_pNexusMemory);
++      sample.input.data_length = f_cbData;
++      sample.input.subsamples = &subsample;
++      sample.input.subsamples_length = 1;
++      sample.input.iv = m_IV;
++      sample.input.iv_length = sizeof(m_IV);
++
++      sample.output.data = reinterpret_cast<uint8_t*>(pOpaqueData);
++      sample.output.data_length = f_cbData;
++      sample.output.data_offset = 0;
++
++
++      widevine::Cdm::DecryptionBatch batch;
++      batch.samples = &sample;
++      batch.samples_length = 1;
++      batch.key_id = keyId;
++      batch.key_id_length = keyIdLength;
++      batch.is_secure = true;
++      batch.encryption_scheme = widevine::Cdm::kAesCtr;
++      batch.is_video = true;
++
++      uint8_t crypto_byte_block = 0;
++      uint8_t skip_byte_block = 0;
++      widevine::Cdm::Pattern pattern(crypto_byte_block, skip_byte_block);
++      batch.pattern = pattern;
++
++      if (widevine::Cdm::kSuccess == m_cdm->decrypt(batch)) {
++        status = CDMi_SUCCESS;
++      } else {
++        printf("CDM decrypt failed!\n");
++      }
++#else
+       widevine::Cdm::OutputBuffer output;
+       output.data = reinterpret_cast<uint8_t*>(pOpaqueData);
+       output.data_length = f_cbData;
+@@ -557,6 +594,7 @@ CDMi_RESULT MediaKeySession::Decrypt(
+           m_decryptErrorReportCount = 0;
+         }
+       }
++#endif
+     }
+   }
+ 
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index d1e180b..8d2b29c 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -259,7 +259,7 @@ public:
+ 
+         std::string serverCertificate(reinterpret_cast<const char*>(f_pbServerCertificate), f_cbServerCertificate);
+ 
+-#ifdef USE_CENC15
++#if defined (USE_CENC15) || defined (USE_CENC16)
+         if (widevine::Cdm::kSuccess == _cdm->setServiceCertificate(widevine::Cdm::ServiceRole::kAllServices, serverCertificate)) {
+             dr = CDMi_SUCCESS;
+         }
+@@ -307,7 +307,7 @@ public:
+         _adminLock.Unlock();
+     }
+ 
+-#if defined (USE_CENC14) || defined (USE_CENC15)
++#if defined (USE_CENC14) || defined (USE_CENC15) || defined (USE_CENC16)
+     void onKeyStatusesChange(const std::string& session_id,  bool has_new_usable_key) override
+ #else
+     void onKeyStatusesChange(const std::string& session_id) override
+@@ -334,6 +334,7 @@ public:
+         _adminLock.Unlock();
+     }
+ 
++#if !defined (USE_CENC16)
+     // Called when a deferred action has completed.
+     void onDeferredComplete(const std::string& session_id, widevine::Cdm::Status result) override {
+ 
+@@ -345,6 +346,7 @@ public:
+ 
+         _adminLock.Unlock();
+     }
++#endif
+ #if CENC_VERSION < 15
+     // Called when the CDM requires a new device certificate
+     virtual void onDirectIndividualizationRequest(const std::string& session_id, const std::string& request) {
+diff --git a/cmake/FindNexusWidevine.cmake b/cmake/FindNexusWidevine.cmake
+index b06b252..3ae3dc5 100644
+--- a/cmake/FindNexusWidevine.cmake
++++ b/cmake/FindNexusWidevine.cmake
+@@ -71,7 +71,11 @@ if(NOT LIBNexusWidevine_LIBRARY)
+ endif()
+ 
+ # needed libs
+-list(APPEND NeededLibs protobuf-lite cmndrm cmndrm_tl crypto oemcrypto_tl)
++if (WIDEVINE_VERSION EQUAL 16)
++  list(APPEND NeededLibs protobuf-lite widevine_tl crypto oemcrypto_tl)
++else ()
++  list(APPEND NeededLibs protobuf-lite cmndrm cmndrm_tl crypto oemcrypto_tl)
++endif()
+ 
+ # needed svp libs
+ list(APPEND NeededLibs drmrootfs srai)
+-- 
+2.25.1
+

@@ -1,0 +1,154 @@
+From: Marek Bulatek <marek.bulatek@redembedded.com>
+Date: Mon, 13 Jun 2022 16:43:45 +0100
+Subject: [ONEM-25410] Added ODH logging for Widevine OCDM plugin
+
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6992e3b..c53dd54 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -87,5 +87,13 @@ target_link_libraries(${DRM_PLUGIN_NAME}
+         NexusWidevine::NexusWidevine
+ )
+ 
++find_path(LIBODHERR_INCLUDE_DIR "rdk/libodherr/odherr.h")
++if (LIBODHERR_INCLUDE_DIR)
++  message(STATUS "ODH Error reporting support enabled (path: ${LIBODHERR_INCLUDE_DIR})")
++  target_compile_definitions(${DRM_PLUGIN_NAME} PRIVATE -DHAVE_LIBODHERR_ODHERR_H -DODH_SOURCE_NAME="OCDM.Widevine")
++  target_include_directories(${DRM_PLUGIN_NAME} PRIVATE ${LIBODHERR_INCLUDE_DIR})
++  target_link_libraries(${DRM_PLUGIN_NAME} PRIVATE odherr jansson)
++endif(LIBODHERR_INCLUDE_DIR)
++
+ install(TARGETS ${DRM_PLUGIN_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX}/share/${NAMESPACE}/OCDM)
+ 
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 1b5fbbe..09a851c 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -92,7 +92,8 @@ MediaKeySession::MediaKeySession(widevine::Cdm *cdm, int32_t licenseType)
+     , m_sessionId("")
+     , m_TokenHandle(nullptr)
+     , m_pNexusMemory(nullptr)
+-    , m_NexusMemorySize(512 * 1024) {
++    , m_NexusMemorySize(512 * 1024)
++    , m_decryptErrorReportCount(0) {
+ 
+ #if CENC_VERSION >= 14
+   if(!m_cdm->isProvisioned()) {
+@@ -191,6 +192,7 @@ void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCal
+     widevine::Cdm::Status status = m_cdm->generateRequest(m_sessionId, m_initDataType, m_initData);
+     if (widevine::Cdm::kSuccess != status) {
+        printf("generateRequest failed\n");
++       WIDEVINE_ODH_REPORT("generateRequest failed\n");
+ #if CENC_VERSION < 15
+ #ifdef HANDLE_DEVICE_PROVISIONING_REQUEST
+        while(!_cdm_request.empty()) {
+@@ -201,6 +203,7 @@ void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCal
+            sendPostRequest(request, response);
+            if (widevine::Cdm::kSuccess != m_cdm->update(m_sessionId, response)) {
+                printf("updating response failed\n");
++               WIDEVINE_ODH_REPORT("updating response failed\n");
+            } else {
+                printf("device provisioned.\n");
+            }
+@@ -237,6 +240,7 @@ void MediaKeySession::onMessage(widevine::Cdm::MessageType f_messageType, const
+   }
+   default:
+     printf("unsupported message type %d\n", f_messageType);
++    WIDEVINE_ODH_REPORT("unsupported message type %d\n", f_messageType);
+     break;
+   }
+   message.append(f_message.c_str(),  f_message.size());
+@@ -481,6 +485,7 @@ CDMi_RESULT MediaKeySession::Decrypt(
+     if( rc != 0 ) {
+ 
+         printf("NexusMemory to small, use larger buffer. could not allocate memory %d", f_cbData);
++        WIDEVINE_ODH_REPORT("NexusMemory to small, use larger buffer. could not allocate memory %d", f_cbData);
+         return status;
+     }
+ 
+@@ -495,6 +500,7 @@ CDMi_RESULT MediaKeySession::Decrypt(
+   if (!pNexusMemoryBlock) {
+ 
+     printf("NexusBlockMemory could not allocate %d", f_cbData);
++    WIDEVINE_ODH_REPORT("NexusBlockMemory could not allocate %d", f_cbData);
+     return status;
+   }
+ 
+@@ -504,6 +510,7 @@ CDMi_RESULT MediaKeySession::Decrypt(
+   if (rc) {
+ 
+     printf("NexusBlockMemory is not usable");
++    WIDEVINE_ODH_REPORT("NexusBlockMemory is not usable");
+     NEXUS_MemoryBlock_Free(pNexusMemoryBlock);
+     pOpaqueData = nullptr;
+     return status;
+@@ -513,6 +520,7 @@ CDMi_RESULT MediaKeySession::Decrypt(
+   if (!m_TokenHandle) {
+ 
+     printf("Could not create a token for another process");
++    WIDEVINE_ODH_REPORT("Could not create a NEXUS memory block token for another process");
+     NEXUS_MemoryBlock_Unlock(pNexusMemoryBlock);
+     NEXUS_MemoryBlock_Free(pNexusMemoryBlock);
+     pOpaqueData = nullptr;
+@@ -552,6 +560,13 @@ CDMi_RESULT MediaKeySession::Decrypt(
+         status = CDMi_SUCCESS;
+       } else {
+         printf("CDM decrypt failed!\n");
++        if (m_decryptErrorReportCount++ == 0) {
++          WIDEVINE_ODH_REPORT("CDM decrypt failed!\n");
++        }
++
++        if (m_decryptErrorReportCount == DECRYPT_ERROR_REPORT_PERIOD) {
++          m_decryptErrorReportCount = 0;
++        }
+       }
+     }
+   }
+diff --git a/MediaSession.h b/MediaSession.h
+index bb7344a..ba6273f 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -50,6 +50,22 @@
+ 
+ #include <nexus_memory.h>
+ 
++
++#ifdef HAVE_LIBODHERR_ODHERR_H
++#include <rdk/libodherr/odherr.hpp>
++#define WIDEVINE_ODH_REPORT(format, ...)                               \
++    do {                                                               \
++        char *msg = odh_error_report_sprintf(format, ##__VA_ARGS__);   \
++        ODH_ERROR_REPORT_CTX_ERROR(0, msg);                            \
++        free(msg);                                                     \
++    } while (false)
++
++#else
++#define WIDEVINE_ODH_REPORT(format, ...)
++#endif
++
++#define DECRYPT_ERROR_REPORT_PERIOD 100
++
+ namespace CDMi
+ {
+ class MediaKeySession : public IMediaKeySession
+@@ -133,6 +149,7 @@ private:
+     NEXUS_MemoryBlockTokenHandle m_TokenHandle;
+     void *m_pNexusMemory;
+     uint32_t m_NexusMemorySize;
++    uint32_t m_decryptErrorReportCount;
+ };
+ 
+ }  // namespace CDMi
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index f3143b7..d1e180b 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -239,6 +239,7 @@ public:
+ 
+ 
+         if (dr != CDMi_SUCCESS) {
++            WIDEVINE_ODH_REPORT("Failed to init MediaKeySession\n");
+             delete mediaKeySession;
+         }
+         else {

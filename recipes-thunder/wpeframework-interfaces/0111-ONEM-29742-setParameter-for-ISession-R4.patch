@@ -1,0 +1,27 @@
+From 6f0698f74d74cecf650f3e804bbf3f15d24b8682 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Fri, 17 Mar 2023 15:37:30 +0100
+Subject: [PATCH] ONEM-29742: setParameter for ISession
+
+---
+ interfaces/IOCDM.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/interfaces/IOCDM.h b/interfaces/IOCDM.h
+index e43b567..0d1ccd7 100644
+--- a/interfaces/IOCDM.h
++++ b/interfaces/IOCDM.h
+@@ -119,6 +119,9 @@ struct ISession : virtual public Core::IUnknown {
+     // Let the CDM know playback has stopped in order to disable output protection
+     virtual void ResetOutputProtection() = 0;
+ 
++    // Set a name/value pair into the CDM
++    virtual void SetParameter(const std::string& name, const std::string& value) = 0;
++
+     // During instantiation a callback is set, here we can decouple.
+     virtual void Revoke(ISession::ICallback* callback) = 0;
+ };
+-- 
+2.25.1
+
+ 
