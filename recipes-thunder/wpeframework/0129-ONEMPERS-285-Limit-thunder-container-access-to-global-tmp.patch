@@ -1,0 +1,64 @@
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Wed, 26 Jan 2022 22:21:57 +0100
+Subject: [PATCH] Pass communicator and input/locator to config
+
+---
+ Source/WPEFramework/GenericConfig.cmake | 18 +++++++++++-------
+ 1 file changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/Source/WPEFramework/GenericConfig.cmake b/Source/WPEFramework/GenericConfig.cmake
+index 7872fe0..839396e 100644
+--- a/Source/WPEFramework/GenericConfig.cmake
++++ b/Source/WPEFramework/GenericConfig.cmake
+@@ -19,6 +19,8 @@
+ string(TOLOWER ${NAMESPACE} NAMESPACE_LIB)
+ 
+ set(PORT 80 CACHE STRING "The port for the webinterface")
++set(COMMUNICATOR "/tmp/communicator" CACHE STRING "The communicator")
++set(INPUT_LOCATOR "/tmp/keyhandler" CACHE STRING "Input locator")
+ set(BINDING "0.0.0.0" CACHE STRING "The binding interface")
+ set(IDLE_TIME 180 CACHE STRING "Idle time")
+ set(PERSISTENT_PATH "/root" CACHE STRING "Persistent path")
+@@ -46,6 +48,7 @@ end()
+ ans(CONFIG)
+ 
+ map_set(${CONFIG} port ${PORT})
++map_set(${CONFIG} communicator ${COMMUNICATOR})
+ map_set(${CONFIG} binding ${BINDING})
+ map_set(${CONFIG} ipv6 ${IPV6_SUPPORT})
+ map_set(${CONFIG} idletime ${IDLE_TIME})
+@@ -143,7 +146,7 @@ ans(PLUGIN_FATAL_TRACING)
+ 
+ if(NOT VIRTUALINPUT)
+     map()
+-    kv(locator "/dev/uinput")
++    kv(locator ${INPUT_LOCATOR})
+     kv(type "device")
+     if(KEY_OUTPUT_DISABLED)
+         kv(output false)
+@@ -153,15 +156,16 @@ if(NOT VIRTUALINPUT)
+ 
+     map_append(${CONFIG} input ${PLUGIN_INPUT_DEVICE})
+ else(VIRTUALINPUT)
++    map()
++    kv(type "virtual")
++    kv(locator ${INPUT_LOCATOR})
+     if(KEY_OUTPUT_DISABLED)
+-        map()
+-        kv(type "virtual")
+         kv(output false)
+-        end()
+-        ans(PLUGIN_INPUT_DEVICE)
+-
+-        map_append(${CONFIG} input ${PLUGIN_INPUT_DEVICE})
+     endif()
++    end()
++    ans(PLUGIN_INPUT_DEVICE)
++
++    map_append(${CONFIG} input ${PLUGIN_INPUT_DEVICE})
+ endif(NOT VIRTUALINPUT)
+ 
+ if(TRACE_SETTINGS)
+-- 
+2.25.1
+

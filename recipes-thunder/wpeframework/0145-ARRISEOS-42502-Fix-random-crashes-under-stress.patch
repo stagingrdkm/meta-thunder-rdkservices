@@ -1,0 +1,54 @@
+From 0ecefb840f918ddf6468e46a3a4677414e2046c9 Mon Sep 17 00:00:00 2001
+From: Piotr Marcinkowski <piotr.marcinkowski@redembedded.com>
+Date: Thu, 3 Nov 2022 07:51:55 +0000
+Subject: [PATCH] ARRISEOS-42502 Fix random crashes undder stress
+
+Browser crashes after being stressed with immediate URL changes and
+JSON-RPC calls and as a result box is rebooted.
+
+It wasn't fully clear what steps are needed for reproduction.
+Additionally the reproduction rate was very low. The reliable fix
+could not be provided but after thorough investigation and
+consultations with Metrological the following was established:
+
+* The Serialize will never be called, becasue the socket (as it is
+closed from the other side) will never reach the state that it can
+feed new data (and thus call serialize). Therefore waiting for the
+Serialzier to complete will be infinite.
+
+* Since the Serialize will never get called it's safe to remove
+the ASSERT in Serializer destructor as there won't be any further
+calls to methods of potentially released objects.
+
+* An option that is currently under discussion, is to "flush" the
+Serializers at the moment we close the socket so the Serializer
+knows it can drop the _current safely. The Flush would than be
+called after the Close  (see destructer calls in the callstack)
+and the ASSERT will not fire since the _current is a nullptr now.
+
+* The issue is probably LGI-specific only. It may have been caused
+by the implementation of containerized browser plugin.
+https://wikiprojects.upc.biz/pages/viewpage.action?pageId=404448418
+---
+ Source/core/IPCConnector.h | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/Source/core/IPCConnector.h b/Source/core/IPCConnector.h
+index 56971b4f..ceda61ba 100644
+--- a/Source/core/IPCConnector.h
++++ b/Source/core/IPCConnector.h
+@@ -51,7 +51,10 @@ namespace Core {
+             }
+             virtual ~Serializer()
+             {
+-                ASSERT(_current == nullptr);
++                if (_current != nullptr) {
++                    TRACE_L1("ARRISEOS-42502 Serializer::~Serializer _current != nullptr");
++                }
++                // ASSERT(_current == nullptr);
+             }
+ 
+         public:
+-- 
+2.37.0
+

@@ -1,0 +1,33 @@
+From d78a0967a44880919982cea6bf77af7465646b46 Mon Sep 17 00:00:00 2001
+From: Marcin Hajkowski <mhajkowski.contractor@libertyglobal.com>
+Date: Mon, 21 Mar 2022 22:16:51 +0000
+Subject: [PATCH] Use reverse proxy for provisioning.
+
+---
+ MediaSession.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 51a1800..9eb94c8 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -134,7 +134,7 @@ MediaKeySession::~MediaKeySession(void) {
+ 
+ #ifdef HANDLE_DEVICE_PROVISIONING_REQUEST
+ static const std::string kProvisioningServerUrl =
+-    "https://www.googleapis.com/"
++    "http://localhost:81/widevine-provisioning/"
+     "certificateprovisioning/v1/devicecertificates/create"
+     "?key=AIzaSyB-5OLKTx2iU5mko18DfdwK5611JIjbUhE";
+ 
+@@ -165,6 +165,7 @@ std::string& response)
+     if (curl) {
+         curl_easy_setopt(curl, CURLOPT_URL, server_url.c_str());
+         curl_easy_setopt(curl, CURLOPT_HTTPPOST, 0);
++        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writeback);
+         res = curl_easy_perform(curl);
+         response = msgBuffer;
+-- 
+2.29.2
+

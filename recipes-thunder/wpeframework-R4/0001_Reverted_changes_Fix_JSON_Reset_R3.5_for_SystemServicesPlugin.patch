@@ -1,0 +1,14 @@
+diff --git a/Source/core/JSON.h b/Source/core/JSON.h
+index f7f1854c..1bc16459 100644
+--- a/Source/core/JSON.h
++++ b/Source/core/JSON.h
+@@ -3368,7 +3368,6 @@ namespace Core {
+                 }
+             }
+
+-        protected:
+             void Reset()
+             {
+                 _data.clear();
+
+

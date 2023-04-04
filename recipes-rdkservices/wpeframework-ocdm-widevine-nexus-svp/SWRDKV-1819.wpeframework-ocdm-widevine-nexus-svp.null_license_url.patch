@@ -1,0 +1,20 @@
+--- old/MediaSession.cpp	2019-05-08 15:47:26.488258611 -0400
++++ new/MediaSession.cpp	2019-05-08 15:48:24.720800411 -0400
+@@ -27,6 +27,7 @@
+ #include <string.h>
+ #include <sys/utsname.h>
+ 
++#define NULL_LICENSE_SERVER_URL
+ #define HANDLE_DEVICE_PROVISIONING_REQUEST
+ #ifdef HANDLE_DEVICE_PROVISIONING_REQUEST
+ // has to use curl for posting provision request
+@@ -160,6 +161,9 @@
+     break;
+   }
+   message.append(f_message.c_str(),  f_message.size());
++#ifdef NULL_LICENSE_SERVER_URL
++  destUrl.assign(""); 
++#endif
+   m_piCallback->OnKeyMessage((const uint8_t*) message.c_str(), message.size(), (char*) destUrl.c_str());
+ }
+ 

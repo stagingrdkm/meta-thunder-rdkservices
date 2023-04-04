@@ -1,0 +1,77 @@
+From b9c428e0c43201bfad761ee32a9f9f516c0ff323 Mon Sep 17 00:00:00 2001
+From: Marcin Hajkowski <mhajkowski.contractor@libertyglobal.com>
+Date: Wed, 23 Feb 2022 22:09:19 +0000
+Subject: [PATCH] fix build and library loading
+
+---
+ MediaSession.h                |  2 ++
+ MediaSystem.cpp               |  4 ++--
+ cmake/FindNexusWidevine.cmake | 10 ++++++++--
+ 3 files changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/MediaSession.h b/MediaSession.h
+index 526ddf0..bb7344a 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -114,7 +114,9 @@ public:
+     void deferredKeyStatusChange();
+     void onRemoveComplete();
+     void onDeferredComplete(widevine::Cdm::Status);
++#if CENC_VERSION < 15
+     void onDirectIndividualizationRequest(const std::string&, const std::string&);
++#endif
+ 
+ private:
+     void onKeyStatusError(widevine::Cdm::Status status);
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 2506f85..fa57715 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -342,7 +342,7 @@ public:
+ 
+         _adminLock.Unlock();
+     }
+-
++#if CENC_VERSION < 15
+     // Called when the CDM requires a new device certificate
+     virtual void onDirectIndividualizationRequest(const std::string& session_id, const std::string& request) {
+ 
+@@ -354,7 +354,7 @@ public:
+ 
+         _adminLock.Unlock();
+     }
+-
++#endif
+ private:
+     WPEFramework::Core::CriticalSection _adminLock;
+     widevine::Cdm* _cdm;
+diff --git a/cmake/FindNexusWidevine.cmake b/cmake/FindNexusWidevine.cmake
+index 7c813a9..b06b252 100644
+--- a/cmake/FindNexusWidevine.cmake
++++ b/cmake/FindNexusWidevine.cmake
+@@ -48,14 +48,20 @@
+ #
+ 
+ find_path(LIBNexusWidevine_INCLUDE_DIR cdm.h
+-        PATH_SUFFIXES widevine refsw openssl)
++        PATH_SUFFIXES widevine refsw openssl
++        HINTS ${CMAKE_SYSROOT}/usr/include/widevine/cdm)
++
++find_path(LIBNexusWidevine_INCLUDE_DIR_UTIL string_conversions.h
++        PATH_SUFFIXES widevine refsw openssl
++        HINTS ${CMAKE_SYSROOT}/usr/include/widevine/util)
+ 
+ find_path(LIBNexusSVP_INCLUDE_DIR sage_srai.h
+         PATH_SUFFIXES refsw)
+ 
+ set(LIBNexusWidevine_DEFINITIONS "")
+ 
+-list(APPEND LIBNexusWidevine_INCLUDE_DIRS ${LIBNexusWidevine_INCLUDE_DIR} ${LIBNexusSVP_INCLUDE_DIR})
++list(APPEND LIBNexusWidevine_INCLUDE_DIRS ${LIBNexusWidevine_INCLUDE_DIR} ${LIBNexusSVP_INCLUDE_DIR}
++                                          ${LIBNexusWidevine_INCLUDE_DIR_UTIL})
+ 
+ # main lib
+ find_library(LIBNexusWidevine_LIBRARY widevine_ce_cdm_shared)
+-- 
+2.29.2
+

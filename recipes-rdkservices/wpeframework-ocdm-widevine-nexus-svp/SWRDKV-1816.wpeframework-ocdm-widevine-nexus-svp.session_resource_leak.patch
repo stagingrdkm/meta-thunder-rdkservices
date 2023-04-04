@@ -1,0 +1,12 @@
+--- old/MediaSystem.cpp	2019-07-12 10:07:14.406711155 -0400
++++ new/MediaSystem.cpp	2019-08-06 15:55:09.742644723 -0400
+@@ -179,6 +179,9 @@
+         SessionMap::iterator index (_sessions.find(sessionId));
+ 
+         if (index != _sessions.end()) {
++            // To clean up an underlying session resource 
++            // Init is called in CreateMediaKeySession, so call Close here
++            index->second->Close();
+             _sessions.erase(index);
+         }
+ 

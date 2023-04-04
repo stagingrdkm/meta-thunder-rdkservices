@@ -1,0 +1,26 @@
+##########################################
+Date: Dec 20, 2021 1:41 AM
+From: d4723c06bddfca7cbd9f9327ed402dd2cc4b75a7 
+Subject: to generate WPEFRameworkCOM pkgconfig
+Source: COMCAST
+Upstream-Status: Pending
+Signed-off-by: LeenaSunthari <ldhana149@cable.comcast.com>
+##########################################
+
+
+
+diff --git a/Source/com/CMakeLists.txt b/Source/com/CMakeLists.txt
+index 566d34e2..55eaa6d2 100644
+--- a/Source/com/CMakeLists.txt
++++ b/Source/com/CMakeLists.txt
+@@ -135,4 +135,7 @@ install(
+         INCLUDES DESTINATION include/${NAMESPACE}   # default include path
+ )
+
+-InstallCMakeConfig(TARGETS ${TARGET})
+\ No newline at end of file
++InstallCMakeConfig(TARGETS ${TARGET})
++InstallPackageConfig(
++               TARGETS ${TARGET}
++              DESCRIPTION "Enable ease of development for COM support." )
+

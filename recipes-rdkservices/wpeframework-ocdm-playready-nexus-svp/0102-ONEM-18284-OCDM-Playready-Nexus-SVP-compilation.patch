@@ -1,0 +1,19 @@
+From 3ef1eb41da1b1347903e22b987de780c416f9985 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Mon, 11 Jan 2021 14:01:42 +0100
+Subject: ONEM-18284: OCDM-Playready-Nexus-SVP failed to compile
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 15c8b11..a4d1da4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -53,6 +53,9 @@ if (BUILD_REFERENCE)
+     add_definitions(-DBUILD_REFERENCE=${BUILD_REFERENCE})
+ endif()
+ 
++find_path(LIBNexusPlayready_INCLUDE_DIR drmmanager.h
++        PATH_SUFFIXES playready3x refsw)
++
+ find_package(WPEFramework REQUIRED)
+ find_package(${NAMESPACE}Core REQUIRED)
+ find_package(NEXUS REQUIRED)

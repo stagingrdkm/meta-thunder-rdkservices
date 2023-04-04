@@ -1,0 +1,102 @@
+--- old/CMakeLists.txt	2020-10-13 16:24:13.657135818 -0400
++++ new/CMakeLists.txt	2020-10-09 15:04:30.238065010 -0400
+@@ -6,7 +6,7 @@
+ 
+ set(DRM_PLUGIN_NAME "WideVine")
+ 
+-set(CENC_VERSION 14 CACHE STRING "Defines version of CENC is used.")
++set(CENC_VERSION 15 CACHE STRING "Defines version of CENC is used.")
+ 
+ find_package(WPEFramework)
+ find_package(${NAMESPACE}Core)
+@@ -31,6 +32,7 @@
+ target_compile_definitions(${DRM_PLUGIN_NAME} 
+     PRIVATE
+         USE_CENC${CENC_VERSION}
++        CENC_VERSION=${CENC_VERSION}
+ )
+ 
+ target_link_libraries(${DRM_PLUGIN_NAME} 
+
+--- old/MediaSession.cpp	2020-10-13 16:24:13.605131619 -0400
++++ new/MediaSession.cpp	2020-10-09 15:04:30.238065010 -0400
+@@ -47,6 +47,10 @@
+ 
+ namespace CDMi {
+ 
++#ifdef HANDLE_DEVICE_PROVISIONING_REQUEST
++static void sendPostRequest(std::string& request, std::string& response);
++#endif
++
+ WPEFramework::Core::CriticalSection g_lock;
+ 
+ MediaKeySession::MediaKeySession(widevine::Cdm *cdm, int32_t licenseType)
+@@ -59,6 +63,26 @@
+     , m_pNexusMemory(nullptr)
+     , m_NexusMemorySize(512 * 1024) {
+ 
++#if CENC_VERSION >= 14
++  if(!m_cdm->isProvisioned()) {
++        widevine::Cdm::Status status;
++        std::string provision_request;
++
++        status = m_cdm->getProvisioningRequest(&provision_request);
++        if (status != widevine::Cdm::kSuccess) {
++            printf("getProvisioningRequest() fails! %u", status);
++        } else {
++            std::string provision_response;
++            sendPostRequest(provision_request, provision_response);
++
++            status = m_cdm->handleProvisioningResponse(provision_response);
++            if (status != widevine::Cdm::kSuccess) {
++                printf("handleProvisioningResponse fails! %u", status);
++            }
++            printf("device provisioned.");
++        }
++    }
++#endif
+   m_cdm->createSession(m_licenseType, &m_sessionId);
+ 
+   ::memset(m_IV, 0 , sizeof(m_IV));
+@@ -130,6 +154,7 @@
+     widevine::Cdm::Status status = m_cdm->generateRequest(m_sessionId, m_initDataType, m_initData);
+     if (widevine::Cdm::kSuccess != status) {
+        printf("generateRequest failed\n");
++#if CENC_VERSION < 15
+ #ifdef HANDLE_DEVICE_PROVISIONING_REQUEST
+        while(!_cdm_request.empty()) {
+            std::string request = _cdm_request;
+@@ -144,6 +169,7 @@
+            }
+        }
+ #endif
++#endif
+        m_piCallback->OnKeyMessage((const uint8_t *) "", 0, "");
+     }
+   }
+@@ -277,6 +303,7 @@
+ void MediaKeySession::onDeferredComplete(widevine::Cdm::Status) {
+ }
+ 
++#if CENC_VERSION < 15
+ void MediaKeySession::onDirectIndividualizationRequest(
+         const std::string& session_id,
+         const std::string& request) {
+@@ -284,6 +311,7 @@
+         _cdm_request = request;
+ #endif
+ }
++#endif
+ 
+ CDMi_RESULT MediaKeySession::Load(void) {
+   CDMi_RESULT ret = CDMi_S_FALSE;
+--- old/HostImplementation.h	2020-10-09 11:16:49.853503469 -0400
++++ new/HostImplementation.h	2020-10-09 11:21:35.348623140 -0400
+@@ -47,6 +47,7 @@
+ #define WIDEVINE_HOST_IMPLEMENTATION_H
+ 
+ #include "cdm.h"
++#define OVERRIDE
+ 
+ #include <core/core.h>
+ 

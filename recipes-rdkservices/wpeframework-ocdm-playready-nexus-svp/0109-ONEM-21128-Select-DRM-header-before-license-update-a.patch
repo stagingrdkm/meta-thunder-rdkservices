@@ -1,0 +1,66 @@
+From 3faaf9dd1c8c893d6d8be63035885de711ed6544 Mon Sep 17 00:00:00 2001
+From: Maciej Kolanski <maciej.kolanski@consult.red>
+Date: Wed, 21 Jul 2021 13:31:12 +0200
+Subject: [PATCH] ONEM-21128: Select DRM header before license update and request generation
+
+With PlayReady 3.0 multi-key feature a single stream may use multiple
+encryption keys (e.g. separate key per each track). In such case, EME
+application creates multiple MediaKeySession objects. The problem is
+that in OCDM-Playready-Nexus-SVP all MediaKeySession objects share the
+same |DRM_APP_CONTEXT| handle and it is possible to select just a single
+active PlayReady header.
+
+In order to guarantee that currently selected header is related to the
+given MediaKeySession object, the header has to be reselected before
+license update and request generation.
+---
+ MediaSession.cpp | 19 +++++++++++--------
+ 1 file changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 3a5ac62..cc72819 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -422,14 +422,8 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+             playreadyInitData = initData;
+         }
+ 
+-        // TODO: can we do this nicer?
+-        mDrmHeader.resize(f_cbInitData);
+-        memcpy(&mDrmHeader[0], f_pbInitData, f_cbInitData);
+-
+-        ChkDR(Drm_Content_SetProperty(m_poAppContext,
+-                                      DRM_CSP_AUTODETECT_HEADER,
+-                                      reinterpret_cast<const uint8_t *>(playreadyInitData.data()),
+-                                      playreadyInitData.size()));
++        mDrmHeader.assign(playreadyInitData.begin(), playreadyInitData.end());
++        SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data());
+ 
+         // Generate a random media session ID.
+         ChkDR(Oem_Random_GetBytes(m_poAppContext, (DRM_BYTE *)&oSessionID, sizeof(oSessionID)));
+@@ -496,6 +490,12 @@ bool MediaKeySession::playreadyGenerateKeyRequest() {
+     DRM_DWORD cchSilentURL = 0;
+ 
+     if(m_eKeyState == KEY_INIT){
++
++        // Set this session's DMR header in the PR3 app context.
++        if (SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()) != CDMi_SUCCESS) {
++            return false;
++        }
++
+         // Try to figure out the size of the license acquisition
+         // challenge to be returned.
+         dr = Drm_LicenseAcq_GenerateChallenge(m_poAppContext,
+@@ -617,6 +617,9 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+ 
+     BKNI_Memset(&oLicenseResponse, 0, sizeof(oLicenseResponse));
+ 
++    // Set this session's DMR header in the PR3 app context.
++    SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data());
++
+     LOGGER(LINFO_, "Processing license acquisition response...");
+     ChkDR(Drm_LicenseAcq_ProcessResponse(m_poAppContext,
+                                         DRM_PROCESS_LIC_RESPONSE_SIGNATURE_NOT_REQUIRED,
+-- 
+2.32.0
+

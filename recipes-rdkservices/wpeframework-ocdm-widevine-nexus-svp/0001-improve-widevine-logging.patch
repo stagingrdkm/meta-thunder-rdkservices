@@ -1,0 +1,27 @@
+From 32638501731835fb390a585a6d4db29cd3ea3fc3 Mon Sep 17 00:00:00 2001
+From: Marcin Hajkowski <mhajkowski.contractor@libertyglobal.com>
+Date: Mon, 21 Feb 2022 09:02:01 +0000
+Subject: [PATCH] improve-widevine-logging
+
+---
+ MediaSystem.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 2506f85..d1d70ee 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -218,7 +218,9 @@ public:
+         if (_cdm == nullptr) {
+             if (widevine::Cdm::kSuccess == widevine::Cdm::initialize(
+                     widevine::Cdm::kOpaqueHandle, client_info, &_host, &_host, &_host, 
+-                    static_cast<widevine::Cdm::LogLevel>(-1))) {
++                    //LOG_SILENT = -1, LOG_ERROR = 0, LOG_WARN = 1,
++                    //LOG_INFO = 2, LOG_DEBUG = 3, LOG_VERBOSE = 4
++                    static_cast<widevine::Cdm::LogLevel>(1))) {
+                 // Setting the last parameter to true, requres serviceCertificates 
+                 //   so the requests can be encrypted. Currently badly supported
+                 // in the EME tests, so turn of for now :-)
+-- 
+2.29.2
+

@@ -1,0 +1,244 @@
+OMWAPPI-914 Add cbcs support
+
+Passes information about encryption scheme and pattern to cdm
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 8ec1f58..a917452 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -62,6 +62,7 @@ find_package(NXCLIENT)
+ find_package(NexusWidevine)
+ 
+ add_library(${DRM_PLUGIN_NAME} SHARED
++    Module.cpp
+     HostImplementation.cpp 
+     MediaSession.cpp 
+     MediaSystem.cpp
+diff --git a/HostImplementation.h b/HostImplementation.h
+index 86761b0..aa2906e 100644
+--- a/HostImplementation.h
++++ b/HostImplementation.h
+@@ -46,10 +46,10 @@
+ #ifndef WIDEVINE_HOST_IMPLEMENTATION_H
+ #define WIDEVINE_HOST_IMPLEMENTATION_H
+ 
+-#include "cdm.h"
+ #define OVERRIDE
++#include "Module.h"
+ 
+-#include <core/core.h>
++#include "cdm.h"
+ 
+ namespace CDMi {
+ 
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 9ab84fa..f05ddce 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -43,6 +43,8 @@
+  ###############################################################################
+  */
+ 
++#include "Module.h"
++
+ #include "MediaSession.h"
+ #include "Policy.h"
+ 
+@@ -62,8 +64,6 @@
+ #include <curl/curl.h>
+ #endif
+ 
+-#include <core/core.h>
+-
+ #define NYI_KEYSYSTEM "keysystem-placeholder"
+ 
+ #include <nexus_memory.h>
+@@ -438,11 +438,11 @@ CDMi_RESULT MediaKeySession::Init(
+ CDMi_RESULT MediaKeySession::Decrypt(
+     const uint8_t *f_pbSessionKey,
+     uint32_t f_cbSessionKey,
+-    const uint32_t *f_pdwSubSampleMapping,
+-    uint32_t f_cdwSubSampleMapping,
++    const EncryptionScheme encryptionScheme,
++    const EncryptionPattern& pattern,
+     const uint8_t *f_pbIV,
+     uint32_t f_cbIV,
+-    const uint8_t *f_pbData,
++    uint8_t *f_pbData,
+     uint32_t f_cbData,
+     uint32_t *f_pcbOpaqueClearContent,
+     uint8_t **f_ppbOpaqueClearContent,
+@@ -545,13 +545,22 @@ CDMi_RESULT MediaKeySession::Decrypt(
+       batch.key_id = keyId;
+       batch.key_id_length = keyIdLength;
+       batch.is_secure = true;
+-      batch.encryption_scheme = widevine::Cdm::kAesCtr;
++      switch (encryptionScheme) {
++          case AesCtr_Cenc:
++          case AesCtr_Cens:
++              batch.encryption_scheme = widevine::Cdm::kAesCtr;
++              break;
++          case AesCbc_Cbc1:
++          case AesCbc_Cbcs:
++              batch.encryption_scheme = widevine::Cdm::kAesCbc;
++              break;
++          default:
++              batch.encryption_scheme = widevine::Cdm::kClear;
++              break;
++      }
+       batch.is_video = true;
+-
+-      uint8_t crypto_byte_block = 0;
+-      uint8_t skip_byte_block = 0;
+-      widevine::Cdm::Pattern pattern(crypto_byte_block, skip_byte_block);
+-      batch.pattern = pattern;
++      batch.pattern.encrypted_blocks = pattern.encrypted_blocks;
++      batch.pattern.clear_blocks = pattern.clear_blocks;
+ 
+       if (widevine::Cdm::kSuccess == m_cdm->decrypt(batch)) {
+         status = CDMi_SUCCESS;
+@@ -571,8 +580,22 @@ CDMi_RESULT MediaKeySession::Decrypt(
+       input.key_id_length = keyIdLength;
+       input.iv = m_IV;
+       input.iv_length = sizeof(m_IV);
++      input.pattern.encrypted_blocks = pattern.encrypted_blocks;
++      input.pattern.clear_blocks = pattern.clear_blocks;
++      switch (encryptionScheme) {
++          case AesCtr_Cenc:
++          case AesCtr_Cens:
++              input.encryption_scheme = widevine::Cdm::kAesCtr;
++              break;
++          case AesCbc_Cbc1:
++          case AesCbc_Cbcs:
++              input.encryption_scheme = widevine::Cdm::kAesCbc;
++              break;
++          default:
++              input.encryption_scheme = widevine::Cdm::kClear;
++              break;
++      }
+ 
+-      input.encryption_scheme = widevine::Cdm::kAesCtr;
+       input.is_video = true;
+       input.block_offset = 0;
+       for (int ii = 15, counter = 0; ii >= 12; ii--, counter = counter >> 8) {
+diff --git a/MediaSession.h b/MediaSession.h
+index f7ce93a..3d5ee96 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -45,8 +45,9 @@
+ 
+ #pragma once
+ 
++#include <interfaces/IDRM.h>
++
+ #include <cdm.h>
+-#include <cdmi.h>
+ 
+ #include <nexus_memory.h>
+ 
+@@ -104,11 +105,11 @@ public:
+     virtual CDMi_RESULT Decrypt(
+         const uint8_t *f_pbSessionKey,
+         uint32_t f_cbSessionKey,
+-        const uint32_t *f_pdwSubSampleMapping,
+-        uint32_t f_cdwSubSampleMapping,
++        const EncryptionScheme encryptionScheme,
++        const EncryptionPattern& pattern,
+         const uint8_t *f_pbIV,
+         uint32_t f_cbIV,
+-        const uint8_t *f_pbData,
++        uint8_t *f_pbData,
+         uint32_t f_cbData,
+         uint32_t *f_pcbOpaqueClearContent,
+         uint8_t **f_ppbOpaqueClearContent,
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 8d2b29c..84a9bdb 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -43,6 +43,7 @@
+  ###############################################################################
+  */
+ 
++#include "Module.h"
+ #include "MediaSession.h"
+ #include "HostImplementation.h"
+ 
+@@ -50,15 +51,12 @@
+ #include <iostream>
+ #include <sstream>
+ #include <sys/utsname.h>
+-#include <core/core.h>
+ 
+ #include <nexus_config.h>
+ #include <nxclient.h>
+ 
+ using namespace WPEFramework;
+ 
+-MODULE_NAME_DECLARATION(BUILD_REFERENCE)
+-
+ namespace CDMi {
+ 
+ class WideVine : public IMediaKeys, public widevine::Cdm::IEventListener
+diff --git a/Module.cpp b/Module.cpp
+new file mode 100644
+index 0000000..ba71a73
+--- /dev/null
++++ b/Module.cpp
+@@ -0,0 +1,23 @@
++/*
++ * If not stated otherwise in this file or this component's LICENSE file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2021 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include "Module.h"
++
++MODULE_NAME_DECLARATION(BUILD_REFERENCE)
++
+diff --git a/Module.h b/Module.h
+new file mode 100644
+index 0000000..77a418a
+--- /dev/null
++++ b/Module.h
+@@ -0,0 +1,28 @@
++/*
++ * If not stated otherwise in this file or this component's LICENSE file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2021 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++#pragma once
++
++#ifndef MODULE_NAME
++#define MODULE_NAME OCDM_Widevine
++#endif
++
++#include <com/com.h>
++#include <core/core.h>
++#include <tracing/tracing.h>
++#include <websocket/websocket.h>

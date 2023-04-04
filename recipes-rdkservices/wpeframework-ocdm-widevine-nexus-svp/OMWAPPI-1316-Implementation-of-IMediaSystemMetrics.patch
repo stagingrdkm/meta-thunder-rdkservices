@@ -1,0 +1,58 @@
+From 89557fee56da6f3b5a3d3e2a7a95083ee7a93c95 Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Thu, 9 Mar 2023 16:55:20 +0100
+Subject: [PATCH] [OMWAPPI-1316] Implementation of IMediaSystemMetrics
+ interface
+
+---
+ MediaSystem.cpp | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 84a9bdb..c05c95c 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -50,6 +50,7 @@
+ #include <assert.h>
+ #include <iostream>
+ #include <sstream>
++#include <cstring>
+ #include <sys/utsname.h>
+ 
+ #include <nexus_config.h>
+@@ -59,7 +60,7 @@ using namespace WPEFramework;
+ 
+ namespace CDMi {
+ 
+-class WideVine : public IMediaKeys, public widevine::Cdm::IEventListener
++class WideVine : public IMediaKeys, public IMediaSystemMetrics, public widevine::Cdm::IEventListener
+ {
+ private:
+     WideVine (const WideVine&) = delete;
+@@ -292,6 +293,23 @@ public:
+         return CDMi_SUCCESS;
+     }
+ 
++     CDMi_RESULT GetMetrics (uint32_t bufferLength, uint8_t buffer[], uint32_t &count) override {
++       if(!_cdm) {
++         count = 0;
++         return CDMi_SUCCESS;
++       }
++       std::string metrics;
++       if(widevine::Cdm::kSuccess == _cdm->getMetrics(&metrics)) {
++          count = metrics.size();
++          if(bufferLength < metrics.size()) {
++            return CDMi_BUFFER_TOO_SMALL;
++          }
++          memcpy(buffer, reinterpret_cast<const uint8_t*>(metrics.c_str()), count);
++          return CDMi_SUCCESS;
++       }
++       return CDMi_S_FALSE;
++     }
++
+     void onMessage(const std::string& session_id,
+         widevine::Cdm::MessageType f_messageType,
+         const std::string& f_message) override {
+-- 
+2.25.1
+

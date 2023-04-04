@@ -1,0 +1,34 @@
+--- git/MediaSession.h	2019-06-28 09:55:45.192406067 -0400
++++ git/MediaSession.h	2019-06-28 09:55:51.776544191 -0400
+@@ -81,6 +81,7 @@
+     void onMessageUrl(const std::string& f_serverUrl) {}
+     void onMessage(widevine::Cdm::MessageType f_messageType, const std::string& f_message);
+     void onKeyStatusChange();
++    void deferredKeyStatusChange();
+     void onRemoveComplete();
+     void onDeferredComplete(widevine::Cdm::Status);
+     void onDirectIndividualizationRequest(const std::string&, const std::string&);
+--- git/MediaSession.cpp	2019-06-28 11:19:15.617631146 -0400
++++ git/MediaSession.cpp	2019-06-28 11:19:21.513746644 -0400
+@@ -40,6 +40,9 @@
+ 
+ #include <nexus_memory.h>
+ 
++#include <functional>
++#include <thread>
++
+ using namespace std;
+ 
+ namespace CDMi {
+@@ -194,6 +197,11 @@
+ 
+ void MediaKeySession::onKeyStatusChange()
+ {
++    std::thread(std::bind(&MediaKeySession::deferredKeyStatusChange, this)).detach();
++}
++
++void MediaKeySession::deferredKeyStatusChange()
++{
+     widevine::Cdm::KeyStatusMap map;
+     if (widevine::Cdm::kSuccess != m_cdm->getKeyStatuses(m_sessionId, &map))
+         return;
