@@ -4,17 +4,15 @@ PR = "r0"
 
 require include/thunder.inc
 LIC_FILES_CHKSUM = "file://LICENSE;md5=2f6c18f99faffa0e5d4ff478705c53f8"
+PROVIDES += "wpeframework-interfaces"
+RPROVIDES_${PN} += "wpeframework-interfaces"
+
 DEPENDS = "wpeframework wpeframework-tools-native"
-
-#           file://0001-Revert-Merge-pull-request-137-from-mikolaj-staworzyn.patch - reverted by Comcast
-
-FILESEXTRAPATHS_append := ":${THISDIR}/${PN}-R4"
 
 SRC_URI = "git://github.com/rdkcentral/ThunderInterfaces.git;protocol=https;branch=R4;name=wpeframework-interfaces \
            file://SplitDeviceCapablities.patch \
            file://0018-notifyclient-event-added.patch \
-           file://0020-Adding-the-VoiceCommand-API-for-Netflix-plugin-R4.patch \
-           file://0001-RDK-31882-Add-GstCaps-parsing-in-OCDM-wpeframework-interfaces.patch \
+           file://0020-Adding-the-VoiceCommand-API-for-Netflix-plugin.patch \
            file://0001-Revert-Merge-pull-request-137-from-mikolaj-staworzyn.patch \
            file://Library-version-Matched-With-Release-interfaces.patch \
            "
@@ -53,4 +51,3 @@ FILES_${PN} += "${includedir}/cdmi.h"
 
 INSANE_SKIP_${PN} += "dev-so"
 INSANE_SKIP_${PN}-dbg += "dev-so"
-

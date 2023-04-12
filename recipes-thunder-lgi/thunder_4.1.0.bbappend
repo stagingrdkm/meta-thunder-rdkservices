@@ -62,13 +62,13 @@ SRC_URI += "file://0107-ONEM-18296-tracing-use-direct-output.patch \
             file://wpeprocess-start.sh \
             file://container_rdk_service_stop.sh \
             file://collect_identification_data.sh \
-            file://0110-ONEM-21606-remove-incorrect-ASSERT-R4.patch \
-            file://0111-ONEM-15869-awc-proxy-container-R4.patch \
-            file://0113-ONEM-21500-added-notifyserviceready-to-awclistener-R4.patch \
+            file://0110-ONEM-21606-remove-incorrect-ASSERT.patch \
+            file://0111-ONEM-15869-awc-proxy-container.patch \
+            file://0113-ONEM-21500-added-notifyserviceready-to-awclistener.patch \
             file://0118-ONEM-15903-error-reporting-deinit.patch \
             file://0121-ONEM-23238-Unified-handling-of-logging-configuration.patch \
             file://0126-ONEM-22947_allow_assert_with_trace.patch \
-            file://0127-ONEM-22947-Additional-EXTERNAL-R4.patch \
+            file://0127-ONEM-22947-Additional-EXTERNAL.patch \
             file://0129-ONEMPERS-285-Limit-thunder-container-access-to-global-tmp.patch \
             file://0131-HUMAXEOSR-995-Termination-thread-introduced.patch \
             file://0133-ONEMPERS-367-Avoid-sending-unknown-method-response.patch \
@@ -77,7 +77,7 @@ SRC_URI += "file://0107-ONEM-18296-tracing-use-direct-output.patch \
             file://0144-ARRISEOS-42363-Don-t-flush-libraries-in-Dispatch.patch \
             file://0145-ARRISEOS-42502-Fix-random-crashes-under-stress.patch \
             file://0147-ARRISAPP-140-Fix-assert-on-call-to-opencdm_dispose.patch \
-            file://0148-FindSlauncher-lost-letter-R4.patch \
+            file://0148-FindSlauncher-lost-letter.patch \
             file://0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch \
             file://local.patch \
             file://rights_patch.patch \
