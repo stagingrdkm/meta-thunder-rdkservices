@@ -1,0 +1,21 @@
+From: Lukasz Wasylyk <lukasz.wasylyk@redembedded.com>
+Date: Tue, 10 Aug 2021 14:20:00 +0100
+Subject: ONEM-21606 - Remove incorrect ASSERT
+When testing autostart of some plugins, when in negative scenario (plugin did not succeed to start because of timeout),
+we noticed that RPC Process shutdown mechanism is based on clock timeouts. It leads to the situation
+(especially in case time is adjusted during boot) where TimedInfo is getting rescheduled after time update.
+
+diff --git a/Source/core/Timer.h b/Source/core/Timer.h
+index 0c356ca2..9d17224a 100644
+--- a/Source/core/Timer.h
++++ b/Source/core/Timer.h
+@@ -295,7 +295,8 @@ namespace Core {
+                 m_Admin.Lock();
+ 
+                 if (reschedule != 0) {
+-                    ASSERT(reschedule > now);
++                    // it might happen that TimedInfo entry under info will get expired when reaching here to Process() method, or time might be shifted during the timeout (for example bootup time aquisition). We cannot assert on below condition then.
++                   //ASSERT(reschedule > now);
+ 
+                     info.ScheduleTime(reschedule);
+                     ScheduleEntry(std::move(info));

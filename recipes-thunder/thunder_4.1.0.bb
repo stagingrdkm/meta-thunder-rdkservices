@@ -2,6 +2,8 @@ SUMMARY = "Thunder Framework"
 require include/thunder.inc
 LIC_FILES_CHKSUM = "file://LICENSE;md5=85bcfede74b96d9a58c6ea5d4b607e58"
 
+PROVIDES += "wpeframework"
+RPROVIDES_${PN} += "wpeframework"
 DEPENDS = "zlib wpeframework-tools-native rfc"
 DEPENDS_append_libc-musl = " libexecinfo"
 DEPENDS += "breakpad-wrapper"
@@ -9,9 +11,8 @@ DEPENDS += "breakpad-wrapper"
 # Need gst-svp-ext which is an abstracting lib for metadata
 DEPENDS +=  "${@bb.utils.contains('DISTRO_FEATURES', 'rdk_svp', 'gst-svp-ext', '', d)}"
 
-FILESEXTRAPATHS_append := ":${THISDIR}/${PN}-R4"
-
-#           file://trace_log_flag_enabled.patch - it does not make sense for us
+FILESEXTRAPATHS_append := ":${THISDIR}/${PN}-${PV}"
+FILESEXTRAPATHS_append := ":${THISDIR}/${PN}"
 
 SRC_URI += " \
            file://wpeframework-init \
@@ -19,15 +20,18 @@ SRC_URI += " \
            file://wpeframework.service.xdial.in \
            file://wpeframework.service.no-container.in \
            file://wpeframework.service.no-container.xdial.in \
-           file://0003-OCDM-increase-RPC-comm-timeout-R4.patch \
+           file://Library_version_matched_with_release_tag.patch \
+           file://Remove_versioning_for_executables.patch \
+           file://0003-OCDM-increase-RPC-comm-timeout.patch \
            file://0001-RDK-28534-Security-Agent-Utility-and-Logging.patch \
-           file://0004-Enable-BrowserConsoleLog-by-default-R4.patch \
+           file://0004-Enable-BrowserConsoleLog-by-default.patch \
            file://0001-RDKTV-15393-clock_gettime.patch \
-           file://LLAMA-2254_fix_netlink_buffer_size_error-R4.patch \
+           file://LLAMA-2254_fix_netlink_buffer_size_error.patch \
            file://0001-Thunder_Trace_log_enable_error_fix.patch \
            file://to_add_protocols_pkgconfig_sdk.patch \
            file://0001-Thunder_json_quoted_string_parsing_fix.patch \
            file://0001_Reverted_changes_Fix_JSON_Reset_R3.5_for_SystemServicesPlugin.patch \
+           file://trace_log_flag_enabled.patch \
            file://0001-disable_trace_warnings.patch \
            file://0005-Thunder-R4.1-fixes.patch \
            file://activationevent.patch \
@@ -184,4 +188,3 @@ RDEPENDS_${PN} += "${@bb.utils.contains('DISTRO_FEATURES', 'rdk_svp', 'gst-svp-e
 RDEPENDS_${PN} += "${@bb.utils.contains('DISTRO_FEATURES', 'sage_svp', 'gst-svp-ext', '', d)}"
 
 RDEPENDS_${PN}_append_rpi = " ${@bb.utils.contains('DISTRO_FEATURES', 'vc4graphics', '', 'userland', d)}"
-

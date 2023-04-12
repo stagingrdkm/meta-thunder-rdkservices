@@ -1,0 +1,25 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 23 Nov 2021 10:04:49 +0100
+Subject: [PATCH] [ONEM-23505] Setup configuration umask by CMake
+
+---
+ Source/WPEFramework/GenericConfig.cmake | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Source/WPEFramework/GenericConfig.cmake b/Source/WPEFramework/GenericConfig.cmake
+index 5c2f807..7872fe0 100644
+--- a/Source/WPEFramework/GenericConfig.cmake
++++ b/Source/WPEFramework/GenericConfig.cmake
+@@ -62,6 +62,9 @@ map()
+     kv(policy ${POLICY})
+     kv(oomadjust ${OOMADJUST})
+     kv(stacksize ${STACKSIZE})
++    if(DEFINED UMASK)
++        kv(umask ${UMASK})
++    endif(UMASK)
+ end()
+ ans(PROCESS_CONFIG)
+ map_append(${CONFIG} process ${PROCESS_CONFIG})
+-- 
+2.25.1
+

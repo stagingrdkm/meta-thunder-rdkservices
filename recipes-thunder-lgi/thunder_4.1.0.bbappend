@@ -1,6 +1,6 @@
 inherit onemw_build_type
 
-FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
+FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
 
 # R2-v1.12 tag revision
 # R4.1 tag version
@@ -15,6 +15,8 @@ DEPENDS_append = " dbus libodherr lxc systemd"
 SRC_URI_remove = "file://0001-RDK-28534-Security-Agent-Utility-and-Logging.patch"
 # we need only part of that FindRFC.cmake
 SRC_URI += "file://0001-RDK-28534-Security-Agent-Utility-and-Logging-OnlyFindRFC.patch"
+
+SRC_URI_remove = "file://trace_log_flag_enabled.patch"
 
 EXTRA_OECMAKE += "${@in_debug_or_release_no_ops(bb, d, '-DBINDING=0.0.0.0')}"
 EXTRA_OECMAKE += "-DTRACING_ONLY_DIRECT_OUTPUT=ON"

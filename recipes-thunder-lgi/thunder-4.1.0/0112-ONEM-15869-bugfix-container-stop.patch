@@ -1,0 +1,19 @@
+ONEM-15869 Bufix container STOP
+
+In case IContainer::Stop() returns true - no need to schedule timer and check
+if container was stopped later.
+
+--- a/Source/com/Communicator.cpp
++++ b/Source/com/Communicator.cpp
+@@ -167,7 +167,10 @@ namespace RPC {
+                     if (_process.Id() != 0) {
+                         _process.Kill(false);
+                     } else {
+-                        _container->Stop(0);
++                        if(_container->Stop(0)) {
++                            nextinterval = 0;
++                            break;
++                        }
+                     }
+                 }
+                     nextinterval = 10000;

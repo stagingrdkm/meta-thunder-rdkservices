@@ -85,6 +85,13 @@ author: wlodzimierz.lipert@consult.red
  namespace WPEFramework {
  namespace ProcessContainers {
  
+@@ -52,4 +56,4 @@ namespace ProcessContainers {
+     };
+ 
+ } // ProcessContainers
+-} // WPEFramework
+\ No newline at end of file
++} // WPEFramework
 --- /dev/null
 +++ b/Source/processcontainers/implementations/AWCImplementation/AWC.cpp
 @@ -0,0 +1,55 @@
@@ -234,7 +241,7 @@ author: wlodzimierz.lipert@consult.red
 +}
 +
 +AWCContainerAdministrator::AWCContainerAdministrator()
-+    : BaseContainerAdministrator()
++    : BaseAdministrator()
 +{
 +    TRACE_L1("%p", this);
 +    awcClient_ = awc::AWCClient::getInstance();
@@ -300,7 +307,7 @@ author: wlodzimierz.lipert@consult.red
 +}
 --- /dev/null
 +++ b/Source/processcontainers/implementations/AWCImplementation/AWCContainerAdministrator.h
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,48 @@
 +#pragma once
 +
 +#include <mutex>
@@ -310,6 +317,7 @@ author: wlodzimierz.lipert@consult.red
 +#include "AWC.h"
 +#include "dbus/Client.h"
 +#include "processcontainers/common/BaseAdministrator.h"
++#include "processcontainers/common/Lockable.h"
 +#include "core/JSON.h"
 +
 +namespace WPEFramework {
@@ -328,7 +336,7 @@ author: wlodzimierz.lipert@consult.red
 +
 +
 +class AWCContainerAdministrator:
-+    public BaseContainerAdministrator<IContainer>,
++    public BaseAdministrator<IContainer, Lockable<IContainerAdministrator>>,
 +    public AWCStateChangeNotifier
 +{
 +    friend class AWCContainer;
@@ -350,7 +358,9 @@ author: wlodzimierz.lipert@consult.red
 +} /* WPEFramework */
 --- /dev/null
 +++ b/Source/processcontainers/implementations/AWCImplementation/AWCContainerBase.cpp
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,65 @@
++#include "processcontainers/common/NetworkInfoUnimplemented.h"
++
 +#include "AWCContainerBase.h"
 +
 +using namespace WPEFramework::ProcessContainers;
@@ -412,7 +422,7 @@ author: wlodzimierz.lipert@consult.red
 +INetworkInterfaceIterator* AWCContainerBase::NetworkInterfaces() const
 +{
 +    TRACE_L3("%s", _TRACE_FUNCTION_);
-+    return nullptr;
++    return new UnimplementedNetworkInterfaceIterator();
 +}
 --- /dev/null
 +++ b/Source/processcontainers/implementations/AWCImplementation/AWCContainerBase.h
@@ -443,13 +453,14 @@ author: wlodzimierz.lipert@consult.red
 +} /* WPEFramework */
 --- a/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.cpp
 +++ b/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.cpp
-@@ -17,321 +17,153 @@
+@@ -17,322 +17,153 @@
   * limitations under the License.
   */
  
 +#include "AWCContainerAdministrator.h"
  #include "AWCImplementation.h"
 -#include "processcontainers/common/CGroupContainerInfo.h"
+-#include "processcontainers/common/NetworkInfoUnimplemented.h"
 +#include "processcontainers/Tracing.h"
  
 -#define _TRACE_FUNCTION_ __PRETTY_FUNCTION__
@@ -594,7 +605,7 @@ author: wlodzimierz.lipert@consult.red
 -    INetworkInterfaceIterator* AWCContainer::NetworkInterfaces() const
 -    {
 -        TRACE_L3("%s", _TRACE_FUNCTION_);
--        return nullptr;
+-        return new UnimplementedNetworkInterfaceIterator();
 -    }
 +    awc::AWCClient::str_vect_sptr_t windowParams = std::make_shared<std::vector<std::string>>();
 +    awc::AWCClient::str_vect_sptr_t appParams = std::make_shared<std::vector<std::string>>();
@@ -745,7 +756,7 @@ author: wlodzimierz.lipert@consult.red
 +}
  
 -    AWCContainerAdministrator::AWCContainerAdministrator()
--        : BaseContainerAdministrator()
+-        : BaseAdministrator()
 +bool AWCContainer::Stop(const uint32_t timeout /*ms*/)
 +{
 +    if(!IsRunning())
@@ -868,17 +879,16 @@ author: wlodzimierz.lipert@consult.red
      }
  }
 -} //namespace WPEFramework
-diff --git a/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.h b/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.h
-index 961ec25..88a1a8b 100644
 --- a/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.h
 +++ b/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.h
-@@ -19,104 +19,43 @@
+@@ -19,106 +19,43 @@
  
  #pragma once
  
--#include "processcontainers/ProcessContainer.h"
--#include "processcontainers/common/BaseAdministrator.h"
--#include "processcontainers/common/BaseRefCount.h"
+-#include "../../ProcessContainer.h"
+-#include "../../common/BaseAdministrator.h"
+-#include "../../common/BaseRefCount.h"
+-#include "../../common/Lockable.h"
 -#include "Module.h"
 -#include "Tracing.h"
 -#include <cctype>
@@ -943,6 +953,7 @@ index 961ec25..88a1a8b 100644
 -        uint32_t _pid;
 -        int _runId;
 -        awc::awc_app_state_t _appState;
+-        mutable Core::CriticalSection _adminLock;
 -        mutable uint32_t _referenceCount;
 -        awc::AWCClient * _client;
 -        AWCStateChangeNotifier * _notifier;
@@ -952,7 +963,7 @@ index 961ec25..88a1a8b 100644
 -        static std::string const _envVariables[];
 -    };
 -
--    class AWCContainerAdministrator : public BaseContainerAdministrator<AWCContainer>, public AWCStateChangeNotifier {
+-    class AWCContainerAdministrator : public BaseAdministrator<AWCContainer, Lockable<IContainerAdministrator>>, public AWCStateChangeNotifier {
 -        friend class AWCContainer;
 -        friend class Core::SingletonType<AWCContainerAdministrator>;
 -
@@ -3890,4 +3901,3 @@ index 961ec25..88a1a8b 100644
 +
 +set(LIBGOBJECT_INCLUDE_DIRS ${LIBGOBJECT_INCLUDE_DIR})
 +set(LIBGOBJECT_LIBRARIES ${LIBGOBJECT_LIBRARY})
-

@@ -1,0 +1,46 @@
+From ed35b86a4e1030ae23c01d0842f6b4e6430aaa87 Mon Sep 17 00:00:00 2001
+From: Maciej Kolanski <maciej.kolanski@consult.red>
+Date: Fri, 20 May 2022 13:40:21 +0200
+Subject: [PATCH] [ARRISEOS-41993] Use string arguments in IBrowser interface
+
+IStringIterator arguments were causing crash of wpeframework.
+---
+ interfaces/IBrowser.h | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/interfaces/IBrowser.h b/interfaces/IBrowser.h
+index 2f2de3d..8194b46 100644
+--- a/interfaces/IBrowser.h
++++ b/interfaces/IBrowser.h
+@@ -162,21 +162,21 @@ namespace Exchange {
+         // @brief Headers to send on all requests that the browser makes
+         // @param header Header Name
+         // @json:omit
+-        virtual uint32_t Headers(IStringIterator*& header /* @out */) const = 0;
++        virtual uint32_t Headers(string& header /* @out */) const = 0;
+         // @json:omit
+-        virtual uint32_t Headers(IStringIterator* const header) = 0;
++        virtual uint32_t Headers(const string& header) = 0;
+ 
+         // @property
+         // @brief User scripts used by the browser
+-        // @param uris JSON array containing URIs pointing to user scripts, supported protocols: file://
+-        virtual uint32_t UserScripts(IStringIterator*& uris /* @out */) const = 0;
+-        virtual uint32_t UserScripts(IStringIterator* const uris) = 0;
++        // @param uris URI pointing to user script, supported protocols: file://
++        virtual uint32_t UserScripts(string& uri /* @out */) const = 0;
++        virtual uint32_t UserScripts(const string& uri) = 0;
+ 
+         // @property
+         // @brief User style sheets used by the browser
+-        // @param uris JSON array containing URIs pointing to user style sheets, supported protocols: file://
+-        virtual uint32_t UserStyleSheets(IStringIterator*& uris /* @out */) const = 0;
+-        virtual uint32_t UserStyleSheets(IStringIterator* const uris) = 0;
++        // @param uris URI pointing to user style sheet, supported protocols: file://
++        virtual uint32_t UserStyleSheets(string& uri /* @out */) const = 0;
++        virtual uint32_t UserStyleSheets(const string& uri) = 0;
+     };
+ 
+     /* @json */
+-- 
+2.25.1

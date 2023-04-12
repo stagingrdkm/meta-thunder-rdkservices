@@ -1,0 +1,39 @@
+From 93e557870f183ab4b35ccce813a5ea01744127e5 Mon Sep 17 00:00:00 2001
+From: Adam Stolcenburg <astolcenburg.contractor@libertyglobal.com>
+Date: Mon, 17 Jan 2022 11:54:26 +0100
+Subject: [PATCH] ONEM-24350 Prefer service library over plugin library in
+ WPEProcess
+
+---
+ Source/WPEProcess/Process.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+Index: git/Source/WPEProcess/Process.cpp
+===================================================================
+--- git.orig/Source/WPEProcess/Process.cpp
++++ git/Source/WPEProcess/Process.cpp
+@@ -330,7 +330,24 @@ namespace Process {
+         void* result = nullptr;
+ 
+         if ((options.Locator != nullptr) && (options.ClassName != nullptr)) {
++            std::string servicesPath;
++
++            if (!options.SystemPath.empty()) {
++                std::string normalizedSystemPath;
++
++                if (options.SystemPath.back() == '/') {
++                    normalizedSystemPath = options.SystemPath.substr(0, options.SystemPath.size() - 1);
++                } else {
++                    normalizedSystemPath = options.SystemPath;
++                }
++                servicesPath = Core::File::PathName(normalizedSystemPath) + "services";
++            }
++            result = CheckInstance(servicesPath, (Core::File::FileName(options.Locator) + "Service." + Core::File::Extension(options.Locator)).c_str(),
++                                   options.ClassName, options.InterfaceId, options.Version);
++
++            if (result == nullptr) {
+                 result = CheckInstance(options.SystemPath, options.Locator, options.ClassName, options.InterfaceId, options.Version);
++            }
+         }
+ 
+         return (result);
