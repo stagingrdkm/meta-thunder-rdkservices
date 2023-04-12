@@ -1,0 +1,40 @@
+From 5e08f23e72c31915e68efbbbf89724c572e76235 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Wed, 27 Apr 2022 16:58:31 +0200
+Subject: [PATCH] Revert "DELIA-54331: Don't set the receive buffer"
+
+This reverts commit 0e62bb4194805c554fe6b719dc26267f4e4f31d7.
+---
+ Source/plugins/Channel.cpp     | 2 +-
+ Source/websocket/JSONRPCLink.h | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Source/plugins/Channel.cpp b/Source/plugins/Channel.cpp
+index c20dcd0a..d6526d3f 100644
+--- a/Source/plugins/Channel.cpp
++++ b/Source/plugins/Channel.cpp
+@@ -28,7 +28,7 @@ namespace PluginHost {
+ #pragma warning(disable : 4355)
+ #endif
+     Channel::Channel(const SOCKET& connector, const Core::NodeId& remoteId)
+-        : BaseClass(true, false, 5, _requestAllocator, false, connector, remoteId, 1024, -1)
++        : BaseClass(true, false, 5, _requestAllocator, false, connector, remoteId, 1024, 1024)
+         , _adminLock()
+         , _ID(0)
+         , _nameOffset(~0)
+diff --git a/Source/websocket/JSONRPCLink.h b/Source/websocket/JSONRPCLink.h
+index 9946c876..452b5fa4 100644
+--- a/Source/websocket/JSONRPCLink.h
++++ b/Source/websocket/JSONRPCLink.h
+@@ -132,7 +132,7 @@ namespace JSONRPC {
+     
+             public:
+                 ChannelImpl(CommunicationChannel* parent, const Core::NodeId& remoteNode, const string& callsign, const string& query)
+-                    : BaseClass(5, FactoryImpl::Instance(), callsign, _T("JSON"), query, "", false, false, false, remoteNode.AnyInterface(), remoteNode, 256, -1)
++                    : BaseClass(5, FactoryImpl::Instance(), callsign, _T("JSON"), query, "", false, false, false, remoteNode.AnyInterface(), remoteNode, 256, 256)
+                     , _parent(*parent)
+                 {
+                 }
+-- 
+2.25.1
+

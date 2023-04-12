@@ -1,0 +1,122 @@
+From e70fe4856c7cef952238decf9730e8b5283658e5 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 5 Oct 2021 09:58:04 +0200
+Subject: [PATCH] ONEM-22659: Synchronization in Release changed
+
+UnregisterProxy in Release is invoked after taking Administrator lock and
+self synchronization object.
+
+Without that we have race between UnknownProxyType::Relese
+(that invokes destructor) and UnknownProxy::Relese
+(invoked on connection closed for deadProxies objects in Communicator::Closed ).
+
+It causes invalid lifetime of the UnknownProxy objects that are at first stage
+manifested by the following logs:
+* "Probably trying to delete a used CriticalSection" (with EBUSY error code
+  on pthread_mutex_destroy) - operation on locked mutex
+* "Probably creating a deadlock situation" (with EINVAL error code on
+  pthread_mutex_lock) - operation on already destroyed mutex
+* Probably does the calling thread not own this CriticalSection (with EINVAL
+  error code on pthread_mutex_unlock) - operation on already destroyed mutex
+
+Later in plugin activation/deactivation stress test it cause memory corruption
+and random crashes.
+---
+ Source/com/Administrator.cpp |  6 +-----
+ Source/com/Administrator.h   |  9 ++++++++-
+ Source/com/IUnknown.h        | 17 +++++++++--------
+ 3 files changed, 18 insertions(+), 14 deletions(-)
+
+diff --git a/Source/com/Administrator.cpp b/Source/com/Administrator.cpp
+index ec4797f1..0bf3fd89 100644
+--- a/Source/com/Administrator.cpp
++++ b/Source/com/Administrator.cpp
+@@ -96,10 +96,8 @@ namespace RPC {
+         proxy->Complete(response);
+     }
+ 
+-    void Administrator::UnregisterProxy(const ProxyStub::UnknownProxy& proxy)
++    void Administrator::UnregisterProxyLocked(const ProxyStub::UnknownProxy& proxy)
+     {
+-        _adminLock.Lock();
+-
+         ChannelMap::iterator index(_channelProxyMap.find(proxy.Channel().operator->()));
+ 
+         if (index != _channelProxyMap.end()) {
+@@ -118,8 +116,6 @@ namespace RPC {
+         } else {
+             TRACE_L1("Could not find the Proxy entry to be unregistered from a channel perspective.");
+         }
+-
+-        _adminLock.Unlock();
+     }
+ 
+     void Administrator::Invoke(Core::ProxyType<Core::IPCChannel>& channel, Core::ProxyType<InvokeMessage>& message)
+diff --git a/Source/com/Administrator.h b/Source/com/Administrator.h
+index 99eb3017..85081a6f 100644
+--- a/Source/com/Administrator.h
++++ b/Source/com/Administrator.h
+@@ -240,7 +240,14 @@ namespace RPC {
+ 
+             _adminLock.Unlock();
+         }
+-        void UnregisterProxy(const ProxyStub::UnknownProxy& proxy);
++        // should be invoked with already taken lock
++        void UnregisterProxyLocked(const ProxyStub::UnknownProxy& proxy);
++        void Lock() {
++            _adminLock.Lock();
++        }
++        void UnLock() {
++            _adminLock.Unlock();
++        }
+         
+    private:
+         // ----------------------------------------------------------------------------------------------------
+diff --git a/Source/com/IUnknown.h b/Source/com/IUnknown.h
+index 49d14000..c5c38821 100644
+--- a/Source/com/IUnknown.h
++++ b/Source/com/IUnknown.h
+@@ -189,7 +189,7 @@ namespace ProxyStub {
+         }
+         uint32_t Release() const {
+             uint32_t result = Core::ERROR_NONE;
+-
++            RPC::Administrator::Instance().Lock();
+             _adminLock.Lock();
+             _refCount--;
+ 
+@@ -209,23 +209,24 @@ namespace ProxyStub {
+                     message->Parameters().Writer().Number<uint32_t>(_remoteReferences);
+ 
+                     // Just try the destruction for few Seconds...
+-                    result = Invoke(message, RPC::CommunicationTimeOut);
+-
++                    result = Invoke(message, 2000);
++                    if (result == Core::ERROR_TIMEDOUT)
++                        TRACE_L1("Communication timeout");
+                     if (result != Core::ERROR_NONE) {
+-                        TRACE_L1("Could not remote release the Proxy.");
++                        TRACE_L1("Could not remote release the Proxy result=%d", result);
+                     } else {
+                         // Pass the remote release return value through
+                         result = message->Response().Reader().Number<uint32_t>();
+                     }
+                 }
+ 
+-                _adminLock.Unlock();
+-
+                 // Remove our selves from the Administration, we are done..
+-                RPC::Administrator::Instance().UnregisterProxy(*this);
++                RPC::Administrator::Instance().UnregisterProxyLocked(*this);
++                _adminLock.Unlock();
+ 
+-                result = (result == Core::ERROR_NONE ? Core::ERROR_DESTRUCTION_SUCCEEDED : result);
++                result = Core::ERROR_DESTRUCTION_SUCCEEDED;
+             }
++            RPC::Administrator::Instance().UnLock();
+             return (result);
+         }
+         inline void* RemoteInterface(const uint32_t id) const
+-- 
+2.25.1
+

@@ -1,0 +1,30 @@
+From d47c7f1a5be394124a308686e995c54c622d06b9 Mon Sep 17 00:00:00 2001
+From: Michal Kucharczyk <mkucharczyk.contractor@libertyglobal.com>
+Date: Wed, 8 Sep 2021 13:19:30 +0200
+Subject: [PATCH] ONEM-22285: do not modify local files
+
+---
+ cmake/project.cmake.in | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/cmake/project.cmake.in b/cmake/project.cmake.in
+index 6e4d6b1..81c7189 100644
+--- a/cmake/project.cmake.in
++++ b/cmake/project.cmake.in
+@@ -128,10 +128,11 @@ macro(write_config)
+             endif()
+         endif()
+ 
+-        json_write("${CMAKE_CURRENT_LIST_DIR}/${plugin}.json" ${plugin_config})
++        json_write("${CMAKE_CURRENT_LIST_DIR}/${plugin}.generated.json" ${plugin_config})
+ 
+         install(
+-                FILES ${plugin}.json DESTINATION
++                FILES ${plugin}.generated.json
++                RENAME ${plugin}.json DESTINATION
+                 "${CMAKE_INSTALL_PREFIX}/../etc/${NAMESPACE}/plugins/"
+                 COMPONENT ${MODULE_NAME})
+     endforeach()
+-- 
+2.7.4
+

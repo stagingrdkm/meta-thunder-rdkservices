@@ -32,4 +32,3 @@ Index: git/Source/processcontainers/implementations/AWCImplementation/AWC.h
  private:
      AWCStateChangeNotifier * _notifier;
  };
-

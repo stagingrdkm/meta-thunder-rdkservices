@@ -1,0 +1,48 @@
+ONEM-22512
+Dont use colors in generated logs. Added thread id to logs.
+
+author: wlodzimierz.lipert@consult.red
+
+--- a/Source/core/Trace.h
++++ b/Source/core/Trace.h
+@@ -16,10 +16,15 @@
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+- 
++
+ #ifndef __TRACE_INTERNAL_H
+ #define __TRACE_INTERNAL_H
+ 
++#ifndef __WINDOWS__
++#include <unistd.h>
++#include <sys/syscall.h>
++#endif
++
+ #include "Module.h"
+ #include "Portability.h"
+ 
+@@ -46,20 +51,19 @@ namespace WPEFramework {
+ #ifdef __WINDOWS__
+ #define TRACE_PROCESS_ID ::GetCurrentProcessId()
+ #else
+-#define TRACE_PROCESS_ID ::getpid()
++#define TRACE_PROCESS_ID int(::getpid())
++#define TRACE_THREAD_ID int(::syscall(SYS_gettid))
+ #endif
+ 
+ #define TRACE_FORMATTING(fmt, ...)                                                                                                        \
+     do {                                                                                                                                  \
+-        fprintf(stderr, "\033[1;32m[%s:%d](%s)<%d>" fmt "\n\033[0m", &__FILE__[WPEFramework::Core::FileNameOffset(__FILE__)], __LINE__, __FUNCTION__, TRACE_PROCESS_ID, ##__VA_ARGS__);  \
++        fprintf(stderr, "[%s:%d](%s)<%d:%d>" fmt "\n", &__FILE__[WPEFramework::Core::FileNameOffset(__FILE__)], __LINE__, __FUNCTION__, TRACE_PROCESS_ID, TRACE_THREAD_ID, ##__VA_ARGS__);  \
+         fflush(stderr);                                                                                                                   \
+     } while (0)
+ 
+ #ifdef __WINDOWS__
+-#define TRACE_PROCESS_ID ::GetCurrentProcessId()
+ #define ASSERT_LOGGER(message, ...) fprintf(stderr, message, ##__VA_ARGS__)
+ #else
+-#define TRACE_PROCESS_ID ::getpid()
+ #define ASSERT_LOGGER(message, ...) ::fprintf(stderr, message, ##__VA_ARGS__)
+ #endif
+ 
