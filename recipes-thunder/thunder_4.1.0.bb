@@ -1,6 +1,6 @@
 SUMMARY = "Thunder Framework"
 require include/thunder.inc
-LIC_FILES_CHKSUM = "file://LICENSE;md5=85bcfede74b96d9a58c6ea5d4b607e58"
+require include/thunder_${PV}.inc
 
 PROVIDES += "wpeframework"
 RPROVIDES_${PN} += "wpeframework"

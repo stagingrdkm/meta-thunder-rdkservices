@@ -2,9 +2,6 @@ inherit onemw_build_type
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
 
-# R2-v1.12 tag revision
-# R4.1 tag version
-SRCREV_thunder = "65bff2a6c5599ccbeb01d77a16417ad9d09df918"
 RDEPENDS_${PN} += "rfc libodherr"
 DEPENDS_remove = "breakpad-wrapper"
 DEPENDS_append = " breakpad"
