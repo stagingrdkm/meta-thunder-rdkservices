@@ -2,6 +2,9 @@ SUMMARY = "WPE Framework User Interface"
 LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=66fe57b27abb01505f399ce4405cfea0"
 
+PROVIDES += "wpeframework-ui"
+RPROVIDES_${PN} += "wpeframework-ui"
+
 SRC_URI = "git://github.com/rdkcentral/ThunderUI.git;protocol=https"
 
 #Version on July 22, 2021
