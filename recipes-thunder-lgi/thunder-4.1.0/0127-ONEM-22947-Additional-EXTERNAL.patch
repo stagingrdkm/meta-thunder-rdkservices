@@ -13,7 +13,7 @@ WPEFramework::Core::IteratorType<std::__cxx11::list<WPEFramework::Trace::ITraceC
  2 files changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/Source/core/IIterator.h b/Source/core/IIterator.h
-index bde27fb..4ffd2b2 100644
+index 3d6236d6..b5a7c905 100644
 --- a/Source/core/IIterator.h
 +++ b/Source/core/IIterator.h
 @@ -39,7 +39,7 @@ namespace Core {
@@ -26,7 +26,7 @@ index bde27fb..4ffd2b2 100644
          IteratorType()
              : m_Container(nullptr)
 diff --git a/Source/tracing/ITraceControl.h b/Source/tracing/ITraceControl.h
-index e7142dc..f98a404 100644
+index 958fcaed..ae0eb8f2 100644
 --- a/Source/tracing/ITraceControl.h
 +++ b/Source/tracing/ITraceControl.h
 @@ -29,7 +29,7 @@ namespace WPEFramework {
@@ -35,7 +35,7 @@ index e7142dc..f98a404 100644
  
 -    struct ITraceControl {
 +    struct EXTERNAL ITraceControl {
-         virtual ~ITraceControl() {}
+         virtual ~ITraceControl() = default;
          virtual void Destroy() = 0;
          virtual const char* Category() const = 0;
 -- 

@@ -6,16 +6,19 @@ we noticed that RPC Process shutdown mechanism is based on clock timeouts. It le
 (especially in case time is adjusted during boot) where TimedInfo is getting rescheduled after time update.
 
 diff --git a/Source/core/Timer.h b/Source/core/Timer.h
-index 0c356ca2..9d17224a 100644
+index 60d1b281..72cbc9c5 100644
 --- a/Source/core/Timer.h
 +++ b/Source/core/Timer.h
-@@ -295,7 +295,8 @@ namespace Core {
-                 m_Admin.Lock();
+@@ -362,7 +362,8 @@ namespace Core {
+                 _adminLock.Lock();
  
-                 if (reschedule != 0) {
+                 if ((_executing != nullptr) && (reschedule != 0)) {
 -                    ASSERT(reschedule > now);
 +                    // it might happen that TimedInfo entry under info will get expired when reaching here to Process() method, or time might be shifted during the timeout (for example bootup time aquisition). We cannot assert on below condition then.
 +                   //ASSERT(reschedule > now);
  
                      info.ScheduleTime(reschedule);
                      ScheduleEntry(std::move(info));
+-- 
+2.25.1
+
