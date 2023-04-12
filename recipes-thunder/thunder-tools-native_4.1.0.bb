@@ -1,5 +1,6 @@
 SUMMARY = "Host/Native tooling for the Web Platform for Embedded Framework"
 require include/thunder.inc
+require include/thunder_${PV}.inc
 SRC_URI_append = " file://0002-StubGenerator.patch"
 SRC_URI_append = " file://0005-RDKTV-16258-lambda_crash_error.patch"
 PROVIDES += "wpeframework-tools-native"
