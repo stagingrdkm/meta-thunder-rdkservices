@@ -11,15 +11,10 @@ DEPENDS += "breakpad-wrapper"
 # Need gst-svp-ext which is an abstracting lib for metadata
 DEPENDS +=  "${@bb.utils.contains('DISTRO_FEATURES', 'rdk_svp', 'gst-svp-ext', '', d)}"
 
-FILESEXTRAPATHS_append := ":${THISDIR}/${PN}-${PV}"
-FILESEXTRAPATHS_append := ":${THISDIR}/${PN}"
-
 SRC_URI += " \
            file://wpeframework-init \
            file://wpeframework.service.in \
-           file://wpeframework.service.xdial.in \
-           file://wpeframework.service.no-container.in \
-           file://wpeframework.service.no-container.xdial.in \
+           file://WPEFramework.env \
            file://Library_version_matched_with_release_tag.patch \
            file://Remove_versioning_for_executables.patch \
            file://0003-OCDM-increase-RPC-comm-timeout.patch \
@@ -87,14 +82,10 @@ PACKAGECONFIG[websocket]       = "-DWEBSOCKET=ON,,"
 # Internet event is provided by the LocationSync plugin
 # WebSource event is provided by the WebServer plugin
 
-# Only enable certain events if wpeframework is in distro features
-WPEFRAMEWORK_DIST_EVENTS ?= "${@bb.utils.contains('DISTRO_FEATURES', 'wpeframework', 'Network', '', d)}"
-
 WPEFRAMEWORK_EXTERN_EVENTS ?= " \
     Decryption \
     ${@bb.utils.contains('PACKAGECONFIG', 'provisionproxy', 'Provisioning', '', d)} \
     ${@bb.utils.contains('PACKAGECONFIG', 'websource', 'WebSource', '', d)} \
-    ${WPEFRAMEWORK_DIST_EVENTS} \
     Location Time Internet \
     ${@bb.utils.contains('DISTRO_FEATURES', 'thunder_security_disable', '', 'Security', d)} \
 "
@@ -109,6 +100,7 @@ EXTRA_OECMAKE += " \
     -DTREE_REFERENCE=${SRCREV_thunder} \
     -DPORT=${WPEFRAMEWORK_PORT} \
     -DBINDING=${WPEFRAMEWORK_BINDING} \
+    -DENABLED_TRACING_LEVEL=2 \
     -DPERSISTENT_PATH=${WPEFRAMEWORK_PERSISTENT_PATH} \
     -DSYSTEM_PREFIX=${WPEFRAMEWORK_SYSTEM_PREFIX} \
     -DPYTHON_EXECUTABLE=${STAGING_BINDIR_NATIVE}/python3-native/python3 \
@@ -116,10 +108,9 @@ EXTRA_OECMAKE += " \
     -DTHREADPOOL_COUNT=${WPEFRAMEWORK_THREADPOOL_COUNT} \
     -DEXCEPTION_CATCHING=ON \
     -DWARNING_REPORTING=ON \
+    -DHIDE_NON_EXTERNAL_SYMBOLS=OFF \
     -DEXIT_REASONS=${WPEFRAMEWORK_EXIT_REASONS} \
 "
-
-TARGET_CXXFLAGS_remove_class-target_dunfell = "-Werror=return-type"
 
 do_install_append() {
     if ${@bb.utils.contains("DISTRO_FEATURES", "systemd", "true", "false", d)}
@@ -131,21 +122,16 @@ do_install_append() {
         then
            extra_after="nxserver.service"
         fi
-
-        AMI_SERVICE="${@oe.utils.conditional('WPE_AS_APPMODULE', '1', 'ami.service', '', d)}"
-
-        extra_after="${extra_after} ${WAYLAND_COMPOSITOR} ${AMI_SERVICE}"
+        extra_after="${extra_after} ${WAYLAND_COMPOSITOR}"
         install -d ${D}${systemd_unitdir}/system
-        if ${@bb.utils.contains("DISTRO_FEATURES", "onemwthunder-no-container", "true", "false", d)}
-        then
-            sed -e "s|@EXTRA_AFTER@|${extra_after}|g" < ${WORKDIR}/wpeframework.service.no-container.${@bb.utils.contains("PREFERRED_PROVIDER_dialserver", "xdialserver", "xdial.in", "in", d)} > ${D}${systemd_unitdir}/system/wpeframework.service
-        else
-            sed -e "s|@EXTRA_AFTER@|${extra_after}|g" < ${WORKDIR}/wpeframework.service.${@bb.utils.contains("PREFERRED_PROVIDER_dialserver", "xdialserver", "xdial.in", "in", d)} > ${D}${systemd_unitdir}/system/wpeframework.service
-        fi
+        sed -e "s|@EXTRA_AFTER@|${extra_after}|g" < ${WORKDIR}/wpeframework.service.in > ${D}${systemd_unitdir}/system/wpeframework.service
     else
         install -d ${D}${sysconfdir}/init.d
         install -m 0755 ${WORKDIR}/wpeframework-init ${D}${sysconfdir}/init.d/wpeframework
     fi
+
+    install -d ${D}${sysconfdir}/wpeframework
+    install -m 0644 ${WORKDIR}/WPEFramework.env ${D}${sysconfdir}/wpeframework
 }
 
 SYSTEMD_SERVICE_${PN} = "wpeframework.service"

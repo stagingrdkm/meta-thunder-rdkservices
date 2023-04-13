@@ -1,0 +1,52 @@
+[ARRISEOS-43856]: Fix WPEProcess crash during shutdown
+
+TerminationThread should return void* value from its main function and
+should join main process when it is exiting.
+
+diff --git a/Source/WPEProcess/Process.cpp b/Source/WPEProcess/Process.cpp
+index 38d7b9ef..56587c68 100644
+--- a/Source/WPEProcess/Process.cpp
++++ b/Source/WPEProcess/Process.cpp
+@@ -393,6 +393,7 @@ public:
+         , _engine()
+         , _proxyStubs()
+         , _factories()
++        , terminationThreadId(0)
+     {
+         _instance = this;
+ 
+@@ -405,8 +406,7 @@ public:
+         sigaddset(&signals, SIGQUIT);
+         pthread_sigmask(SIG_BLOCK, &signals, 0);
+         TRACE_L1("Starting termination thread");
+-        pthread_t tid;
+-        if (pthread_create(&tid, NULL, TerminationThread, NULL) != 0) {
++        if (pthread_create(&terminationThreadId, NULL, TerminationThread, NULL) != 0) {
+             TRACE_L1("Cannot create thread");
+             exit(0);
+         } else {
+@@ -450,6 +450,8 @@ public:
+             sleep(10);
+         }
+         #endif
++        if (pthread_join(terminationThreadId, NULL))
++            TRACE_L1("Failed to join TerminationThread");
+ 
+         // We are going to tear down the stugg. Unregistere the Worker Pool
+         Core::IWorkerPool::Assign(nullptr);
+@@ -531,6 +533,7 @@ private:
+             ProcessFlow::Abort();
+             TRACE_L1("TerminationThread: abort done");
+         }
++        return NULL;
+     }
+     #endif
+ 
+@@ -539,6 +542,7 @@ private:
+     Core::ProxyType<WorkerPoolImplementation> _engine;
+     std::list<Core::Library> _proxyStubs;
+     FactoriesImplementation _factories;
++    pthread_t terminationThreadId;
+ 
+     static Core::CriticalSection _lock;
+     static ProcessFlow* _instance;
