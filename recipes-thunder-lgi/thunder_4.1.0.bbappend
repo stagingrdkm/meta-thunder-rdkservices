@@ -26,7 +26,8 @@ EXTRA_OECMAKE += "-DINPUT_LOCATOR=/run/wpeframework/keyhandler"
 EXTRA_OECMAKE += "-DKEY_OUTPUT_DISABLED=true"
 EXTRA_OECMAKE += "-DWARNING_REPORTING=OFF"
 EXTRA_OECMAKE += "-DEXCEPTION_CATCHING=ON"
-EXTRA_OECMAKR += "-DENABLED_TRACING_LEVEL=3"
+EXTRA_OECMAKE += "-DENABLED_TRACING_LEVEL=3"
+EXTRA_OECMAKE += "-DHIDE_NON_EXTERNAL_SYMBOLS=ON"
 
 TARGET_CXXFLAGS += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-D_TRACE_LEVEL=2 -D__ENABLE_ASSERT__=ON', '', d)}"
 TARGET_CXXFLAGS += "-D__ERRORRESULT__=errno"
@@ -53,7 +54,10 @@ TARGET_CXXFLAGS += "-D__ERRORRESULT__=errno"
 # file://0125-ONEM-24034-Setup-group-and-permissions-for-socket.patch == rights_patch.patch
 
 
-SRC_URI += "file://0107-ONEM-18296-tracing-use-direct-output.patch \
+SRC_URI += "file://wpeframework.service.xdial.in \
+            file://wpeframework.service.no-container.in \
+            file://wpeframework.service.no-container.xdial.in \
+            file://0107-ONEM-18296-tracing-use-direct-output.patch \
             file://wpeframework.conf \
             file://core-dumps-0006.conf \
             file://wpeprocess-start.sh \
@@ -73,6 +77,7 @@ SRC_URI += "file://0107-ONEM-18296-tracing-use-direct-output.patch \
             file://0143-ARRISAPOL-2718-Add-JSONRPC-helper-prints.patch \
             file://0144-ARRISEOS-42363-Don-t-flush-libraries-in-Dispatch.patch \
             file://0145-ARRISEOS-42502-Fix-random-crashes-under-stress.patch \
+            file://0146-ARRISEOS-43856-add-join-and-return-value-for-termination-thread.patch \
             file://0147-ARRISAPP-140-Fix-assert-on-call-to-opencdm_dispose.patch \
             file://0148-FindSlauncher-lost-letter.patch \
             file://0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch \
@@ -107,6 +112,31 @@ PACKAGECONFIG_append = " processcontainers processcontainers_awc"
 PACKAGECONFIG_remove = " virtualinput"
 
 do_install_append() {
+    rm -rf ${D}${sysconfdir}/wpeframework
+    if ${@bb.utils.contains("DISTRO_FEATURES", "systemd", "true", "false", d)}
+    then
+        if ${@bb.utils.contains("MACHINE_FEATURES", "platformserver", "true", "false", d)}
+        then
+           extra_after=""
+        elif ${@bb.utils.contains("PREFERRED_PROVIDER_virtual/egl", "broadcom-refsw", "true", bb.utils.contains("PREFERRED_PROVIDER_virtual/egl", "broadcom-ursr", "true", "false", d), d)}
+        then
+           extra_after="nxserver.service"
+        fi
+
+        AMI_SERVICE="${@oe.utils.conditional('WPE_AS_APPMODULE', '1', 'ami.service', '', d)}"
+
+        extra_after="${extra_after} ${WAYLAND_COMPOSITOR} ${AMI_SERVICE}"
+        install -d ${D}${systemd_unitdir}/system
+        if ${@bb.utils.contains("DISTRO_FEATURES", "onemwthunder-no-container", "true", "false", d)}
+        then
+            sed -e "s|@EXTRA_AFTER@|${extra_after}|g" < ${WORKDIR}/wpeframework.service.no-container.${@bb.utils.contains("PREFERRED_PROVIDER_dialserver", "xdialserver", "xdial.in", "in", d)} > ${D}${systemd_unitdir}/system/wpeframework.service
+        else
+            sed -e "s|@EXTRA_AFTER@|${extra_after}|g" < ${WORKDIR}/wpeframework.service.${@bb.utils.contains("PREFERRED_PROVIDER_dialserver", "xdialserver", "xdial.in", "in", d)} > ${D}${systemd_unitdir}/system/wpeframework.service
+        fi
+    else
+        install -d ${D}${sysconfdir}/init.d
+        install -m 0755 ${WORKDIR}/wpeframework-init ${D}${sysconfdir}/init.d/wpeframework
+    fi
     install -d ${D}${datadir}/WPEFramework
     install -m 0755 ${WORKDIR}/wpeprocess-start.sh ${D}${datadir}/WPEFramework
     install -d ${D}${systemd_unitdir}/system
