@@ -3,29 +3,17 @@ LICENSE = "Apache-2.0"
 PR = "r0"
 
 require include/thunder.inc
-
-#old patches
-#           file://0001-RDK-28534-Security-Agent-Utility-and-Logging-ClientLibs.patch
-#           file://0021-move-the-SOC-specific-svp-transformation-to-gst-svp.patch
-#           file://0001-link-secapi-crypto.patch
-#           file://0026-Send_empty_buffer_on_noBoundKeyMsg.patch
-#           file://0002-openssl-api-based-on-openssl-version.patch
-#           file://0001-RDK-31882-Add-GstCaps-parsing-in-OCDM-to-wpeframework-clientlibraries.patch
-#           file://0001-RDK-29803-SoC-Independent-SVP-support.patch
-#           file://0001-IPersistent_API_Cobalt.patch
-#           file://0008-added-opencdm_gstreamer_transform_caps-method.patch
-#           file://0009-DELIA-51340.patch
-
-# we have our alternative here (different name)
-#           file://0003_MediaType_name_changed.patch 
-#           file://0001_gstreamer_session_decrypt_ex_with_caps.patch - we have it provided elsewhere
+PROVIDES += "wpeframework-clientlibraries"
+RPROVIDES_${PN} += "wpeframework-clientlibraries"
 
 LIC_FILES_CHKSUM = "file://LICENSE;md5=847677038847363222ffb66cfa6406c2"
 SRC_URI = "git://github.com/rdkcentral/ThunderClientLibraries.git;protocol=git;branch=R4;name=wpeframework-clientlibraries \
-           file://0001-RDK-28534-Security-Agent-Utility-and-Logging-ClientLibs-R4.patch \
+           file://0001-RDK-28534-Security-Agent-Utility-and-Logging-ClientLibs.patch \
            file://Library-version-Matched-With-Release-ClientLibs.patch \
+           file://0003_MediaType_name_changed.patch \
            file://0004-Cipher-CipherNetflix-methods-return-type-changes.patch \
-           file://0001-RDK-29803-SoC-Independent-SVP-support-R4.patch \
+           file://0001-RDK-29803-SoC-Independent-SVP-support.patch \
+           file://0001_gstreamer_session_decrypt_ex_with_caps.patch \
            file://R4.1_Trace_enabled_error_wpeframework_clientlibraries.patch \
            "
 
@@ -39,9 +27,8 @@ include include/compositor.inc
 DEPENDS = " \
     wpeframework-interfaces \
     wpeframework-tools-native \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'compositor', '${WPE_COMPOSITOR_DEP}', '', d)} \
 "
-
-#${@bb.utils.contains('DISTRO_FEATURES', 'compositor', '${WPE_COMPOSITOR_DEP}', '', d)}
 
 RDEPENDS_${PN}_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'sage_svp', ' gst-svp-ext', '', d)}"
 RDEPENDS_${PN}_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'rdk_svp', ' gst-svp-ext', '', d)}"
@@ -64,7 +51,10 @@ def get_cdmi_adapter(d):
         return "opencdm_gst"
     fi
 
+
+#WPE_R4_COMMIT
 WPE_CDMI_ADAPTER_IMPL = "${@get_cdmi_adapter(d)}"
+#WPE_CDMI_ADAPTER_IMPL = "opencdm_gst"
 
 PACKAGECONFIG ?= " \
     release \
@@ -121,4 +111,3 @@ CXXFLAGS += "${@bb.utils.contains('DISTRO_FEATURES', 'netflix_cryptanium', " -I$
 # which might not be needed at first glance but will cause problems higher up in the change, there for lets drop -Wl,--as-needed
 # some distros, like POKY (morty) enable --as-needed by default (e.g. https://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/conf/distro/include/as-needed.inc?h=morty)
 ASNEEDED = ""
-
