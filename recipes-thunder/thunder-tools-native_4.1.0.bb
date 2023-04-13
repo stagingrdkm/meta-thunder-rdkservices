@@ -1,11 +1,15 @@
 SUMMARY = "Host/Native tooling for the Web Platform for Embedded Framework"
 require include/thunder.inc
 require include/thunder_${PV}.inc
-SRC_URI_append = " file://0002-StubGenerator.patch"
-SRC_URI_append = " file://0005-RDKTV-16258-lambda_crash_error.patch"
+
+SRC_URI_append = " file://0002-StubGenerator.patch \
+                   file://0005-RDKTV-16258-lambda_crash_error.patch \
+                  "
 PROVIDES += "wpeframework-tools-native"
 
 inherit cmake pkgconfig native python3native
+
+RDEPENDS_${PN} = "python3"
 
 DEPENDS = "\
     python3-native \
