@@ -2,7 +2,7 @@ SUMMARY = "WPEFramework client libraries"
 LICENSE = "Apache-2.0"
 PR = "r0"
 
-require include/thunder.inc
+require ../include/thunder.inc
 PROVIDES += "wpeframework-clientlibraries"
 RPROVIDES_${PN} += "wpeframework-clientlibraries"
 
@@ -22,7 +22,7 @@ SRCREV_wpeframework-clientlibraries = "25d33079e4688d86702c296b0838fc7aaf8c2ec1"
 
 # ----------------------------------------------------------------------------
 
-include include/compositor.inc
+include ../include/compositor.inc
 
 DEPENDS = " \
     wpeframework-interfaces \

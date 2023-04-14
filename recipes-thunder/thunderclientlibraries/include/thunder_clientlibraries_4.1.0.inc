@@ -1,4 +1,4 @@
-require thunder.inc
+require ../../include/thunder.inc
 LIC_FILES_CHKSUM = "file://LICENSE;md5=847677038847363222ffb66cfa6406c2"
 FILESEXTRAPATHS_prepend = "${THISDIR}/thunder-clientlibraries-${PV}:"
 
