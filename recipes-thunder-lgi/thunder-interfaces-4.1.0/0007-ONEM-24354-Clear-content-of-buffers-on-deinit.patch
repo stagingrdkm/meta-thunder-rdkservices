@@ -1,0 +1,28 @@
+From 00cb5b46214edacb3f865486ef4700321cbd4259 Mon Sep 17 00:00:00 2001
+From: Lukasz Wasylyk <lukasz.wasylyk@redembedded.com>
+Date: 2021.02.17
+Subject: [ONEM-24354] OCDM buffer cleanup added
+---
+ Source/ocdm/DataExchange.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/Source/ocdm/DataExchange.h b/Source/ocdm/DataExchange.h
+index c63cf5c..5d8ab10 100644
+--- a/Source/ocdm/DataExchange.h
++++ b/Source/ocdm/DataExchange.h
+@@ -69,7 +69,11 @@ public:
+         // Clear the administration space before using it.
+         ::memset(admin, 0, sizeof(Administration));
+     }
+-    ~DataExchange() {}
++    ~DataExchange()
++    {
++      Reallocation(0);
++      Sync();
++    }
+ 
+ public:
+     inline void Status(uint32_t status)
+-- 
+2.25.1
+

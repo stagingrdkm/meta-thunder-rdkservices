@@ -1,7 +1,8 @@
-DEPENDS += "wpeframework-interfaces libodherr"
+DEPENDS += "wpeframework-tools-native wpeframework-interfaces libodherr"
 RDEPENDS_{$PN} += "libodherr"
 
 FILESEXTRAPATHS_append := ":${THISDIR}/${PN}"
+FILESEXTRAPATHS_append := ":${THISDIR}/cmake"
 
 # SWRDKV-2413/SWRDKV-2773, in dunfell build, each module has specific sysroot.
 # Since in case of sage dtcp build, libcmndrm_tl.so is provided by dtcp, below are needed.
@@ -36,3 +37,7 @@ SRC_URI+="file://OMWAPPI-914-widevine_cbcs_support.patch"
 SRC_URI+="file://OMWAPPI-914-widevine_pass_subsample_information.patch"
 SRC_URI += "file://OMWAPPI-1316-Implementation-of-IMediaSystemMetrics.patch"
 SRC_URI += "file://OMWAPPI-1492-Implement-Widewine-settings-in-WideVine.patch"
+
+SRC_URI += "file://FindNEXUS.cmake;subdir=OCDM-Widevine-Nexus-SVP/cmake"
+SRC_URI += "file://FindNXCLIENT.cmake;subdir=OCDM-Widevine-Nexus-SVP/cmake"
+

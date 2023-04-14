@@ -8,4 +8,4 @@ SRC_URI += "file://0001-RDK-28534-Security-Agent-Utility-and-Logging-ClientLibs.
 
 PACKAGECONFIG ?= "securityagent securityutility"
 PACKAGECONFIG[securityagent]    = "-DSECURITYAGENT=ON, -DSECURITYAGENT=OFF"
-PACKAGECONFIG[securityutility]  = "-DSECURITYUTILITY=ON, --DSECURITYUTILITY=OFF"
+PACKAGECONFIG[securityutility]  = "-DSECURITYUTILITY=ON, -DSECURITYUTILITY=OFF"
