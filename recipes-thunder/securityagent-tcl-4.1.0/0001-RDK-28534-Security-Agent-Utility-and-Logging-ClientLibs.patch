@@ -33,7 +33,7 @@ Index: git/Source/CMakeLists.txt
  option(CRYPTOGRAPHY
          "Include the cryptography library." OFF)
 +option(SECURITYUTILITY
-+        "Application to generate Localhost Security Token" ON)
++        "Application to generate Localhost Security Token" OFF)
  option(LOCALTRACER
          "Header only library to locally print traces coming from Messaging without the need of running Thunder/WPEFramework." OFF)
 

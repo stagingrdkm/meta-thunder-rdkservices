@@ -1,0 +1,52 @@
+From a0be4c92ec7b63392965d901bcb78e40632a180d Mon Sep 17 00:00:00 2001
+From: Piotr Marcinkowski <piotr.marcinkowski@redembedded.com>
+Date: Thu, 19 Jan 2023 18:03:03 +0000
+Subject: [PATCH] OMAPPI-911 Fix for conflicting declaration of enum MediaType
+
+This patch is a temporary fix for conflicting type names when.
+MediaType was added in 1.12 of open_cdm.h
+
+  typedef enum
+  {
+    MediaType_Unknown = 0,
+    MediaType_Video,
+    ...
+  } MediaType;
+
+and a type with the same name is defined in AampMediaType.h
+
+  enum MediaType
+  {
+    eMEDIATYPE_VIDEO,               /**< Type video */
+    eMEDIATYPE_AUDIO,               /**< Type audio */
+    ...
+  };
+---
+ Source/ocdm/open_cdm.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
+index fd87c46..275c234 100644
+--- a/Source/ocdm/open_cdm.h
++++ b/Source/ocdm/open_cdm.h
+@@ -125,7 +125,7 @@ typedef enum
+     MediaType_Video,
+     MediaType_Audio,
+     MediaType_Data
+-} MediaType;
++} OpenCDMMediaType;
+ 
+ //CENC3.0 pattern is a number of encrypted blocks followed a number of clear blocks after which the pattern repeats.
+ typedef struct {
+@@ -153,7 +153,7 @@ typedef struct {
+ typedef struct {
+     uint16_t height;
+     uint16_t width;
+-    MediaType media_type;
++    OpenCDMMediaType media_type;
+ } MediaProperties;
+ 
+ 
+-- 
+2.25.1
+

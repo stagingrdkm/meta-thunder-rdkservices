@@ -56,15 +56,15 @@ def get_cdmi_adapter(d):
 WPE_CDMI_ADAPTER_IMPL = "${@get_cdmi_adapter(d)}"
 #WPE_CDMI_ADAPTER_IMPL = "opencdm_gst"
 
-PACKAGECONFIG ?= " \
-    release \
-    ${@bb.utils.contains('DISTRO_FEATURES', 'opencdm', 'opencdm ${WPE_CDMI_ADAPTER_IMPL}', '', d)} \
-    ${@bb.utils.contains('DISTRO_FEATURES', 'provisioning', 'provisionproxy', '', d)} \
-    securityagent \
-    cryptography \
-    "
+#PACKAGECONFIG ?= "
+#    release
+#    ${@bb.utils.contains('DISTRO_FEATURES', 'opencdm', 'opencdm ${WPE_CDMI_ADAPTER_IMPL}', '', d)}
+#    ${@bb.utils.contains('DISTRO_FEATURES', 'provisioning', 'provisionproxy', '', d)}
+#    securityagent
+#    cryptography
+#    "
 
-PACKAGECONFIG_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'compositor', 'compositorclient', '', d)}"
+#PACKAGECONFIG_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'compositor', 'compositorclient', '', d)}"
 
 PACKAGECONFIG[compositorclient] = "-DCOMPOSITORCLIENT=ON,-DCOMPOSITORCLIENT=OFF"
 PACKAGECONFIG[provisionproxy]   = "-DPROVISIONPROXY=ON,-DPROVISIONPROXY=OFF,libprovision"
@@ -111,3 +111,5 @@ CXXFLAGS += "${@bb.utils.contains('DISTRO_FEATURES', 'netflix_cryptanium', " -I$
 # which might not be needed at first glance but will cause problems higher up in the change, there for lets drop -Wl,--as-needed
 # some distros, like POKY (morty) enable --as-needed by default (e.g. https://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/conf/distro/include/as-needed.inc?h=morty)
 ASNEEDED = ""
+
+deltask do_install
