@@ -11,8 +11,6 @@ SRC_URI += "file://0102-OMWAPPI-1119-cobalt-vault-implementation.patch;patchdir=
 # should be applied
 # SRC_URI += "file://0103-OMWAPPI-1119-cobalt-vault-tests.patch"
 
-EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
-
 # other options OpenSSL, SecApi, Thunder
 CRYPTOGRAPHY_IMPLEMENTATION="Icrypto-nexus"
 
