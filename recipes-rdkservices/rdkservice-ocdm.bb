@@ -21,6 +21,26 @@ SRC_URI += "file://ocdm_store_check.sh"
 OECMAKE_TARGET_COMPILE = "WPEFrameworkOCDM"
 
 DEPENDS += "wpeframework-clientlibraries devicesettings iarmmgrs libodherr asconnector rdk-logger"
+# when cmake scripts was provided by wpeframework-clientlibraries it was fine, now the scripts are not found
+DEPENDS += "ocdm-tcl"
+# problematic line is the following: find_package(ocdm REQUIRED)
+# it means that each app/module that integrates with splited TCL could have similar integration issues
+#| CMake Error at OpenCDMi/CMakeLists.txt:35 (find_package):
+#|   By not providing "Findocdm.cmake" in CMAKE_MODULE_PATH this project has
+#|   asked CMake to find a package configuration file provided by "ocdm", but
+#|   CMake did not find one.
+#| 
+#|   Could not find a package configuration file provided by "ocdm" with any of
+#|   the following names:
+#| 
+#|     ocdmConfig.cmake
+#|     ocdm-config.cmake
+#| 
+#|   Add the installation prefix of "ocdm" to CMAKE_PREFIX_PATH or set
+#|   "ocdm_DIR" to a directory containing one of the above files.  If "ocdm"
+#|   provides a separate development package or SDK, be sure it has been
+#|   installed.
+
 RDEPENDS_${PN} += "devicesettings libodherr"
 
 PACKAGECONFIG ?= " \
