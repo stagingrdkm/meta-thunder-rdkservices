@@ -6,32 +6,38 @@ PR = "r1"
 PV = "3.0+git${SRCPV}"
 
 S = "${WORKDIR}/git"
-inherit cmake pkgconfig
+inherit cmake pkgconfig python3native
 
-SRC_URI = "git://github.com/rdkcentral/rdkservices.git;protocol=https;branch=sprint/2101 \
+SRC_URI = "git://github.com/rdkcentral/rdkservices.git;protocol=git;branch=wpe_r4 \
            file://index.html \
            file://osmc-devinput-remote.json \
            file://thunder_acl.json \
-           ${@bb.utils.contains('DISTRO_FEATURES', 'systimemgr','file://0001-Added-Support-for-querying-and-publishing-the-Secure.patch','',d)} \
+           file://rdkshell_post_startup.conf \
+           file://rdkservices.ini \
+           file://thundersupportchange.patch \
           "
 
-# Jan 21, 2021
-SRCREV = "776c2e4d7b35c57f0c0f0e302ea3d87fb2f3270f"
-
+# Feb 10, 2023
+SRCREV = "f05b4b50174b96b2b9d59e9c3f2b82245d299542"
 TOOLCHAIN = "gcc"
 EXTRA_OECMAKE += "-DCMAKE_SYSROOT=${STAGING_DIR_HOST}"
 
-DEPENDS += "wpeframework-clientlibraries devicesettings iarmbus iarmmgrs tts storagemanager nopoll audiocapturemgr hdmicec"
-DEPENDS +=  " trower-base64 rfc "
+DEPENDS += "wpeframework-tools-native wpeframework-clientlibraries devicesettings iarmbus iarmmgrs tts storagemanager nopoll audiocapturemgr hdmicec ctrlm-headers"
+DEPENDS +=  " trower-base64 rfc telemetry websocketpp boost "
 DEPENDS += "${@bb.utils.contains('DISTRO_FEATURES', 'bluetooth', 'bluetooth-mgr', '', d)}"
 DEPENDS += "${@bb.utils.contains('DISTRO_FEATURES', 'rdkshell', ' rdkshell ', '', d)}"
+DEPENDS += " breakpad-wrapper"
 DEPENDS += " ${@bb.utils.contains('DISTRO_FEATURES', 'systimemgr',     'systimemgrinetrface', '', d)}"
+
+TARGET_LDFLAGS += " -Wl,--no-as-needed -ltelemetry_msgsender -Wl,--as-needed "
+EXTRA_OECMAKE += "-DBUILD_ENABLE_TELEMETRY_LOGGING=ON"
 
 RDEPENDS_${PN} += "devicesettings"
 
 CXXFLAGS += " -I${STAGING_DIR_TARGET}${includedir}/wdmp-c/ "
 CXXFLAGS += " -I${STAGING_DIR_TARGET}${includedir}/trower-base64/ "
 CXXFLAGS += "${@bb.utils.contains('DISTRO_FEATURES', 'build_rfc_enabled',"-DRFC_ENABLED ","", d)}"
+#CXXFLAGS += " -Wall -Werror "
 
 # More complicated plugins are moved seperate includes
 include include/compositor.inc
@@ -40,16 +46,16 @@ include include/power.inc
 include include/remotecontrol.inc
 include include/snapshot.inc
 include include/webkitbrowser.inc
-#include include/packager.inc
+include include/packager.inc
 include include/texttospeech.inc
 
 WPEFRAMEWORK_LOCATIONSYNC_URI ?= "http://jsonip.metrological.com/?maf=true"
 
 PACKAGECONFIG ?= " \
     ${WPE_SNAPSHOT} \
-    activitymonitor avinput continuewatching controlservice datacapture devicediagnostics \
-    deviceinfo displaysettings framerate hdcpprofile hdmicec hdmiinput loggingpreferences \
-    messenger network playerinfo remoteactionmapping screencapture securityagent stateobserver \
+    activitymonitor avinput continuewatching controlservice voicecontrol datacapture devicediagnostics \
+    displaysettings framerate hdcpprofile hdmicec hdmiinput loggingpreferences \
+    messenger network remoteactionmapping screencapture securityagent stateobserver \
     systemservices timer tracecontrol userpreferences warehouse monitor locationsync texttospeech persistent_store\
     ${@bb.utils.contains('DISTRO_FEATURES', 'bluetooth', 'bluetoothcontrol', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'opencdm',              'opencdmi', '', d)} \
@@ -59,15 +65,24 @@ PACKAGECONFIG ?= " \
     ${@bb.utils.contains('DISTRO_FEATURES', 'rdkshell',             'rdkshell', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'DOBBY_CONTAINERS',     'ocicontainer', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'wifi', 'wifimanager', '', d)} \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'enable_maintenance_manager', 'maintenancemanager', '', d)} \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'fireboltmediaplayer', 'fireboltmediaplayer', '', d)} \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'dlnasupport', ' dlna', '', d)} \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'flex2_rdk', ' hdmicecsource', ' ', d)} \
 "
 EXTRA_OECMAKE += "${@bb.utils.contains('DISTRO_FEATURES', 'rdkshell', ' -DPLUGIN_RDKSHELL=ON ', ' -DPLUGIN_RDKSHELL=OFF ', d)}"
 EXTRA_OECMAKE += "${@bb.utils.contains('DISTRO_FEATURES', 'rdkshell_disable_autostart', ' -DPLUGIN_RDKSHELL_AUTOSTART=false ', ' -DPLUGIN_RDKSHELL_AUTOSTART=true ', d)}"
+EXTRA_OECMAKE += "${@bb.utils.contains_any('DISTRO_FEATURES', 'rdkshell_ra second_form_factor', ' -DPLUGIN_RDKSHELL_AUTOSTART=true ', ' ', d)}"
+
+#WPE_R4_COMMIT : Disabled these below flags for now..
+#CXXFLAGS += " -Wall -Werror "
 
 PACKAGECONFIG[activitymonitor]      = "-DPLUGIN_ACTIVITYMONITOR=ON,-DPLUGIN_ACTIVITYMONITOR=OFF,"
 PACKAGECONFIG[avinput]              = "-DPLUGIN_AVINPUT=ON,-DPLUGIN_AVINPUT=OFF,"
 PACKAGECONFIG[bluetoothcontrol]     = "-DPLUGIN_BLUETOOTH=ON -DPLUGIN_BLUETOOTH_AUTOSTART=true,-DPLUGIN_BLUETOOTH=OFF,,bluez5"
 PACKAGECONFIG[continuewatching]     = "-DPLUGIN_CONTINUEWATCHING=ON,-DPLUGIN_CONTINUEWATCHING=OFF,"
 PACKAGECONFIG[controlservice]       = "-DPLUGIN_CONTROLSERVICE=ON,-DPLUGIN_CONTROLSERVICE=OFF,"
+PACKAGECONFIG[voicecontrol]         = "-DPLUGIN_VOICECONTROL=ON,-DPLUGIN_VOICECONTROL=OFF,"
 PACKAGECONFIG[datacapture]          = "-DPLUGIN_DATACAPTURE=ON, -DPLUGIN_DATACAPTURE=OFF,"
 PACKAGECONFIG[devicediagnostics]    = "-DPLUGIN_DEVICEDIAGNOSTICS=ON,-DPLUGIN_DEVICEDIAGNOSTICS=OFF,"
 PACKAGECONFIG[deviceinfo]           = "-DPLUGIN_DEVICEINFO=ON,-DPLUGIN_DEVICEINFO=OFF,"
@@ -79,6 +94,7 @@ PACKAGECONFIG[framerate]            = "-DPLUGIN_FRAMERATE=ON,-DPLUGIN_FRAMERATE=
 PACKAGECONFIG[hdcpprofile]          = "-DPLUGIN_HDCPPROFILE=ON,-DPLUGIN_HDCPPROFILE=OFF,"
 PACKAGECONFIG[hdmicec]              = "-DPLUGIN_HDMICEC=ON,-DPLUGIN_HDMICEC=OFF,"
 PACKAGECONFIG[hdmicec2]             = "-DPLUGIN_HDMICEC2=ON,-DPLUGIN_HDMICEC2=OFF,"
+PACKAGECONFIG[hdmicecsource]        = "-DPLUGIN_HDMICECSOURCE=ON,-DPLUGIN_HDMICECSOURCE=OFF,"
 PACKAGECONFIG[hdmiinput]            = "-DPLUGIN_HDMIINPUT=ON,-DPLUGIN_HDMIINPUT=OFF,"
 PACKAGECONFIG[compositeinput]       = "-DPLUGIN_COMPOSITEINPUT=ON,-DPLUGIN_COMPOSITEINPUT=OFF,"
 PACKAGECONFIG[ioconnector]          = "-DPLUGIN_IOCONNECTOR=ON,-DPLUGIN_IOCONNECTOR=OFF,"
@@ -88,11 +104,7 @@ PACKAGECONFIG[locationsync]         = "-DPLUGIN_LOCATIONSYNC=ON \
                                       ,-DPLUGIN_LOCATIONSYNC=OFF,"
 PACKAGECONFIG[loggingpreferences]   = "-DPLUGIN_LOGGINGPREFERENCES=ON,-DPLUGIN_LOGGINGPREFERENCES=OFF,"
 PACKAGECONFIG[messenger]            = "-DPLUGIN_MESSENGER=ON,-DPLUGIN_MESSENGER=OFF,"
-PACKAGECONFIG[monitor]              = "-DPLUGIN_MONITOR=ON \
-                                       -DPLUGIN_WEBKITBROWSER_MEMORYLIMIT=614400 \
-                                       -DPLUGIN_YOUTUBE_MEMORYLIMIT=614400 \
-                                       -DPLUGIN_NETFLIX_MEMORYLIMIT=307200 \
-                                      ,-DPLUGIN_MONITOR=OFF,"
+PACKAGECONFIG[monitor]              = "-DPLUGIN_MONITOR=ON ${MONITOR_PLUGIN_ARGS},-DPLUGIN_MONITOR=OFF,"
 PACKAGECONFIG[network]              = "-DPLUGIN_NETWORK=ON,-DPLUGIN_NETWORK=OFF,"
 PACKAGECONFIG[persistent_store]     = "-DPLUGIN_PERSISTENTSTORE=ON,,sqlite3 glib-2.0"
 PACKAGECONFIG[playerinfo]           = "-DPLUGIN_PLAYERINFO=ON -DUSE_DEVICESETTINGS=1,-DPLUGIN_PLAYERINFO=OFF,"
@@ -102,6 +114,7 @@ PACKAGECONFIG[screencapture]        = "-DPLUGIN_SCREENCAPTURE=ON,-DPLUGIN_SCREEN
 PACKAGECONFIG[securityagent]        = "-DPLUGIN_SECURITYAGENT=ON,-DPLUGIN_SECURITYAGENT=OFF,"
 PACKAGECONFIG[stateobserver]        = "-DPLUGIN_STATEOBSERVER=ON,-DPLUGIN_STATEOBSERVER=OFF,"
 PACKAGECONFIG[systemdconnector]     = "-DPLUGIN_SYSTEMDCONNECTOR=ON,-DPLUGIN_SYSTEMDCONNECTOR=OFF,"
+PACKAGECONFIG[maintenancemanager]   = "-DPLUGIN_MAINTENANCEMANAGER=ON,-DPLUGIN_MAINTENANCEMANAGER=OFF,"
 PACKAGECONFIG[systemservices]       = "-DPLUGIN_SYSTEMSERVICES=ON,-DPLUGIN_SYSTEMSERVICES=OFF,"
 PACKAGECONFIG[timer]                = "-DPLUGIN_TIMER=ON,-DPLUGIN_TIMER=OFF,"
 PACKAGECONFIG[timesync]             = "-DPLUGIN_TIMESYNC=ON,-DPLUGIN_TIMESYNC=OFF,"
@@ -121,8 +134,21 @@ PACKAGECONFIG[wifimanager]          = "-DPLUGIN_WIFIMANAGER=ON,-DPLUGIN_WIFIMANA
 PACKAGECONFIG[xcast]                = "-DPLUGIN_XCAST=ON,-DPLUGIN_XCAST=OFF,"
 PACKAGECONFIG[ocicontainer]         = "-DPLUGIN_OCICONTAINER=ON, -DPLUGIN_OCICONTAINER=OFF, dobby, dobby"
 PACKAGECONFIG[usbaccess]            = "-DPLUGIN_USBACCESS=ON,-DPLUGIN_USBACCESS=OFF,"
+PACKAGECONFIG[erm]                  = "-DBUILD_ENABLE_ERM=ON,-DBUILD_ENABLE_ERM=OFF,"
+PACKAGECONFIG[fireboltmediaplayer]  = "-DPLUGIN_FIREBOLTMEDIAPLAYER=ON,-DPLUGIN_FIREBOLTMEDIAPLAYER=OFF, aamp, aamp"
+PACKAGECONFIG[dlna] = "-DPLUGIN_DLNA_SERVICE=ON, -DPLUGIN_DLNA_SERVICE=OFF,xupnp-rpc,xupnp-rpc"
+
+MONITOR_PLUGIN_ARGS                ?= " \
+                                       -DPLUGIN_WEBKITBROWSER_MEMORYLIMIT=614400 \
+                                       -DPLUGIN_YOUTUBE_MEMORYLIMIT=614400 \
+                                       -DPLUGIN_NETFLIX_MEMORYLIMIT=307200 \
+                                       -DPLUGIN_MONITOR_CLONED_APPS=ON -DPLUGIN_MONITOR_CLONED_APP_MEMORYLIMIT=657408 \
+                                       -DPLUGIN_MONITOR_SEARCH_AND_DISCOVERY_MEMORYLIMIT=888832 \
+                                       -DPLUGIN_MONITOR_NETFLIX_APP_MEMORYLIMIT=1048576 \
+"
 
 EXTRA_OECMAKE += " \
+    -DPYTHON_EXECUTABLE=${STAGING_BINDIR_NATIVE}/python3-native/python3 \
     -DBUILD_REFERENCE=${SRCREV} \
     -DBUILD_SHARED_LIBS=ON \
     -DSECAPI_LIB=sec_api \
@@ -131,6 +157,12 @@ EXTRA_OECMAKE += " \
 
 do_install_append() {
     install -m 0644 ${WORKDIR}/thunder_acl.json ${D}${sysconfdir}
+    install -m 0644 ${WORKDIR}/rdkshell_post_startup.conf ${D}${sysconfdir}
+    if ${@bb.utils.contains_any("DISTRO_FEATURES", "rdkshell_ra second_form_factor", "true", "false", d)}
+    then
+      install -d ${D}${sysconfdir}/rfcdefaults
+      install -m 0644 ${WORKDIR}/rdkservices.ini ${D}${sysconfdir}/rfcdefaults/
+    fi
 }
 
 # ----------------------------------------------------------------------------
