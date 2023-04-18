@@ -19,7 +19,7 @@ EXTERNALSRC_SYMLINKS = ""
 # rdkservices "next" location. Thunder R4
 SRC_URI_remove = "git://github.com/rdkcentral/rdkservices.git;protocol=https;branch=sprint/2101"
 SRC_URI += "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=test_wpe_r4;name=${PN};destsuffix=git"
-SRCREV = "774dc81e818eba279213704c8802464888e245c0"
+SRCREV = "b268414e4a771b2fc0146d53ffb486a41e69c137"
 
 DEPENDS_remove = "storagemanager"
 DEPENDS_remove = "audiocapturemgr"
