@@ -11,8 +11,8 @@ diff --git a/interfaces/INetflix.h b/interfaces/INetflix.h
 index 91107ee..f272bf7 100644
 --- a/interfaces/INetflix.h
 +++ b/interfaces/INetflix.h
-@@ -39,6 +39,7 @@ namespace Exchange {
-             // Signal changes on the subscribed namespace..
+@@ -38,6 +38,7 @@ namespace Exchange {
+ 
              virtual void StateChange(const INetflix::state state) = 0;
              virtual void Exit(const uint32_t exitCode) = 0;
 +            virtual void NotifyClient(const string& eventName) = 0;

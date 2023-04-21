@@ -11,7 +11,7 @@ diff --git a/interfaces/IContentDecryption.h b/interfaces/IContentDecryption.h
 index 48b3f4b..1d051ce 100644
 --- a/interfaces/IContentDecryption.h
 +++ b/interfaces/IContentDecryption.h
-@@ -51,6 +51,6 @@ namespace Exchange {
+@@ -53,8 +53,8 @@ namespace Exchange {
                                                const Status status) = 0;
          };
  
@@ -20,6 +20,8 @@ index 48b3f4b..1d051ce 100644
 +        virtual uint32_t Register(IContentDecryption::INotification* notification) = 0;
 +        virtual uint32_t Unregister(IContentDecryption::INotification* notification) = 0;
      };
+ 
+     class DataExchange : public Core::SharedBuffer {
 -- 
 2.25.1
 
