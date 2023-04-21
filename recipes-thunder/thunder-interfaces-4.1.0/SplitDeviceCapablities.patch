@@ -1,3 +1,17 @@
+From e5d1e65fe5d915df57e36b9d1aad10a68df7b71f Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Thu, 20 Apr 2023 19:17:49 +0200
+Subject: [PATCH] SplitDeviceCapablities
+
+---
+ interfaces/IDeviceInfo2.h     |  74 +++
+ interfaces/IFirmwareVersion.h |  19 +
+ interfaces/Ids.h              |   8 +-
+ jsonrpc/DeviceInfo.json       | 843 ++++++++++++++++++++++++++--------
+ 4 files changed, 757 insertions(+), 187 deletions(-)
+ create mode 100644 interfaces/IDeviceInfo2.h
+ create mode 100644 interfaces/IFirmwareVersion.h
+
 diff --git a/interfaces/IDeviceInfo2.h b/interfaces/IDeviceInfo2.h
 new file mode 100644
 index 0000000..7539657
@@ -78,21 +92,46 @@ index 0000000..7539657
 +    };
 +}
 +}
+diff --git a/interfaces/IFirmwareVersion.h b/interfaces/IFirmwareVersion.h
+new file mode 100644
+index 0000000..ba6ce5a
+--- /dev/null
++++ b/interfaces/IFirmwareVersion.h
+@@ -0,0 +1,19 @@
++#pragma once
++
++#include "Module.h"
++
++namespace WPEFramework {
++namespace Exchange {
++
++    struct EXTERNAL IFirmwareVersion : virtual public Core::IUnknown {
++        enum { ID = ID_FIRMWARE_VERSION };
++
++        virtual ~IFirmwareVersion() override = default;
++
++        virtual uint32_t Imagename(string& imagename /* @out */) const = 0;
++        virtual uint32_t Sdk(string& sdk /* @out */) const = 0;
++        virtual uint32_t Mediarite(string& mediarite /* @out */) const = 0;
++        virtual uint32_t Yocto(string& yocto /* @out */) const = 0;
++    };
++}
++}
 diff --git a/interfaces/Ids.h b/interfaces/Ids.h
-index dcafb4f..cde6105 100644
+index 99cc5c5..ea8a8c2 100644
 --- a/interfaces/Ids.h
 +++ b/interfaces/Ids.h
-@@ -252,6 +255,7 @@ namespace Exchange {
+@@ -255,6 +255,7 @@ namespace Exchange {
          ID_DEVICE_CAPABILITIES_VIDEO               = ID_DEVICE_CAPABILITIES + 2,
          ID_DEVICE_CAPABILITIES_RESOLUTION          = ID_DEVICE_CAPABILITIES + 3,
          ID_DEVICE_METADATA                         = ID_DEVICE_CAPABILITIES + 4,
 +        ID_FIRMWARE_VERSION                        = ID_DEVICE_CAPABILITIES + 5,
-
+ 
          ID_DIALSERVER                              = 0x000003C0,
          ID_DIALSERVER_APPLICATION                  = ID_DIALSERVER + 1,
-@@ -316,7 +316,12 @@ namespace Exchange {
+@@ -321,7 +322,12 @@ namespace Exchange {
          ID_LISA_METADATA_PAYLOAD                   = ID_LISA + 12,
-
+ 
          ID_RUST_BRIDGE                             = 0x000004B0,
 -        ID_RUST_BRIDGE_NOTIFICATION                = ID_RUST_BRIDGE + 1
 +        ID_RUST_BRIDGE_NOTIFICATION                = ID_RUST_BRIDGE + 1,
@@ -101,15 +140,15 @@ index dcafb4f..cde6105 100644
 +        ID_DEVICE_AUDIO_CAPABILITIES_AUDIO_CAPABILITY = ID_DEVICE_INFO + 2,
 +        ID_DEVICE_AUDIO_CAPABILITIES_MS12_CAPABILITY = ID_DEVICE_INFO + 3,
 +        ID_DEVICE_VIDEO_CAPABILITIES = ID_DEVICE_INFO + 4
-
+ 
      };
  }
 diff --git a/jsonrpc/DeviceInfo.json b/jsonrpc/DeviceInfo.json
-index 5c87632..5677299 100644
+index fa25999..efcce11 100644
 --- a/jsonrpc/DeviceInfo.json
 +++ b/jsonrpc/DeviceInfo.json
-@@ -6,6 +6,9 @@
-     "class": "DeviceInfo",
+@@ -7,6 +7,9 @@
+     "format": "uncompliant-extended",
      "description": "DeviceInfo JSON-RPC interface"
    },
 +  "common": {
@@ -118,7 +157,7 @@ index 5c87632..5677299 100644
    "definitions": {
      "cpuloadavgs": {
        "description": "cpu 1min, 5min,15min load avg",
-@@ -36,52 +39,6 @@
+@@ -37,52 +40,6 @@
          "avg15min"
        ]
      },
@@ -171,7 +210,7 @@ index 5c87632..5677299 100644
      "output_resolution": {
        "type": "string",
        "enum": [
-@@ -90,159 +47,259 @@
+@@ -91,159 +48,259 @@
          "480p",
          "576i",
          "576p",
@@ -551,7 +590,7 @@ index 5c87632..5677299 100644
      "systeminfo": {
        "summary": "System general information",
        "readonly": true,
-@@ -364,26 +421,6 @@
+@@ -365,26 +422,6 @@
        "params": {
          "type": "object",
          "properties": {
@@ -578,7 +617,7 @@ index 5c87632..5677299 100644
            "runs": {
              "description": "Number of runs",
              "type": "number",
-@@ -394,6 +431,440 @@
+@@ -395,6 +432,440 @@
            "runs"
          ]
        }
@@ -1019,29 +1058,7 @@ index 5c87632..5677299 100644
      }
    }
  }
-diff --git a/interfaces/IFirmwareVersion.h b/interfaces/IFirmwareVersion.h
-new file mode 100644
-index 0000000..ba6ce5a
---- /dev/null
-+++ b/interfaces/IFirmwareVersion.h
-@@ -0,0 +1,19 @@
-+#pragma once
-+
-+#include "Module.h"
-+
-+namespace WPEFramework {
-+namespace Exchange {
-+
-+    struct EXTERNAL IFirmwareVersion : virtual public Core::IUnknown {
-+        enum { ID = ID_FIRMWARE_VERSION };
-+
-+        virtual ~IFirmwareVersion() override = default;
-+
-+        virtual uint32_t Imagename(string& imagename /* @out */) const = 0;
-+        virtual uint32_t Sdk(string& sdk /* @out */) const = 0;
-+        virtual uint32_t Mediarite(string& mediarite /* @out */) const = 0;
-+        virtual uint32_t Yocto(string& yocto /* @out */) const = 0;
-+    };
-+}
-+}
+\ No newline at end of file
+-- 
+2.25.1
 

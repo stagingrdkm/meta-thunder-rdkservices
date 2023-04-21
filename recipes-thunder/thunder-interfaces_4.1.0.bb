@@ -13,7 +13,6 @@ SRC_URI = "git://github.com/rdkcentral/ThunderInterfaces.git;protocol=https;bran
            file://SplitDeviceCapablities.patch \
            file://0018-notifyclient-event-added.patch \
            file://0020-Adding-the-VoiceCommand-API-for-Netflix-plugin.patch \
-           file://0001-Revert-Merge-pull-request-137-from-mikolaj-staworzyn.patch \
            file://Library-version-Matched-With-Release-interfaces.patch \
            "
 

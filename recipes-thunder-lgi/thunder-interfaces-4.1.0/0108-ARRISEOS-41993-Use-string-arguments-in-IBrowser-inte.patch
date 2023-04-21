@@ -41,6 +41,6 @@ index 2f2de3d..8194b46 100644
 +        virtual uint32_t UserStyleSheets(const string& uri) = 0;
      };
  
-     /* @json */
+     // @json @uncompliant:extended
 -- 
 2.25.1

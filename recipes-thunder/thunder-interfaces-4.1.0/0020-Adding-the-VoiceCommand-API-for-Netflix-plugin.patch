@@ -17,4 +17,6 @@ index 913fdaa..91bb3b9 100644
          virtual void SystemCommand(const string& command) = 0;
 +        virtual void VoiceCommand(const string& command) = 0;
      };
+ }
+ }
 
