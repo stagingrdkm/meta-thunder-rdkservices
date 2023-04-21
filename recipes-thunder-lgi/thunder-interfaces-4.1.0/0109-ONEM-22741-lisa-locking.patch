@@ -71,20 +71,20 @@ diff --git a/interfaces/Ids.h b/interfaces/Ids.h
 index fe8193e..68805d8 100644
 --- a/interfaces/Ids.h
 +++ b/interfaces/Ids.h
-@@ -229,6 +229,8 @@ namespace Exchange {
-         ID_LISA_KEY_VALUE,
-         ID_LISA_KEY_VALUE_ITERATOR,
-         ID_LISA_METADATA_PAYLOAD,
-+        ID_LISA_LOCK_INFO,
-+        ID_LISA_HANDLE_RESULT,
+@@ -320,6 +320,8 @@ namespace Exchange {
+         ID_LISA_KEY_VALUE                          = ID_LISA + 10,
+         ID_LISA_KEY_VALUE_ITERATOR                 = ID_LISA + 11,
+         ID_LISA_METADATA_PAYLOAD                   = ID_LISA + 12,
++        ID_LISA_LOCK_INFO                          = ID_LISA + 13,
++        ID_LISA_HANDLE_RESULT                      = ID_LISA + 14,
  
-         ID_CONTENTDECRYPTION_NOTIFICATION,
-     };
+         ID_RUST_BRIDGE                             = 0x000004B0,
+         ID_RUST_BRIDGE_NOTIFICATION                = ID_RUST_BRIDGE + 1,
 diff --git a/jsonrpc/LISA.json b/jsonrpc/LISA.json
 index 97670e4..f398f4a 100644
 --- a/jsonrpc/LISA.json
 +++ b/jsonrpc/LISA.json
-@@ -9,6 +9,32 @@
+@@ -10,6 +10,32 @@
    "common": {
      "$ref": "common.json"
    },
@@ -117,7 +117,7 @@ index 97670e4..f398f4a 100644
    "definitions": {
      "appId": {
        "description": "Application ID",
-@@ -44,9 +70,35 @@
+@@ -45,14 +71,64 @@
        "description": "Operation handle",
        "type": "string"
      },
@@ -154,9 +154,7 @@ index 97670e4..f398f4a 100644
      },
      "progress": {
        "description": "Operation progress",
-@@ -60,6 +112,30 @@
-       "description": "Value property",
-       "type": "string"
+       "type": "number"
      },
 +    "reason": {
 +      "description": "Reason for lock",
@@ -182,10 +180,10 @@ index 97670e4..f398f4a 100644
 +      "required": [
 +      ]
 +    },
-     "installedApp": {
-       "type": "object",
-       "description": "Installed application variant",
-@@ -681,6 +757,114 @@
+     "key": {
+       "description": "Key property",
+       "type": "string"
+@@ -682,6 +758,114 @@
            "$ref": "#/common/errors/general"
          }
        ]
@@ -300,7 +298,7 @@ index 97670e4..f398f4a 100644
      }
    },
    "events": {
-@@ -693,6 +877,18 @@
+@@ -694,6 +878,18 @@
            "handle": {
              "$ref": "#/definitions/handle"
            },
@@ -319,7 +317,7 @@ index 97670e4..f398f4a 100644
            "status": {
              "$ref": "#/definitions/status"
            },
-@@ -703,7 +899,11 @@
+@@ -704,7 +900,11 @@
          },
          "required": [
            "handle",

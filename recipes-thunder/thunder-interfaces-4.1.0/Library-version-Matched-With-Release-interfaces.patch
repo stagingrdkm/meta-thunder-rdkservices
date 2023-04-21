@@ -1,16 +1,25 @@
+From 34fd6b51dbf6766b6fe9660c848db39580ceefe7 Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Fri, 21 Apr 2023 09:35:14 +0200
+Subject: [PATCH] Library-version-Matched-With-Release-interfaces
+
+---
+ CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index c88235f..3e220b3 100644
+index c88235f..9fd5211 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.12)
  project(Interfaces)
  find_package(WPEFramework)
-
+ 
 -project_version(1.0.0)
 +project_version(4.1.0)
-
+ 
  set(INTERFACES_PATTERNS "I*.h" CACHE STRING "Patterns matching files for which stubs should be generated")
  set(JSONRPC_PATTERNS "*.json" CACHE STRING "Patterns matching files for which json stubs should be generated")
-
-
+-- 
+2.25.1
 
