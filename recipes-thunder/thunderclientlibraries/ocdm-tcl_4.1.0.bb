@@ -4,7 +4,7 @@ PR = "r0"
 
 require include/thunder_clientlibraries_${PV}.inc
 
-SRC_URI += "file://0003_MediaType_name_changed.patch \
+SRC_URI += "file://0003_MediaType_name_changed.patch\
             file://0001-RDK-29803-SoC-Independent-SVP-support.patch \
             file://0001_gstreamer_session_decrypt_ex_with_caps.patch \
            "

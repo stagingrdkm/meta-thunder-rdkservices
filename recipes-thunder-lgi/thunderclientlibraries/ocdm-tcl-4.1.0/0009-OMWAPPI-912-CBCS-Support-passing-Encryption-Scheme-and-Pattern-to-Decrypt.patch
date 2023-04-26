@@ -8,8 +8,8 @@ https://code.rdkcentral.com/r/c/soc/broadcom/components/rdkcentral/thunder/ocdma
 Change-Id: Ife9ae5bb77143f43acf46e2ed77d286301b75b68
 ---
  .../broadcom-svp/open_cdm_adapter-secbuf.cpp  | 231 ++++++++++++++++++
- .../adapter/broadcom-svp/open_cdm_adapter.cpp |  27 +-
- 2 files changed, 256 insertions(+), 2 deletions(-)
+ .../adapter/broadcom-svp/open_cdm_adapter.cpp |  26 +-
+ 2 files changed, 255 insertions(+), 2 deletions(-)
  create mode 100644 Source/ocdm/adapter/broadcom-svp/open_cdm_adapter-secbuf.cpp
 
 diff --git a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter-secbuf.cpp b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter-secbuf.cpp
@@ -253,30 +253,21 @@ diff --git a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp b/Source/ocdm
 index 391e5d6..570dfda 100644
 --- a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
 +++ b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
-@@ -42,9 +42,9 @@
-  # ANY LIMITED REMEDY.
-  ###############################################################################
- */
--#include "Module.h"
+@@ -17,8 +17,8 @@
+  * limitations under the License.
+  */
  
+-#include "Module.h"
  #include "open_cdm_adapter.h"
 +#include "Module.h"
  
  #include <gst/gst.h>
  #include <gst/base/gstbytereader.h>
-@@ -97,6 +97,7 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
- 
-         uint8_t *mappedIV = nullptr;
-         uint32_t mappedIVSize = 0;
-+
-         if (mappedBuffer(IV, false, &mappedIV, &mappedIVSize) == false) {
-             TRACE_L1("adapter_session_decrypt: Invalid IV buffer.");
-             result = ERROR_INVALID_DECRYPT_BUFFER;
-@@ -173,8 +174,30 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
-             ::memcpy(encryptedDataIter, mappedData , mappedDataSize);
- 
+@@ -146,8 +146,30 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+             svpMeta->u.u3.chunk_info[0].offset = 0;
+             fullSampleEncrypted = true;
          }
--        result = opencdm_session_decrypt(session, encryptedData, bufferSize, mappedIV, mappedIVSize,
+-        result = opencdm_session_decrypt(session, fullSampleEncrypted ? mappedData : encryptedData, bufferSize, mappedIV, mappedIVSize,
 +     
 +        //Set the Encryption Scheme and Pattern to defaults.
 +        EncryptionScheme encScheme = AesCtr_Cenc;
