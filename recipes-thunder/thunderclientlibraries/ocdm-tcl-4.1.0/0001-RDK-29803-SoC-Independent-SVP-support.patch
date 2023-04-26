@@ -19,7 +19,7 @@ diff --git a/Source/ocdm/CMakeLists.txt b/Source/ocdm/CMakeLists.txt
 index 648d3bc..0ff21d5 100644
 --- a/Source/ocdm/CMakeLists.txt
 +++ b/Source/ocdm/CMakeLists.txt
-@@ -117,6 +117,15 @@ if (${CDMI_ADAPTER_IMPLEMENTATION} STREQUAL "broadcom-svp-secbuf")
+@@ -119,6 +119,15 @@ if (${CDMI_ADAPTER_IMPLEMENTATION} STREQUAL "broadcom-svp-secbuf")
              )
  endif()
  
@@ -35,7 +35,6 @@ index 648d3bc..0ff21d5 100644
  set_target_properties(${TARGET} PROPERTIES
          CXX_STANDARD 11
          CXX_STANDARD_REQUIRED YES
-
 diff --git a/Source/ocdm/adapter/rdk/open_cdm_adapter.cpp b/Source/ocdm/adapter/rdk/open_cdm_adapter.cpp
 new file mode 100644
 index 0000000..a45aaf9
@@ -206,5 +205,3 @@ index 0000000..a45aaf9
 +
 -- 
 2.24.0
-
- 
