@@ -6,10 +6,10 @@ Subject: [PATCH] [OMWAPPI-1119] Cobalt vault tests based on Cobalt porting
 
 from https://code.rdkcentral.com/r/plugins/gitiles/rdk/components/generic/cobalt/+/refs/heads/23.lts.dev/src/third_party/starboard/rdk/shared/system/system_sign_with_certification_secret_key.cc
 ---
- .../tests/cryptography_test/CMakeLists.txt    |  30 +
- .../CobaltInterfaceTests.cpp                  | 555 ++++++++++++++++++
+ .../tests/cryptography_test/CMakeLists.txt    |  29 +
+ .../CobaltInterfaceTests.cpp                  | 563 ++++++++++++++++++
  .../CobaltVaultHardcodesApolloV1Plus.h        |  69 +++
- 3 files changed, 654 insertions(+)
+ 3 files changed, 661 insertions(+)
  create mode 100644 Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp
  create mode 100644 Source/cryptography/tests/cryptography_test/CobaltVaultHardcodesApolloV1Plus.h
 
@@ -17,10 +17,18 @@ diff --git a/Source/cryptography/tests/cryptography_test/CMakeLists.txt b/Source
 index a1054e7..cd29486 100644
 --- a/Source/cryptography/tests/cryptography_test/CMakeLists.txt
 +++ b/Source/cryptography/tests/cryptography_test/CMakeLists.txt
-@@ -99,3 +99,33 @@ install(TARGETS cgnfsecuritytests DESTINATION bin)
- if (BUILD_NETFLIX_VAULT_GENERATOR)
-    add_subdirectory(NetflixVaultGenerator)
- endif (BUILD_NETFLIX_VAULT_GENERATOR)
+@@ -19,6 +19,7 @@ option(BUILD_NETFLIX_VAULT_GENERATOR "Build Netflix Vault generator" OFF)
+ 
+ 
+ include_directories(${CMAKE_CURRENT_LIST_DIR}/../../../../Source)
++set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+ 
+ set(CMAKE_CXX_STANDARD 11)
+ 
+@@ -105,3 +106,31 @@ if(${CRYPTOGRAPHY_IMPLEMENTATION} STREQUAL "OpenSSL")
+ elseif (${CRYPTOGRAPHY_IMPLEMENTATION} STREQUAL "SecApi")
+    add_definitions(-DSecApi)
+ endif()
 +
 +list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../implementation/Icrypto-nexus/cmake")
 +
@@ -49,14 +57,12 @@ index a1054e7..cd29486 100644
 +    )
 +
 +install(TARGETS cobalttests DESTINATION bin)
-+
-+
 diff --git a/Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp b/Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp
 new file mode 100644
 index 0000000..be97b88
 --- /dev/null
 +++ b/Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp
-@@ -0,0 +1,555 @@
+@@ -0,0 +1,563 @@
 +/*
 + * If not stated otherwise in this file or this component's LICENSE file the
 + * following copyright and licenses apply:
@@ -344,6 +350,7 @@ index 0000000..be97b88
 +    EXPECT_EQ(second_key_id, key_id);
 +    rc = persistent->Flush();
 +    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++    vault->Release();
 +}
 +
 +TEST(Cobalt, CobaltValultLoadFailed)
@@ -368,6 +375,7 @@ index 0000000..be97b88
 +    rc = persistent->Load(key_name, key_id);
 +    EXPECT_EQ(rc, WPEFramework::Core::ERROR_GENERAL);
 +    EXPECT_EQ(key_id, 0);
++    vault->Release();
 +}
 +
 +TEST(Cobalt, CheckVaultStubs)
@@ -384,6 +392,7 @@ index 0000000..be97b88
 +    EXPECT_EQ(vault->Delete(0), false);
 +    EXPECT_EQ(vault->AES(WPEFramework::Cryptography::aesmode::CBC, 0), nullptr);
 +    //EXPECT_EQ(vault->DiffieHellman(), nullptr);
++    vault->Release();
 +}
 +
 +TEST(Cobalt, CheckPersistentStubs)
@@ -399,6 +408,7 @@ index 0000000..be97b88
 +    uint32_t key_id = 0;
 +    EXPECT_EQ(persistent->Create("example_locator", WPEFramework::Cryptography::IPersistent::keytype::AES256, key_id), WPEFramework::Core::ERROR_UNAVAILABLE);
 +    EXPECT_EQ(key_id, 0);
++    vault->Release();
 +}
 +
 +TEST(Cobalt, HMACOnlySHA256Supported)
@@ -425,6 +435,7 @@ index 0000000..be97b88
 +
 +    rc = persistent->Flush();
 +    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++    vault->Release();
 +}
 +
 +TEST(Cobalt, SignatureBufferErrors)
@@ -472,6 +483,7 @@ index 0000000..be97b88
 +
 +    rc = persistent->Flush();
 +    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++    vault->Release();
 +}
 +
 +TEST(Cobalt, CobaltApplicationFlow)
@@ -583,6 +595,7 @@ index 0000000..be97b88
 +
 +    rc = persistent->Flush();
 +    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++    vault->Release();
 +}
 +
 +int main()
@@ -603,13 +616,14 @@ index 0000000..be97b88
 +        CALL(Cobalt, SignatureBufferErrors);
 +        // ckeck complete Cobalt application flow, reference: https://code.rdkcentral.com/r/plugins/gitiles/rdk/components/generic/cobalt/+/refs/heads/master/src/third_party/starboard/rdk/shared/system/system_sign_with_certification_secret_key.cc
 +        CALL(Cobalt, CobaltApplicationFlow);
++        cg->Release();
 +    }
 +    else
 +    {
 +        printf("FATAL: Failed to acquire ICryptographic, no tests can't be performed\n");
 +    }
 +    printf("TOTAL: %i tests; %i PASSED, %i FAILED\n", TotalTests, TotalTestsPassed, (TotalTests - TotalTestsPassed));
-+    Teardown();
++
 +    return (TotalTests - TotalTestsPassed);
 +}
 diff --git a/Source/cryptography/tests/cryptography_test/CobaltVaultHardcodesApolloV1Plus.h b/Source/cryptography/tests/cryptography_test/CobaltVaultHardcodesApolloV1Plus.h

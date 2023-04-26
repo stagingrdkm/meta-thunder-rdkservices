@@ -17,9 +17,9 @@ diff --git a/Source/cryptography/ICryptography.h b/Source/cryptography/ICryptogr
 index e5ad907..bd1fdeb 100644
 --- a/Source/cryptography/ICryptography.h
 +++ b/Source/cryptography/ICryptography.h
-@@ -174,7 +174,7 @@ namespace Cryptography {
+@@ -183,7 +183,7 @@ namespace Cryptography {
  
-     struct ICryptography : virtual public Core::IUnknown {
+         ~ICryptography()  override = default;
  
 -        static ICryptography* Instance(const std::string& connectionPoint);
 +        EXTERNAL static ICryptography* Instance(const std::string& connectionPoint);
@@ -30,7 +30,7 @@ diff --git a/Source/cryptography/INetflixSecurity.h b/Source/cryptography/INetfl
 index 0b266b2..b6e156f 100644
 --- a/Source/cryptography/INetflixSecurity.h
 +++ b/Source/cryptography/INetflixSecurity.h
-@@ -47,7 +47,7 @@ struct INetflixSecurity : public Core::IUnknown
+@@ -47,7 +47,7 @@ struct EXTERNAL INetflixSecurity : public Core::IUnknown
      virtual uint32_t DeriveKeys(const uint32_t privateDhKeyId, const uint32_t peerPublicDhKeyId, const uint32_t derivationKeyId,
                                  uint32_t& encryptionKeyId /* @out */, uint32_t& hmacKeyId /* @out */, uint32_t& wrappingKeyId /* @out */) = 0;
  
@@ -112,8 +112,8 @@ index 140f336..f4d7b25 100644
 --- a/Source/cryptography/implementation/vault_implementation.h
 +++ b/Source/cryptography/implementation/vault_implementation.h
 @@ -30,19 +30,19 @@ extern "C" {
- struct VaultImplementation;
  
+ struct VaultImplementation;
  
 -struct VaultImplementation* vault_instance(const enum cryptographyvault id);
 +EXTERNAL struct VaultImplementation* vault_instance(const enum cryptographyvault id);
@@ -136,8 +136,8 @@ index 140f336..f4d7b25 100644
 -bool vault_delete(struct VaultImplementation* vault, const uint32_t id);
 +EXTERNAL bool vault_delete(struct VaultImplementation* vault, const uint32_t id);
  
+ 
  #ifdef __cplusplus
- } // extern "C"
 -- 
 2.39.0
 
