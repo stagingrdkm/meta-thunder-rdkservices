@@ -1,17 +1,3 @@
-From e5d1e65fe5d915df57e36b9d1aad10a68df7b71f Mon Sep 17 00:00:00 2001
-From: Dawid Trendota <dawid.trendota@consult.red>
-Date: Thu, 20 Apr 2023 19:17:49 +0200
-Subject: [PATCH] SplitDeviceCapablities
-
----
- interfaces/IDeviceInfo2.h     |  74 +++
- interfaces/IFirmwareVersion.h |  19 +
- interfaces/Ids.h              |   8 +-
- jsonrpc/DeviceInfo.json       | 843 ++++++++++++++++++++++++++--------
- 4 files changed, 757 insertions(+), 187 deletions(-)
- create mode 100644 interfaces/IDeviceInfo2.h
- create mode 100644 interfaces/IFirmwareVersion.h
-
 diff --git a/interfaces/IDeviceInfo2.h b/interfaces/IDeviceInfo2.h
 new file mode 100644
 index 0000000..7539657
