@@ -2,14 +2,14 @@ SRCREV_FORMAT="wpeframework-clientlibraries"
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
 
-# already there
-# SRC_URI += "file://0001-ONEM-28788-Fix-missing-header-file-for-ICryptography.h.patch"
-
 SRC_URI += "file://0005-ONEM-23352-Multiple-EXTERNAL-introduced-for-external.patch"
-SRC_URI += "file://0101-OMWAPPI-1119-cobalt-vault.patch"
+SRC_URI += "file://0101-OMWAPPI-1119-cobalt-vault-R4.patch"
+#SRC_URI += "file://0101-OMWAPPI-1119-cobalt-vault.patch"
 SRC_URI += "file://0102-OMWAPPI-1119-cobalt-vault-implementation.patch;patchdir=Source/cryptography/implementation/Icrypto-nexus"
+
+
 # should be applied
-# SRC_URI += "file://0103-OMWAPPI-1119-cobalt-vault-tests.patch"
+SRC_URI += "file://0103-OMWAPPI-1119-cobalt-vault-tests.patch"
 
 # other options OpenSSL, SecApi, Thunder
 CRYPTOGRAPHY_IMPLEMENTATION="Icrypto-nexus"

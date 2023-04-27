@@ -6,10 +6,10 @@ Subject: [PATCH] [OMWAPPI-1119] Cobalt vault tests based on Cobalt porting
 
 from https://code.rdkcentral.com/r/plugins/gitiles/rdk/components/generic/cobalt/+/refs/heads/23.lts.dev/src/third_party/starboard/rdk/shared/system/system_sign_with_certification_secret_key.cc
 ---
- .../tests/cryptography_test/CMakeLists.txt    |  30 +
+ .../tests/cryptography_test/CMakeLists.txt    |  28 +
  .../CobaltInterfaceTests.cpp                  | 555 ++++++++++++++++++
  .../CobaltVaultHardcodesApolloV1Plus.h        |  69 +++
- 3 files changed, 654 insertions(+)
+ 3 files changed, 652 insertions(+)
  create mode 100644 Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp
  create mode 100644 Source/cryptography/tests/cryptography_test/CobaltVaultHardcodesApolloV1Plus.h
 
@@ -17,10 +17,10 @@ diff --git a/Source/cryptography/tests/cryptography_test/CMakeLists.txt b/Source
 index a1054e7..cd29486 100644
 --- a/Source/cryptography/tests/cryptography_test/CMakeLists.txt
 +++ b/Source/cryptography/tests/cryptography_test/CMakeLists.txt
-@@ -99,3 +99,33 @@ install(TARGETS cgnfsecuritytests DESTINATION bin)
- if (BUILD_NETFLIX_VAULT_GENERATOR)
-    add_subdirectory(NetflixVaultGenerator)
- endif (BUILD_NETFLIX_VAULT_GENERATOR)
+@@ -105,3 +105,31 @@ if(${CRYPTOGRAPHY_IMPLEMENTATION} STREQUAL "OpenSSL")
+ elseif (${CRYPTOGRAPHY_IMPLEMENTATION} STREQUAL "SecApi")
+    add_definitions(-DSecApi)
+ endif()
 +
 +list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../implementation/Icrypto-nexus/cmake")
 +
@@ -49,8 +49,6 @@ index a1054e7..cd29486 100644
 +    )
 +
 +install(TARGETS cobalttests DESTINATION bin)
-+
-+
 diff --git a/Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp b/Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp
 new file mode 100644
 index 0000000..be97b88
