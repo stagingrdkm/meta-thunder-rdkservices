@@ -24,9 +24,9 @@ diff --git a/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp b/Source/ocdm/ad
 index 2145782..40854b1 100644
 --- a/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp
 +++ b/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp
-@@ -43,8 +43,14 @@ inline bool mappedBuffer(GstBuffer *buffer, bool writable, uint8_t **data, uint3
+@@ -42,8 +42,14 @@ inline bool mappedBuffer(GstBuffer *buffer, bool writable, uint8_t **data, uint3
+     return true;
  }
- 
  
 -OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSampleBuffer, const uint32_t subSampleCount,
 -                                               GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15)
@@ -39,9 +39,9 @@ index 2145782..40854b1 100644
 +OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSampleBuffer, const uint32_t subSampleCount,
 +                                               GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15, GstCaps* caps)
  {
-     return opencdm_gstreamer_session_decrypt_ex(session, buffer, subSampleBuffer, subSampleCount, IV, keyID, initWithLast15, NULL);
- }
-@@ -101,6 +107,16 @@ OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session
+     OpenCDMError result (ERROR_INVALID_SESSION);
+ 
+@@ -93,6 +99,16 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
              gst_structure_get_uint(protectionMeta->info, "skip_byte_block", &pattern.clear_blocks);
          }
  
@@ -58,7 +58,7 @@ index 2145782..40854b1 100644
          uint8_t *mappedData = reinterpret_cast<uint8_t* >(dataMap.data);
          uint32_t mappedDataSize = static_cast<uint32_t >(dataMap.size);
          uint8_t *mappedIV = reinterpret_cast<uint8_t* >(ivMap.data);
-@@ -145,8 +161,9 @@ OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session
+@@ -137,8 +153,9 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
              }
              gst_byte_reader_set_pos(reader, 0);
  
@@ -69,7 +69,7 @@ index 2145782..40854b1 100644
              // Re-build sub-sample data.
              index = 0;
              unsigned total = 0;
-@@ -163,7 +180,12 @@ OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session
+@@ -155,7 +172,12 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
              free(encryptedData);
              gst_buffer_unmap(subSampleBuffer, &sampleMap);
          } else {
@@ -83,7 +83,7 @@ index 2145782..40854b1 100644
          }
  
          if (keyID != nullptr) {
-@@ -324,11 +346,24 @@ OpenCDMError opencdm_gstreamer_session_decrypt_buffer(struct OpenCDMSession* ses
+@@ -316,11 +338,24 @@ OpenCDMError opencdm_gstreamer_session_decrypt_buffer(struct OpenCDMSession* ses
              sampleInfo.keyId = mappedKeyID;
              sampleInfo.keyIdLength = mappedKeyIDSize;
  
@@ -151,10 +151,10 @@ index 404baf3..aa988c8 100644
 +   EXTERNAL OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
 +                                                    GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15);
  
-     EXTERNAL OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
-                                                    GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15, GstCaps* caps=NULL);
+ /**
+  * \brief Performs decryption based on adapter implementation.
 diff --git a/Source/ocdm/open_cdm.cpp b/Source/ocdm/open_cdm.cpp
-index 76dd9a3..5adff51 100644
+index 8aafae7..77c7e58 100644
 --- a/Source/ocdm/open_cdm.cpp
 +++ b/Source/ocdm/open_cdm.cpp
 @@ -435,6 +435,25 @@ OpenCDMError opencdm_session_resetoutputprotection(struct OpenCDMSession* sessio
@@ -331,6 +331,4 @@ index b15bff8..c886bfa 100644
                  TRACE_L1("Decrypt() failed with return code: %x", result);
 -- 
 2.25.1
-
-
 

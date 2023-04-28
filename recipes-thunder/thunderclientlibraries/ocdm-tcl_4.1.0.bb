@@ -5,9 +5,8 @@ PR = "r0"
 require include/thunder_clientlibraries_${PV}.inc
 
 SRC_URI += "file://0003_MediaType_name_changed.patch\
-            file://0001-RDK-29803-SoC-Independent-SVP-support.patch \
-            file://0001_gstreamer_session_decrypt_ex_with_caps.patch \
-           "
+            file://0001-RDK-29803-SoC-Independent-SVP-support.patch"
+
 RDEPENDS_${PN}_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'sage_svp', ' gst-svp-ext', '', d)}"
 RDEPENDS_${PN}_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'rdk_svp', ' gst-svp-ext', '', d)}"
 
