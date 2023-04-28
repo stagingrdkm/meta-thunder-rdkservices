@@ -1,0 +1,16 @@
+[Unit]
+Description=WPEWebDriver
+
+[Install]
+WantedBy=
+
+[Service]
+UMask=0077
+Type=simple
+
+ExecStart=/usr/bin/lxc-attach -n WPEThunder -o none -f /container/WPEThunder/conf/lxc.conf -s "PID|UTSNAME|IPC|NETWORK" -R -- /appmodule/wpe/usr/bin/WPEWebDriver --port=9517 --host=0.0.0.0
+
+KillMode=control-group
+KillSignal=SIGTERM
+SendSIGKILL=yes
+TimeoutStopSec=5

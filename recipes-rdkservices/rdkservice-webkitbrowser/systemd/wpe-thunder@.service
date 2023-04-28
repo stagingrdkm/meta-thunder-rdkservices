@@ -1,0 +1,26 @@
+[Unit]
+Description=WPE Thunder - instance name = %I
+Requisite=wpeframework.service
+After=jsapp.service wpeframework.service network.target
+
+[Service]
+Type=notify
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+ExecStartPre=/usr/bin/wpe_storage_check.sh
+ExecStartPre=/usr/bin/wpe_remove_old_gst_config.sh
+ExecStartPre=/usr/bin/vmtouch -t /appmodule/wpe/usr -i libWPEWebInspectorResources.so
+ExecStart=/container/WPEThunder/launcher/wpe.sh start ${CMD%i}
+ExecStartPost=/usr/bin/cpid -m appstart -p $MAINPID -n "/usr/bin/WPEProcess" -i %i -t 10000
+# OP_STATUS_PID_OVERWRITE 128
+ExecStartPost=/usr/bin/cpid -m appstart -p $MAINPID -n "/appmodule/wpe/usr/bin/WPEWebProcess" -i %i -t 30000 -s 128
+
+ExecStop=/usr/bin/container_rdk_service_stop.sh WPEThunder 3
+# OP_STATUS_SYSTEMD_STOP 99
+ExecStopPost=/usr/bin/cpid -m appstop -i %i -s 99
+ExecStopPost=-/bin/systemd-tmpfiles --remove --prefix=/tmp/wpe/.cache /etc/tmpfiles.d/wpe-thunder.conf
+
+KillMode=control-group
+KillSignal=SIGTERM
+SendSIGKILL=yes
+TimeoutStopSec=10
+Delegate=yes
