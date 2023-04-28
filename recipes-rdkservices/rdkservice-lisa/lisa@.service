@@ -1,0 +1,18 @@
+[Unit]
+Description=THUNDER LISA Service - instance name = %I
+After=dbus.socket wpeframework.service
+Requires=dbus.socket
+Requisite=wpeframework.service
+StartLimitIntervalSec=0
+
+[Service]
+UMask=0077
+Type=notify
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+ExecStart=/container/THUNDER_LISA/launcher/lisa.sh start ${CMD%i}
+# stop for container launch case
+ExecStop=/container/THUNDER_LISA/launcher/lisa.sh stop
+ExecStartPost=/usr/bin/cpid -m appstart -p $MAINPID -n "/usr/bin/WPEProcess" -i %i -t 10000
+ExecStopPost=/usr/bin/cpid -m appstop -i %i
+KillMode=none
+Delegate=yes

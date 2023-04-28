@@ -1,5 +1,8 @@
 SUMMARY = "RDK services LgiTextToSpeech plugin"
 
+PROVIDES += "rdkservice-texttospeech"
+RPROVIDES_${PN} += "rdkservice-texttospeech"
+
 # plugin directory in rdkservices repository
 PLUGINDIR="LgiTextToSpeech"
 
