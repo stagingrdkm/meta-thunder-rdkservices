@@ -1,5 +1,8 @@
 SUMMARY = "RDK services LGI System plugin"
 
+PROVIDES += "rdkservice-system"
+RPROVIDES_${PN} += "rdkservice-system"
+
 # plugin directory in rdkservices repository
 PLUGINDIR="LgiSystemServices"
 
