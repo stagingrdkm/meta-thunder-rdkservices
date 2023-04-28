@@ -12,7 +12,7 @@ DEPENDS += "wpeframework-tools-native wpeframework wpeframework-interfaces"
 
 # rdkservices "next" location, Thunder R4
 DEFAULT_NEXT_SRC_URI="git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=test_wpe_r4;name=${PN};destsuffix=git"
-DEFAULT_NEXT_SRC_URI_REVISION="b268414e4a771b2fc0146d53ffb486a41e69c137"
+DEFAULT_NEXT_SRC_URI_REVISION="71c62d9e0f0b776b46a840ff9cd4394cc0ea7602"
 
 TOOLCHAIN = "gcc"
 EXTRA_OECMAKE += "-DCMAKE_SYSROOT=${STAGING_DIR_HOST}"

@@ -1,5 +1,8 @@
 SUMMARY = "RDK services Network plugin (LGI Version)"
 
+PROVIDES += "rdkservice-network"
+RPROVIDES_${PN} += "rdkservice-network"
+
 # plugin directory in rdkservices repository
 PLUGINDIR="LgiNetwork"
 
