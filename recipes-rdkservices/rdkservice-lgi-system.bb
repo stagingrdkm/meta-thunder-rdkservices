@@ -11,6 +11,5 @@ include rdkservices-common/common_plugin.inc
 EXTRA_OECMAKE += "-DPLUGIN_LGISYSTEMSERVICE_AUTOSTART=true"
 
 EXTERNALSRC = ""
-#EXTERNALSRC = "${MW_SRC_PATH}/rdkservices-next/"
-SRC_URI += "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=OMWAPPI-1512-getTimeZoneDST-system-plugin;name=${PN};destsuffix=git"
-SRCREV_${PN}="327a7a488fb5cb17f4c92886438bb8778203d40e"
+SRC_URI += "${DEFAULT_NEXT_SRC_URI}"
+SRCREV_${PN}="${DEFAULT_NEXT_SRC_URI_REVISION}"
