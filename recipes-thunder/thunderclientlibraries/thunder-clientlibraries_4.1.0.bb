@@ -13,6 +13,8 @@ DEPENDS += "cryptography-tcl"
 DEPENDS += "securityagent-tcl"
 DEPENDS += "${@bb.utils.contains('DISTRO_FEATURES', 'opencdm', 'ocdm-tcl', '', d)}"
 
+ALLOW_EMPTY_${PN} = "1"
+
 # we do not use and build provisionproxy and compositorclient
 #require ../include/compositor.inc
 #DEPENDS = "${@bb.utils.contains('DISTRO_FEATURES', 'compositor', '${WPE_COMPOSITOR_DEP}', '', d)}"
