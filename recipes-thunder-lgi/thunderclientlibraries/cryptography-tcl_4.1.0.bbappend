@@ -9,6 +9,9 @@ SRC_URI += "file://0102-OMWAPPI-1119-cobalt-vault-implementation.patch;patchdir=
 
 SRC_URI += "file://0103-OMWAPPI-1119-cobalt-vault-tests.patch"
 
+SRC_URI += "file://0105-iCrypto-nexus-platform-vault.patch"
+SRC_URI += "file://0105-iCrypto-nexus-platform-vault-tests.patch"
+
 # other options OpenSSL, SecApi, Thunder
 CRYPTOGRAPHY_IMPLEMENTATION="Icrypto-nexus"
 
