@@ -6,7 +6,7 @@ RPROVIDES_${PN} += "rdkservice-texttospeech"
 # plugin directory in rdkservices repository
 PLUGINDIR="LgiTextToSpeech"
 
-include rdkservices-common/common_plugin.inc
+require rdkservices-common/common_plugin.inc
 OECMAKE_TARGET_COMPILE = "WPEFrameworkTextToSpeech"
 
 EXTERNALSRC = ""

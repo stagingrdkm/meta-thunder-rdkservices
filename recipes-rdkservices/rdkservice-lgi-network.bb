@@ -6,7 +6,7 @@ RPROVIDES_${PN} += "rdkservice-network"
 # plugin directory in rdkservices repository
 PLUGINDIR="LgiNetwork"
 
-include rdkservices-common/common_plugin.inc
+require rdkservices-common/common_plugin.inc
 OECMAKE_TARGET_COMPILE = "WPEFrameworkNetwork"
 
 EXTERNALSRC = ""

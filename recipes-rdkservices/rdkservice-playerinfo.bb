@@ -3,7 +3,7 @@ SUMMARY = "RDK services PlayerInfo plugin"
 # plugin directory in rdkservices repository
 PLUGINDIR="PlayerInfo"
 
-include rdkservices-common/common_plugin.inc
+require rdkservices-common/common_plugin.inc
 
 EXTERNALSRC = ""
 SRC_URI += "${DEFAULT_NEXT_SRC_URI}"
