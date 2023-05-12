@@ -1,7 +1,8 @@
-From 884e847e169b02e11540e9d659a623101c65360b Mon Sep 17 00:00:00 2001
-From: Dawid Trendota <dawid.trendota@consult.red>
-Date: Thu, 11 May 2023 17:44:34 +0200
-Subject: [PATCH] 0105-iCrypto-nexus-platform-vault-tests
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Mon, 8 May 2023 15:53:48 +0200
+
+Platform vault implementation tests; see design here:
+https://wikiprojects.upc.biz/display/CTOM/iCrypto+for+AVPKv5
 
 ---
  .../tests/cryptography_test/CMakeLists.txt    |  28 +
