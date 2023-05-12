@@ -1,7 +1,7 @@
-From 90d4e483e49e9e806e2e9218ff3bd575c72d2078 Mon Sep 17 00:00:00 2001
-From: Dawid Trendota <dawid.trendota@consult.red>
-Date: Thu, 27 Apr 2023 09:37:51 +0200
-Subject: [PATCH] 0101-OMWAPPI-1119-cobalt-vault
+From ccb2c34d89c6724380990372b436c34547fc6de0 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 24 Jan 2023 00:48:41 +0100
+Subject: [OMWAPPI-1119] Cobalt vault introduced
 
 ---
  Source/cryptography/cryptography_vault_ids.h | 3 ++-
