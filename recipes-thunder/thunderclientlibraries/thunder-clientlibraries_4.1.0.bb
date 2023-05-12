@@ -27,4 +27,12 @@ DEPENDS += "${@bb.utils.contains('DISTRO_FEATURES', 'opencdm', 'ocdm-tcl', '', d
 #RDEPENDS_${PN} += "${@bb.utils.contains('DISTRO_FEATURES', 'provisioning', 'provisionproxy-tcl', '', d)}"
 #RDEPENDS_${PN} += "${@bb.utils.contains('DISTRO_FEATURES', 'compositor', 'compositorclient-tcl', '', d)}"
 
+LICENSE = "CLOSED"
+SRC_URI = "file://clientlibraries.txt"
+
+do_install_append() {
+    install -d ${D}${sysconfdir}/wpeframework
+    install -m 0644 ${WORKDIR}/clientlibraries.txt ${D}${sysconfdir}/wpeframework
+}
+
 
