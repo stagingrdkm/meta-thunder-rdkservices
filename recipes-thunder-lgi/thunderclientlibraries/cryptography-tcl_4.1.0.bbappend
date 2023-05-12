@@ -4,7 +4,7 @@ FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
 FILESEXTRAPATHS_append := ":${THISDIR}/cmake"
 
 SRC_URI += "file://0005-ONEM-23352-Multiple-EXTERNAL-introduced-for-external.patch"
-SRC_URI += "file://0101-OMWAPPI-1119-cobalt-vault-R4.patch"
+SRC_URI += "file://0101-OMWAPPI-1119-cobalt-vault.patch"
 SRC_URI += "file://0102-OMWAPPI-1119-cobalt-vault-implementation.patch;patchdir=Source/cryptography/implementation/Icrypto-nexus"
 
 SRC_URI += "file://0103-OMWAPPI-1119-cobalt-vault-tests.patch"
