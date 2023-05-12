@@ -11,7 +11,6 @@ SRC_URI += "file://0110-OMWAPPI-910-Increase-subsamples-limit-for-4k-content.pat
 SRC_URI += "file://0001-OMWAPPI-1315-Extend-ocdm-rdkservice-for-metrics-API.patch"
 SRC_URI += "file://0111-ONEM-29742-setParameter-for-ISession.patch"
 SRC_URI += "file://0112-OMWAPPI-1314-Extend-ThunderInterfaces-ocdm-API.patch"
-
-# apply: 0007-ONEM-24354-Clear-content-of-buffers-on-deinit.patch
+SRC_URI += "file://0007-ONEM-24354-Clear-content-of-buffers-on-deinit.patch"
 
 require thunder-interfaces-4.1.0/interfaces.inc
