@@ -5,7 +5,7 @@ SUMMARY = "RDK services WifiManager plugin"
 # plugin directory in rdkservices repository
 PLUGINDIR="WifiManager"
 
-include rdkservices-common/common_plugin.inc
+require rdkservices-common/common_plugin.inc
 
 EXTERNALSRC = ""
 SRC_URI += "${DEFAULT_NEXT_SRC_URI}"

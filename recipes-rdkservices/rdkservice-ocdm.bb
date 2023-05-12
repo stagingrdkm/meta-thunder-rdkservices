@@ -3,8 +3,8 @@ SUMMARY = "RDK services OCDM plugin"
 # plugin directory in rdkservices repository
 PLUGINDIR="OpenCDMi"
 
-include rdkservices-common/common_plugin.inc
-include ${RDKORIGINDIR}/include/ocdm.inc
+require rdkservices-common/common_plugin.inc
+require ${RDKORIGINDIR}/include/ocdm.inc
 
 EXTERNALSRC = ""
 SRC_URI += "${DEFAULT_NEXT_SRC_URI}"

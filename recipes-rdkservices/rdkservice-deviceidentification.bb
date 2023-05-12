@@ -3,7 +3,7 @@ SUMMARY = "RDK services DeviceIdentification plugin"
 # plugin directory in rdkservices repository
 PLUGINDIR="DeviceIdentification"
 
-include rdkservices-common/common_plugin.inc
+require rdkservices-common/common_plugin.inc
 
 EXTERNALSRC = ""
 SRC_URI += "${DEFAULT_NEXT_SRC_URI}"

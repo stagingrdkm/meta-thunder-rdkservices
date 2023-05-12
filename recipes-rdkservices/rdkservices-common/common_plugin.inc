@@ -49,7 +49,7 @@ PACKAGECONFIG_remove = "stateobserver"
 PACKAGECONFIG_remove = "telemetry"
 PACKAGECONFIG_remove = "warehouse"
 
-RDKORIGINDIR = "../../../meta-rdk-next/recipes-extended/rdkservices/"
+RDKORIGINDIR = "../recipes-thunder/"
 FILESEXTRAPATHS_prepend := "${THISDIR}/../${RDKORIGINDIR}/files:"
 FILESEXTRAPATHS_prepend := "${THISDIR}:"
 
