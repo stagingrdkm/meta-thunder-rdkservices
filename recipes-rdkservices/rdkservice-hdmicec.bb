@@ -4,7 +4,7 @@ SUMMARY = "RDK services HdmiCec plugin"
 # integrated HdmiCec, it looks like one from pair org.rdk.HdmiCec org.rdk.HdmiCec_2 should be integrated
 PLUGINDIR="HdmiCec"
 
-include rdkservices-common/common_plugin.inc
+require rdkservices-common/common_plugin.inc
 
 EXTERNALSRC = ""
 SRC_URI += "${DEFAULT_NEXT_SRC_URI}"

@@ -6,7 +6,7 @@ RPROVIDES_${PN} += "rdkservice-system"
 # plugin directory in rdkservices repository
 PLUGINDIR="LgiSystemServices"
 
-include rdkservices-common/common_plugin.inc
+require rdkservices-common/common_plugin.inc
 
 EXTRA_OECMAKE += "-DPLUGIN_LGISYSTEMSERVICE_AUTOSTART=true"
 
