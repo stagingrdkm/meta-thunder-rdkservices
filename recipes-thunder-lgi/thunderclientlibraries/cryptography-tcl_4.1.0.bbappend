@@ -1,7 +1,6 @@
 SRCREV_FORMAT="wpeframework-clientlibraries"
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
-FILESEXTRAPATHS_append := ":${THISDIR}/cmake"
 
 SRC_URI += "file://0005-ONEM-23352-Multiple-EXTERNAL-introduced-for-external.patch"
 SRC_URI += "file://0101-OMWAPPI-1119-cobalt-vault.patch"
