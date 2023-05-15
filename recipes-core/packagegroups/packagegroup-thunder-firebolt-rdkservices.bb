@@ -3,5 +3,9 @@ inherit packagegroup
 
 PACKAGES = "packagegroup-thunder-firebolt-rdkservices"
 
-#empty list now
-#RDEPENDS_${PN} += "rdkservice-todo"
+RDEPENDS_${PN} += "rdkservice-displayinfo"
+RDEPENDS_${PN} += "rdkservice-playerinfo"
+RDEPENDS_${PN} += "rdkservice-hdcpprofile"
+
+# not yet included
+#RDEPENDS_${PN} += "rdkservice-deviceinfo"
