@@ -3,5 +3,6 @@ inherit packagegroup
 
 PACKAGES = "packagegroup-thunder-lgi-rdkservices"
 
-#empty list now
-#RDEPENDS_${PN} += "rdkservice-todo"
+RDEPENDS_${PN} += "rdkservice-lgidisplaysettings"
+RDEPENDS_${PN} += "rdkservice-lgihdcpprofile"
+RDEPENDS_${PN} += "rdkservice-lgi-hdmicec"
