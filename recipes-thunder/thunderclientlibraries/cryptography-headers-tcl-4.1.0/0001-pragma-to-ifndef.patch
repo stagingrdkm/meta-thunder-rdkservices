@@ -1,0 +1,20 @@
+diff --git a/Source/cryptography/cryptography_vault_ids.h b/Source/cryptography/cryptography_vault_ids.h
+index 0d3fb20..51af23c 100644
+--- a/Source/cryptography/cryptography_vault_ids.h
++++ b/Source/cryptography/cryptography_vault_ids.h
+@@ -17,8 +17,8 @@
+  * limitations under the License.
+  */
+ 
+-#pragma once
+-
++#ifndef _cryptography_vault_ids__h_
++#define _cryptography_vault_ids__h_
+ #include <stdint.h>
+ 
+ #ifdef __cplusplus
+@@ -30,3 +30,4 @@ extern "C"
+         CRYPTOGRAPHY_VAULT_PROVISIONING = 0x10,
+         CRYPTOGRAPHY_VAULT_NETFLIX = 0x11
+     };
++#endif

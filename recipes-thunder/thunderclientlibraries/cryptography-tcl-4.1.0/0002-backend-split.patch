@@ -1,0 +1,80 @@
+From 8f9755d6551c6302cd2fa9287f05abfd6a64fc4a Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Mon, 15 May 2023 13:00:02 +0000
+Subject: [PATCH] backend split
+
+---
+ Source/cryptography/CMakeLists.txt                     |  1 +
+ Source/cryptography/Cryptography.cpp                   | 10 +++++-----
+ Source/cryptography/NetflixSecurity.cpp                |  2 +-
+ .../tests/cryptography_test/ImplementationTests.cpp    |  8 ++++----
+ 4 files changed, 11 insertions(+), 10 deletions(-)
+
+diff --git a/Source/cryptography/CMakeLists.txt b/Source/cryptography/CMakeLists.txt
+index 303ef8d..b76de99 100644
+--- a/Source/cryptography/CMakeLists.txt
++++ b/Source/cryptography/CMakeLists.txt
+@@ -71,6 +71,7 @@ target_include_directories(${TARGET}
+     PUBLIC
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
+         $<INSTALL_INTERFACE:include/${NAMESPACE}/cryptography>
++        $<BUILD_INTERFACE:${CMAKE_SYSROOT}${CMAKE_INSTALL_PREFIX}/include/rdk/tcl/crypto/>
+ )
+ 
+ set(PUBLIC_HEADERS
+diff --git a/Source/cryptography/Cryptography.cpp b/Source/cryptography/Cryptography.cpp
+index bccadc4..2513dc6 100644
+--- a/Source/cryptography/Cryptography.cpp
++++ b/Source/cryptography/Cryptography.cpp
+@@ -21,11 +21,11 @@
+ 
+ #include <ICryptography.h>
+ 
+-#include "implementation/cipher_implementation.h"
+-#include "implementation/diffiehellman_implementation.h"
+-#include "implementation/hash_implementation.h"
+-#include "implementation/vault_implementation.h"
+-#include "implementation/persistent_implementation.h"
++#include "cipher_implementation.h"
++#include "diffiehellman_implementation.h"
++#include "hash_implementation.h"
++#include "vault_implementation.h"
++#include "persistent_implementation.h"
+ 
+ #include <com/com.h>
+ #include <plugins/Types.h>
+diff --git a/Source/cryptography/NetflixSecurity.cpp b/Source/cryptography/NetflixSecurity.cpp
+index 33b4dc9..8ad05eb 100644
+--- a/Source/cryptography/NetflixSecurity.cpp
++++ b/Source/cryptography/NetflixSecurity.cpp
+@@ -21,7 +21,7 @@
+ #include "Module.h"
+ 
+ #include <INetflixSecurity.h>
+-#include "implementation/netflix_security_implementation.h"
++#include "netflix_security_implementation.h"
+ 
+ namespace WPEFramework {
+ 
+diff --git a/Source/cryptography/tests/cryptography_test/ImplementationTests.cpp b/Source/cryptography/tests/cryptography_test/ImplementationTests.cpp
+index 69c7ba7..65da6c6 100644
+--- a/Source/cryptography/tests/cryptography_test/ImplementationTests.cpp
++++ b/Source/cryptography/tests/cryptography_test/ImplementationTests.cpp
+@@ -31,10 +31,10 @@
+ #include <openssl/hmac.h>
+ #include <openssl/sha.h>
+ 
+-#include <implementation/vault_implementation.h>
+-#include <implementation/hash_implementation.h>
+-#include <implementation/cipher_implementation.h>
+-#include <implementation/diffiehellman_implementation.h>
++#include <vault_implementation.h>
++#include <hash_implementation.h>
++#include <cipher_implementation.h>
++#include <diffiehellman_implementation.h>
+ 
+ #include "Helpers.h"
+ #include "Test.h"
+-- 
+2.30.0
+

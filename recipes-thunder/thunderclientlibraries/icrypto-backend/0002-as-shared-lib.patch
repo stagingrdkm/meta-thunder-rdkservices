@@ -1,0 +1,25 @@
+From 80a5a2263d880bd2bfb7329c0f3464da05d2eb1c Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Tue, 16 May 2023 10:45:28 +0000
+Subject: [PATCH] as shared lib
+
+---
+ CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/CMakeLists.txt
+===================================================================
+--- git.orig/CMakeLists.txt
++++ git/CMakeLists.txt
+@@ -48,7 +48,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_C
+ find_package(NEXUS REQUIRED)
+ find_package(NXCLIENT REQUIRED)
+ 
+-add_library(${TARGET} STATIC
++find_package(WPEFramework)
++find_package(${NAMESPACE}Core REQUIRED)
++
++add_library(${TARGET} SHARED
+     Nexus.cpp
+     Implementation.cpp
+     NexusSecurity/SHA.cpp

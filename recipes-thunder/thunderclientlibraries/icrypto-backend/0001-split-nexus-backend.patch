@@ -1,0 +1,191 @@
+From bdd3c7a40a80bf8bb129c2e224c7211085fb8b31 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Mon, 15 May 2023 12:04:00 +0000
+Subject: [PATCH] split nexus backend
+
+---
+ CMakeLists.txt                  |  2 ++
+ Implementation.cpp              |  2 +-
+ Module.h                        | 32 ++++++++++++++++++++++++++++++++
+ Nexus.cpp                       |  2 +-
+ NexusSecurity/SHA.cpp           |  2 +-
+ SageNetflix/AES.cpp             |  2 +-
+ SageNetflix/DiffieHellman.cpp   |  2 +-
+ SageNetflix/HMAC.cpp            |  2 +-
+ SageNetflix/NetflixSecurity.cpp |  2 +-
+ SageNetflix/TEE.cpp             |  2 +-
+ SageNetflix/Vault.cpp           |  2 +-
+ 11 files changed, 43 insertions(+), 9 deletions(-)
+ create mode 100644 Module.h
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b11fde5..62fd5ec 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -75,6 +75,8 @@ target_link_libraries(${TARGET}
+ 
+ target_include_directories(${TARGET}
+     PUBLIC
++        $<BUILD_INTERFACE:${CMAKE_SYSROOT}${CMAKE_INSTALL_PREFIX}/include/rdk/tcl/crypto/>
++	$<BUILD_INTERFACE:${CMAKE_SYSROOT}${CMAKE_INSTALL_PREFIX}/include/WPEFramework/>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
+         $<BUILD_INTERFACE:${CMAKE_SYSROOT}${CMAKE_INSTALL_PREFIX}/include/tl>)
+diff --git a/Implementation.cpp b/Implementation.cpp
+index 1464c38..8f5121f 100644
+--- a/Implementation.cpp
++++ b/Implementation.cpp
+@@ -43,7 +43,7 @@
+  ###############################################################################
+ */
+ 
+-#include "../../Module.h"
++#include "Module.h"
+ 
+ #include <vault_implementation.h>
+ #include <hash_implementation.h>
+diff --git a/Module.h b/Module.h
+new file mode 100644
+index 0000000..fda03f1
+--- /dev/null
++++ b/Module.h
+@@ -0,0 +1,32 @@
++/*
++ * If not stated otherwise in this file or this component's LICENSE file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2020 RDK Management
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#pragma once
++
++#ifndef MODULE_NAME
++#define MODULE_NAME Cryptography
++#endif
++
++#include <core/core.h>
++#include <tracing/tracing.h>
++
++#if defined(__WINDOWS__) && defined(CRYPTOGRAPHY_EXPORTS)
++#undef EXTERNAL
++#define EXTERNAL EXTERNAL_EXPORT
++#endif
+diff --git a/Nexus.cpp b/Nexus.cpp
+index 17924d4..2d8b680 100644
+--- a/Nexus.cpp
++++ b/Nexus.cpp
+@@ -43,7 +43,7 @@
+  ###############################################################################
+ */
+ 
+-#include "../../Module.h"
++#include "Module.h"
+ 
+ #include <cstdio> // for snprintf()
+ 
+diff --git a/NexusSecurity/SHA.cpp b/NexusSecurity/SHA.cpp
+index 38c437c..72d0e8d 100644
+--- a/NexusSecurity/SHA.cpp
++++ b/NexusSecurity/SHA.cpp
+@@ -43,7 +43,7 @@
+  ###############################################################################
+ */
+ 
+-#include "../../../Module.h"
++#include "../Module.h"
+ 
+ #include "../Administrator.h"
+ 
+diff --git a/SageNetflix/AES.cpp b/SageNetflix/AES.cpp
+index 3f1344c..66bc9e5 100644
+--- a/SageNetflix/AES.cpp
++++ b/SageNetflix/AES.cpp
+@@ -43,7 +43,7 @@
+  ###############################################################################
+ */
+ 
+-#include "../../../Module.h"
++#include "../Module.h"
+ 
+ #include "../Administrator.h"
+ #include "TEE.h"
+diff --git a/SageNetflix/DiffieHellman.cpp b/SageNetflix/DiffieHellman.cpp
+index 53e0295..cacc833 100644
+--- a/SageNetflix/DiffieHellman.cpp
++++ b/SageNetflix/DiffieHellman.cpp
+@@ -43,7 +43,7 @@
+  ###############################################################################
+ */
+ 
+-#include "../../../Module.h"
++#include "../Module.h"
+ 
+ #include "../Administrator.h"
+ #include "TEE.h"
+diff --git a/SageNetflix/HMAC.cpp b/SageNetflix/HMAC.cpp
+index 0c83b0d..55e82e3 100644
+--- a/SageNetflix/HMAC.cpp
++++ b/SageNetflix/HMAC.cpp
+@@ -43,7 +43,7 @@
+  ###############################################################################
+ */
+ 
+-#include "../../../Module.h"
++#include "../Module.h"
+ 
+ #include "../Administrator.h"
+ #include "TEE.h"
+diff --git a/SageNetflix/NetflixSecurity.cpp b/SageNetflix/NetflixSecurity.cpp
+index 2ad471c..3b268e9 100644
+--- a/SageNetflix/NetflixSecurity.cpp
++++ b/SageNetflix/NetflixSecurity.cpp
+@@ -43,7 +43,7 @@
+  ###############################################################################
+ */
+ 
+-#include "../../../Module.h"
++#include "../Module.h"
+ 
+ #include <netflix_security_implementation.h>
+ 
+diff --git a/SageNetflix/TEE.cpp b/SageNetflix/TEE.cpp
+index a035f1b..cf79814 100644
+--- a/SageNetflix/TEE.cpp
++++ b/SageNetflix/TEE.cpp
+@@ -43,7 +43,7 @@
+  ###############################################################################
+ */
+ 
+-#include "../../../Module.h"
++#include "../Module.h"
+ 
+ #include "TEE.h"
+ 
+diff --git a/SageNetflix/Vault.cpp b/SageNetflix/Vault.cpp
+index 95ceb56..4753e84 100644
+--- a/SageNetflix/Vault.cpp
++++ b/SageNetflix/Vault.cpp
+@@ -43,7 +43,7 @@
+  ###############################################################################
+ */
+ 
+-#include "../../../Module.h"
++#include "../Module.h"
+ 
+ #include "../Administrator.h"
+ #include "TEE.h"
+-- 
+2.30.0
+

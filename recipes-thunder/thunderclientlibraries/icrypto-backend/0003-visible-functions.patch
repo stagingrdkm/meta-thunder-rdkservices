@@ -1,0 +1,26 @@
+From 5c426bc476c71bb62ffbc87a3279ea2d05085907 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Tue, 16 May 2023 11:51:22 +0000
+Subject: [PATCH] visible functions
+
+---
+ CMakeLists.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 08dd7b5..d0eaaee 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -51,6 +51,9 @@ find_package(NXCLIENT REQUIRED)
+ find_package(WPEFramework)
+ find_package(${NAMESPACE}Core REQUIRED)
+ 
++set(CMAKE_CXX_VISIBILITY_PRESET default)
++set(CMAKE_C_VISIBILITY_PRESET default)
++
+ add_library(${TARGET} SHARED
+     Nexus.cpp
+     Implementation.cpp
+-- 
+2.30.0
+
