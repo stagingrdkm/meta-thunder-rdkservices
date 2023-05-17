@@ -10,10 +10,10 @@ https://wikiprojects.upc.biz/display/CTOM/iCrypto+for+AVPKv5
  2 files changed, 558 insertions(+)
  create mode 100644 Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp
 
-diff --git a/Source/cryptography/tests/cryptography_test/CMakeLists.txt b/Source/cryptography/tests/cryptography_test/CMakeLists.txt
-index 638ddfe..8322e92 100644
---- a/Source/cryptography/tests/cryptography_test/CMakeLists.txt
-+++ b/Source/cryptography/tests/cryptography_test/CMakeLists.txt
+Index: git/Source/cryptography/tests/cryptography_test/CMakeLists.txt
+===================================================================
+--- git.orig/Source/cryptography/tests/cryptography_test/CMakeLists.txt
++++ git/Source/cryptography/tests/cryptography_test/CMakeLists.txt
 @@ -134,3 +134,31 @@ target_link_libraries(cobalttests
      )
  
@@ -46,12 +46,11 @@ index 638ddfe..8322e92 100644
 +install(TARGETS lgiplatformtest DESTINATION bin)
 +
 +# LgiPlatformInterfaceTests.cpp
-diff --git a/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp b/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp
-new file mode 100644
-index 0000000..b9cf136
+Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp
+===================================================================
 --- /dev/null
-+++ b/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp
-@@ -0,0 +1,530 @@
++++ git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp
+@@ -0,0 +1,537 @@
 +/*
 + * If not stated otherwise in this file or this component's LICENSE file the
 + * following copyright and licenses apply:
@@ -130,9 +129,9 @@ index 0000000..b9cf136
 +
 +void testaes(WPEFramework::Cryptography::ICipher *aes, const uint8_t *data)
 +{
-+    const uint32_t dataSize = strlen(reinterpret_cast<const char *>(data));
-+    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
-+    const uint32_t bufferSize = expectedSize + 16;
++    const uint16_t dataSize = strlen(reinterpret_cast<const char *>(data));
++    const uint16_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint16_t bufferSize = expectedSize + 16;
 +
 +    // const uint8_t iv[] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
 +    const uint8_t *iv = reinterpret_cast<const uint8_t *>("oijasdoijasodijasodijaosidjaosidjaoisdjaoisvweertertsdfsdf");
@@ -315,7 +314,7 @@ index 0000000..b9cf136
 +    EXPECT_EQ(key_id, 0);
 +}
 +
-+void aesSpeedTest(const uint32_t SZ = 32 * 1024 * 1024)
++void aesSpeedTest(const uint16_t sz)
 +{
 +    WPEFramework::Cryptography::IVault *vault = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
 +    EXPECT_NE(vault, nullptr);
@@ -332,9 +331,9 @@ index 0000000..b9cf136
 +    WPEFramework::Cryptography::ICipher *aes = vault->AES(WPEFramework::Cryptography::aesmode::CBC, key_id);
 +    EXPECT_NE(aes, nullptr);
 +
-+    const uint32_t dataSize = SZ;
-+    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
-+    const uint32_t bufferSize = expectedSize + 16;
++    const uint16_t dataSize = sz;
++    const uint16_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint16_t bufferSize = expectedSize + 16;
 +
 +    const uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
 +
@@ -348,35 +347,42 @@ index 0000000..b9cf136
 +
 +    if (randinput && randinput.read((char *)data, dataSize))
 +    {
-+        std::cout << "========= testing with data size: " << SZ << std::endl;
++        std::cout << "========= testing with data size: " << sz << std::endl;
 +
-+        if (SZ > 1024 + 32)
++        if (sz > 1024 + 32)
 +            DumpBufferEx("rand data 32 bytes @ 1024:", data, 32, 1024, false);
-+        if (SZ > 2048)
-+            DumpBufferEx("rand data 32 bytes @ SZ-2048:", data, 32, SZ - 2048, false);
++        if (sz > 2048)
++            DumpBufferEx("rand data 32 bytes @ SZ-2048:", data, 32, sz - 2048, false);
 +
 +        memcpy(input, data, dataSize);
 +
-+        auto start = std::chrono::steady_clock::now();
++        using clock = std::chrono::high_resolution_clock;
++
++        auto start = clock::now();
++
++#pragma GCC diagnostic push
++#pragma GCC diagnostic error "-Wconversion"
 +        EXPECT_EQ(aes->Encrypt(16, iv, dataSize, data, bufferSize, output), expectedSize);
-+        auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-+        std::cout << "-- encryption took: " << dt << " [ms]"
-+                  << " so " << (1000.0 * SZ / dt) / (1024.0 * 1024.0) << " mb/sec" << std::endl;
++#pragma GCC diagnostic pop
 +
-+        start = std::chrono::steady_clock::now();
++        auto dt = std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count();
++        std::cout << "-- encryption took: " << dt << " [ns]"
++                  << " so " << (1e9 * sz / dt) / (1024.0 * 1024.0 ) << " mb/sec" << std::endl;
++
++        start = clock::now();
 +        checkbitdiff(data, output, expectedSize);
-+        dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-+        std::cout << "-- checking diff took: " << dt << "[ms]" << std::endl;
++        dt = std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count();
++        std::cout << "-- checking diff took: " << dt << "[ns]" << std::endl;
 +
-+        start = std::chrono::steady_clock::now();
++        start = clock::now();
 +        EXPECT_EQ(aes->Decrypt(16, iv, expectedSize, output, bufferSize, input), dataSize);
-+        dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-+        std::cout << "-- decryption took: " << dt << " [ms]"
-+                  << " so " << (1000.0 * SZ / dt) / (1024.0 * 1024.0) << " mb/sec" << std::endl;
-+        start = std::chrono::steady_clock::now();
++        dt = std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count();
++        std::cout << "-- decryption took: " << dt << " [ns]"
++                  << " so " << (1e9 * sz / dt) / (1024.0 * 1024.0 )  << " mb/sec" << std::endl;
++        start = clock::now();
 +        EXPECT_EQ(::memcmp(input, data, dataSize), 0);
-+        dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-+        std::cout << "-- memcmp took " << dt << "[ms]" << std::endl;
++        dt = std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count();
++        std::cout << "-- memcmp took " << dt << "[ns]" << std::endl;
 +    }
 +    else
 +    {
@@ -391,8 +397,8 @@ index 0000000..b9cf136
 +TEST(Platform, SpeedTest)
 +{
 +    aesSpeedTest(128);
-+    aesSpeedTest(1024 * 1024);
-+    aesSpeedTest(256 * 1024 * 1024);
++    aesSpeedTest(12800);
++    aesSpeedTest(65535 - 32);
 +}
 +
 +TEST(Platform, TwoVaults)
@@ -471,9 +477,9 @@ index 0000000..b9cf136
 +
 +    const char *data = "Mon aéroglisseur est rempli d'anguilles";
 +
-+    const uint32_t dataSize = strlen(data);
-+    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
-+    const uint32_t bufferSize = expectedSize + 16;
++    const uint16_t dataSize = strlen(data);
++    const uint16_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint16_t bufferSize = expectedSize + 16;
 +
 +    const uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
 +
@@ -538,9 +544,9 @@ index 0000000..b9cf136
 +    char *data = new char[16 * 3 + 1];
 +    sprintf(data, "0123456789abcdef0123456789abcdef0123456789abcdef");
 +
-+    const uint32_t dataSize = strlen(data);
-+    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
-+    const uint32_t bufferSize = expectedSize + 16;
++    const uint16_t dataSize = strlen(data);
++    const uint16_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint16_t bufferSize = expectedSize + 16;
 +
 +    const uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
 +                          0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
@@ -582,6 +588,3 @@ index 0000000..b9cf136
 +    printf("TOTAL: %i tests; %i PASSED, %i FAILED\n", TotalTests, TotalTestsPassed, (TotalTests - TotalTestsPassed));
 +    return (TotalTests - TotalTestsPassed);
 +}
--- 
-2.25.1
-
