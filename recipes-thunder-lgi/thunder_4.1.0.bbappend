@@ -32,27 +32,18 @@ EXTRA_OECMAKE += "-DHIDE_NON_EXTERNAL_SYMBOLS=ON"
 TARGET_CXXFLAGS += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-D_TRACE_LEVEL=2 -D__ENABLE_ASSERT__=ON', '', d)}"
 TARGET_CXXFLAGS += "-D__ERRORRESULT__=errno"
 
-# file://0001-ONEM-22285-do-not-modify-local-files.patch
-# file://no_color_in_trace_1_12.patch
-# file://0112-ONEM-15869-bugfix-container-stop.patch
-# file://0117-ONEM-22611-So-locations-restricted_1_12.patch
-# file://0120-ONEM-23505-Setup-configuration-umask-by-CMake.patch
-# file://0122-ONEM-23840-Support-for-serving-gzip-compressed-files.patch
-# file://0123-ARRISAPOL-2315-Missing-external-symbols-not-exported.patch
-# file://0124-ARRISEOS-40990-Missing-logs-from-syslog.patch
-# file://0125-ONEM-24034-Setup-group-and-permissions-for-socket.patch
-# file://0128-ONEM-24449-Load-fallback-logging-configuration.patch
-# file://0132-HUMAXEOSR-995-Block-plugins-activation-when-WPEFrame.patch
-# file://0134-HUMAXEOSR-995-WPEProcess-crash-on-termination-with-_.patch
-# file://0135-ARRISEOS-41575-extend_timeout_to_25sec.patch
-# file://0136-JSON-FloatType-updated-to-support-single-byte-wise-d.patch
-# file://0137-JSON-Automatically-escape-UTF8-in-JSON_1_12.patch
-# file://0138-JSON-RPC-parsing-fixes-848.patch
-# file://0139-Revert-DELIA-54331-Don-t-set-the-receive-buffer.patch
-# file://0146-ONEM-22659-Synchronization-in-Release-changed.patch
-# file://0147-fix-cobalt-crash.patch
-# file://0125-ONEM-24034-Setup-group-and-permissions-for-socket.patch == rights_patch.patch
+# file://0001-ONEM-22285-do-not-modify-local-files.patch - skipped, does not seem needed anymore
+# file://0112-ONEM-15869-bugfix-container-stop.patch - skipped, seems to be upstreamed
+# file://0120-ONEM-23505-Setup-configuration-umask-by-CMake.patch - skipped, seems implemented on their side
+# file://0122-ONEM-23840-Support-for-serving-gzip-compressed-files.patch - skipped, was upstreamed
+# file://0136-JSON-FloatType-updated-to-support-single-byte-wise-d.patch - skipped, was upstreamed in b3bc6cc236ff1e2a36cb765dcd56010c4779df66
+# file://0137-JSON-Automatically-escape-UTF8-in-JSON_1_12.patch - skipped, upstream - 411039cc725c486038d15102d692eaf3e7a22f80
+# file://0138-JSON-RPC-parsing-fixes-848.patch - skipped, upstream 82cffa5d12bf3f015ee1b38bf4768acc1cf84ad7
+# file://0139-Revert-DELIA-54331-Don-t-set-the-receive-buffer.patch - skipped, seems we dont need it (DELIA 54331 is not here)
+# file://0147-fix-cobalt-crash.patch not needed, was replaced with 0147-ARRISAPP-140-Fix-assert-on-call-to-opencdm_dispose.patch
 
+# file://0134-HUMAXEOSR-995-WPEProcess-crash-on-termination-with-_.patch - skipped, seems to be changed, hopefully fixed with 062dd47ec8b26df7d56161db59d972e8570fd1e6 (introduced on R4)
+# file://0146-ONEM-22659-Synchronization-in-Release-changed.patch - skipping, https://github.com/rdkcentral/Thunder/pull/759 : 'I can confirm this was a bug that has been resolved in R3. So this pull request should not be applied to R3'
 
 SRC_URI += "file://wpeframework.service.xdial.in \
             file://wpeframework.service.no-container.in \
@@ -81,8 +72,15 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0147-ARRISAPP-140-Fix-assert-on-call-to-opencdm_dispose.patch \
             file://0148-FindSlauncher-lost-letter.patch \
             file://0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch \
-            file://local.patch \
-            file://rights_patch.patch \
+            file://fix-compilation-with-warning-reporting-disabled.patch \
+            file://0125-ONEM-24034-Setup-group-and-permissions-for-socket.patch \
+            file://no_color_in_trace.patch \
+            file://0117-ONEM-22611-So-locations-restricted.patch \
+            file://0123-ARRISAPOL-2315-Missing-external-symbols-not-exp.patch \
+            file://0124-ARRISEOS-40990-Missing-logs-from-syslog.patch \
+            file://0128-ONEM-24449-Load-fallback-logging-configuration.patch \
+            file://0132-HUMAXEOSR-995-Block-plugins-activation-when-WPE.patch \
+            file://0135-ARRISEOS-41575-extend_timeout_to_25sec.patch \
 "
 
 # 0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch taken from R4 (is on R4.1.1)

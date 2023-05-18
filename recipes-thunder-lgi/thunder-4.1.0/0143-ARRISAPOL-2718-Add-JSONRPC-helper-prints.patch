@@ -7,17 +7,18 @@ During investigation of ARRISAPOL-2718 there was a suspicion that
 wpeframework don't maintain client list properly. Additional logs where
 added which are helpful to understand how many clients and what events
 are registered.
+
 ---
  Source/core/JSONRPC.h | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/Source/core/JSONRPC.h b/Source/core/JSONRPC.h
-index a3eecf37..c2407235 100644
+index 030164ec..e0399fe8 100644
 --- a/Source/core/JSONRPC.h
 +++ b/Source/core/JSONRPC.h
-@@ -1075,13 +1075,14 @@ namespace Core {
-                     ObserverList& clients = index->second;
-                     ObserverList::iterator loop = clients.begin();
+@@ -1328,13 +1328,14 @@ namespace Core {
+                     const ObserverList& clients = index->second;
+                     ObserverList::const_iterator loop = clients.begin();
  
 +                    TRACE_L1("Number of clients: %d", clients.size());
                      result = Core::ERROR_NONE;

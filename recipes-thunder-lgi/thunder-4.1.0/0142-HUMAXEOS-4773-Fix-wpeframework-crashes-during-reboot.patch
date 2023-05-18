@@ -1,4 +1,3 @@
-From 109618b73d6075b76162b328326d899d7d402c83 Mon Sep 17 00:00:00 2001
 From: Piotr Marcinkowski <piotr.marcinkowski@redembedded.com>
 Date: Thu, 28 Jul 2022 20:16:59 +0000
 Subject: [PATCH] HUMAXEOS-4773 Fix wpeframework crashes during reboot loop
@@ -26,16 +25,17 @@ so it can be safely released.
 
 Detailed analysis of this case can be found at
 https://jira.lgi.io/browse/HUMAXEOS-4773
+
 ---
  Source/WPEFramework/PluginServer.h |  6 +++++-
  Source/core/WorkerPool.h           | 10 ++++++++++
  2 files changed, 15 insertions(+), 1 deletion(-)
 
 diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
-index 96feaabf..d62b582e 100644
+index d96cf7ec..d92e0880 100644
 --- a/Source/WPEFramework/PluginServer.h
 +++ b/Source/WPEFramework/PluginServer.h
-@@ -128,7 +128,11 @@ namespace PluginHost {
+@@ -130,7 +130,11 @@ namespace PluginHost {
              {
                  Run();
              }
@@ -49,12 +49,12 @@ index 96feaabf..d62b582e 100644
          private:
              Dispatcher _dispatch;
 diff --git a/Source/core/WorkerPool.h b/Source/core/WorkerPool.h
-index 58b631b7..5f4e657c 100644
+index d8faf6e6..52d8b876 100644
 --- a/Source/core/WorkerPool.h
 +++ b/Source/core/WorkerPool.h
-@@ -254,6 +254,16 @@ namespace Core {
-         {
-             _threadPool.Queue().Disable();
+@@ -329,6 +329,16 @@ POP_WARNING()
+             _threadPool.Stop();
+             delete[] _metadata.Slot;
          }
 +        /**
 +         * @brief Stops until this object remains joined by call to WorkerPool::Join()
@@ -67,8 +67,8 @@ index 58b631b7..5f4e657c 100644
 +            }
 +        }
  
-     private:
-         ThreadPool _threadPool;
+     public:
+         void Submit(const Core::ProxyType<IDispatch>& job) override
 -- 
-2.37.0
+2.25.1
 
