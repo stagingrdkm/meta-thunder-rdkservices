@@ -1,7 +1,6 @@
 From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
 Date: Fri, 7 Jan 2022 11:22:31 +0100
 Subject: [PATCH] [ARRISEOS-40990] Missing logs from syslog
-
 ---
  Source/core/CMakeLists.txt    | 1 +
  Source/core/SyslogToJournal.h | 8 ++++++++
@@ -10,13 +9,13 @@ Subject: [PATCH] [ARRISEOS-40990] Missing logs from syslog
  create mode 100644 Source/core/SyslogToJournal.h
 
 diff --git a/Source/core/CMakeLists.txt b/Source/core/CMakeLists.txt
-index e799b556..27ff0c69 100644
+index 317bede7..3ad62c65 100644
 --- a/Source/core/CMakeLists.txt
 +++ b/Source/core/CMakeLists.txt
-@@ -139,6 +139,7 @@ set(PUBLIC_HEADERS
-         WarningReportingControl.h
-         WarningReportingCategories.h
-         Module.h
+@@ -145,6 +145,7 @@ set(PUBLIC_HEADERS
+         TokenizedStringList.h
+         MessageDispatcher.h
+         MessageUnit.h
 +        SyslogToJournal.h
          )
  
@@ -36,13 +35,13 @@ index 00000000..0fd3a432
 +    } while (0)
 +
 diff --git a/Source/core/core.h b/Source/core/core.h
-index a7c1477f..74014202 100644
+index c514528d..cd2c2279 100644
 --- a/Source/core/core.h
 +++ b/Source/core/core.h
-@@ -110,6 +110,7 @@
- #include "IWarningReportingControl.h"
- #include "WarningReportingControl.h"
- #include "WarningReportingCategories.h"
+@@ -115,6 +115,7 @@
+ #include "TokenizedStringList.h"
+ #include "MessageDispatcher.h"
+ #include "MessageUnit.h"
 +#include "SyslogToJournal.h"
  
  #ifdef __WINDOWS__

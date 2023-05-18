@@ -7,7 +7,7 @@ Subject: [PATCH] Pass communicator and input/locator to config
  1 file changed, 11 insertions(+), 7 deletions(-)
 
 diff --git a/Source/WPEFramework/GenericConfig.cmake b/Source/WPEFramework/GenericConfig.cmake
-index 7872fe0..839396e 100644
+index 4e35ed06..441f17e6 100644
 --- a/Source/WPEFramework/GenericConfig.cmake
 +++ b/Source/WPEFramework/GenericConfig.cmake
 @@ -19,6 +19,8 @@
@@ -18,16 +18,16 @@ index 7872fe0..839396e 100644
 +set(INPUT_LOCATOR "/tmp/keyhandler" CACHE STRING "Input locator")
  set(BINDING "0.0.0.0" CACHE STRING "The binding interface")
  set(IDLE_TIME 180 CACHE STRING "Idle time")
- set(PERSISTENT_PATH "/root" CACHE STRING "Persistent path")
-@@ -46,6 +48,7 @@ end()
+ set(SOFT_KILL_CHECK_WAIT_TIME 10  CACHE STRING "Soft kill check waiting time")
+@@ -57,6 +59,7 @@ end()
  ans(CONFIG)
  
  map_set(${CONFIG} port ${PORT})
 +map_set(${CONFIG} communicator ${COMMUNICATOR})
  map_set(${CONFIG} binding ${BINDING})
  map_set(${CONFIG} ipv6 ${IPV6_SUPPORT})
- map_set(${CONFIG} idletime ${IDLE_TIME})
-@@ -143,7 +146,7 @@ ans(PLUGIN_FATAL_TRACING)
+ if(LEGACY_INITIALZE)
+@@ -180,7 +183,7 @@ ans(PLUGIN_WEBKITBROWSEREXTENSION_TRACING)
  
  if(NOT VIRTUALINPUT)
      map()
@@ -36,7 +36,7 @@ index 7872fe0..839396e 100644
      kv(type "device")
      if(KEY_OUTPUT_DISABLED)
          kv(output false)
-@@ -153,15 +156,16 @@ if(NOT VIRTUALINPUT)
+@@ -190,15 +193,16 @@ if(NOT VIRTUALINPUT)
  
      map_append(${CONFIG} input ${PLUGIN_INPUT_DEVICE})
  else(VIRTUALINPUT)
@@ -58,7 +58,7 @@ index 7872fe0..839396e 100644
 +    map_append(${CONFIG} input ${PLUGIN_INPUT_DEVICE})
  endif(NOT VIRTUALINPUT)
  
- if(TRACE_SETTINGS)
+ 
 -- 
 2.25.1
 

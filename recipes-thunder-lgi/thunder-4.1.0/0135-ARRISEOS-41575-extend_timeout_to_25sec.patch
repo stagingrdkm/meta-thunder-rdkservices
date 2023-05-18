@@ -7,24 +7,29 @@ Dbus timeout is set to be 18 secs. In the same time, once controller will notice
 it starts the process of killing the container. Before this change it was 10 sec of timeout.
 Dbus interface is syncrhonous and confirmation of stop may not pass due to this 18 sec timeout.
 This patch extends timeout for next 10 sec and next 5 , having checks of the status in the intervals:
-10 sec, 10 sec ,5 sec. 25 sec in total. 
+10 sec, 10 sec ,5 sec. 25 sec in total.
+---
+ Source/com/Communicator.cpp | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
 
-Index: git/Source/com/Communicator.cpp
-===================================================================
---- git.orig/Source/com/Communicator.cpp
-+++ git/Source/com/Communicator.cpp
-@@ -180,12 +180,11 @@ namespace RPC {
-                         _process.Kill(true);
-                         nextinterval = 4000;
-                     } else {
--                        ASSERT(false);
--                        nextinterval = 0;
-+                        nextinterval = 10000;
-                     }
-                 } break;
-                 case 2:
--                    _container->Stop(0);
-+                    if(_process.Id() != 0) _container->Stop(0);
-                     nextinterval = 5000;
-                     break;
+diff --git a/Source/com/Communicator.cpp b/Source/com/Communicator.cpp
+index 7e30a0b1..fc00812e 100644
+--- a/Source/com/Communicator.cpp
++++ b/Source/com/Communicator.cpp
+@@ -352,11 +352,10 @@ namespace RPC {
+                             _process.Kill(true);
+                             nextinterval = Communicator::HardKillCheckWaitTime();
+                         } else {
+-                            ASSERT(false);
+-                            nextinterval = 0;
++                            nextinterval = 10;
+                         }
+                         break;
+-                case 2: _container->Stop(0);
++                case 2: if(_process.Id() != 0) _container->Stop(0);
+                         nextinterval = 5;
+                         break;
                  default:
+-- 
+2.25.1
+

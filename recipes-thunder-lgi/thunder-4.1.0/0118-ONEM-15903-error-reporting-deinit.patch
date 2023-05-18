@@ -9,10 +9,10 @@ Subject: [PATCH] [ONEM-15903] Error reporting - deinitialize error reporting
  2 files changed, 15 insertions(+), 1 deletion(-)
 
 diff --git a/Source/WPEProcess/CMakeLists.txt b/Source/WPEProcess/CMakeLists.txt
-index f0019cf..a03b268 100644
+index b10f7a6d..9b3d396d 100644
 --- a/Source/WPEProcess/CMakeLists.txt
 +++ b/Source/WPEProcess/CMakeLists.txt
-@@ -71,6 +71,14 @@ if(BREAKPAD_FOUND)
+@@ -60,6 +60,14 @@ if(BREAKPAD_FOUND)
      target_include_directories(${TARGET} PUBLIC ${BREAKPAD_INCLUDE_DIRS})
  endif(BREAKPAD_FOUND)
  
@@ -28,7 +28,7 @@ index f0019cf..a03b268 100644
          CXX_STANDARD 11
          CXX_STANDARD_REQUIRED YES
 diff --git a/Source/WPEProcess/Process.cpp b/Source/WPEProcess/Process.cpp
-index 0eb3d3f..7dc86bd 100644
+index b08455ed..e76beb0b 100644
 --- a/Source/WPEProcess/Process.cpp
 +++ b/Source/WPEProcess/Process.cpp
 @@ -7,6 +7,12 @@
@@ -44,9 +44,9 @@ index 0eb3d3f..7dc86bd 100644
  MODULE_NAME_DECLARATION(BUILD_REFERENCE)
  
  namespace WPEFramework {
-@@ -663,7 +669,7 @@ int main(int argc, char** argv)
-             }
-         }
+@@ -678,7 +684,7 @@ int main(int argc, char** argv)
+         Core::Messaging::MessageUnit::Instance().Close();
+ #endif
      }
 -
 +    ODH_ERROR_REPORT_DEINIT();

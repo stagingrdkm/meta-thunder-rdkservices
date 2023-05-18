@@ -8,10 +8,10 @@ Subject: [PATCH] [ONEM-23238] Unified handling of logging configuration for
  1 file changed, 6 insertions(+), 2 deletions(-)
 
 diff --git a/Source/tracing/Logging.h b/Source/tracing/Logging.h
-index b09d07d..dd645ac 100644
+index b34b1551..105935c9 100644
 --- a/Source/tracing/Logging.h
 +++ b/Source/tracing/Logging.h
-@@ -310,8 +310,12 @@ namespace Logging {
+@@ -313,8 +313,12 @@ namespace Logging {
                  // if nessecary..
                  Trace::TraceUnit::Instance().Announce(*this);
  
@@ -24,7 +24,7 @@ index b09d07d..dd645ac 100644
 +                    }
 +                }
              }
-             virtual ~LoggingControl()
+             ~LoggingControl() override
              {
 -- 
 2.25.1
