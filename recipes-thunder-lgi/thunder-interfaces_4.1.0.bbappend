@@ -12,5 +12,10 @@ SRC_URI += "file://0001-OMWAPPI-1315-Extend-ocdm-rdkservice-for-metrics-API.patc
 SRC_URI += "file://0111-ONEM-29742-setParameter-for-ISession.patch"
 SRC_URI += "file://0112-OMWAPPI-1314-Extend-ThunderInterfaces-ocdm-API.patch"
 SRC_URI += "file://0007-ONEM-24354-Clear-content-of-buffers-on-deinit.patch"
+SRC_URI += "file://0113-OMWAPPI-1794-JDolbyOutput.diffcode"
 
 require thunder-interfaces-4.1.0/interfaces.inc
+
+do_configure_append() {
+    patch --unified < ${WORKDIR}/0113-OMWAPPI-1794-JDolbyOutput.diffcode ${WORKDIR}/build/definitions/generated/JDolbyOutput.h
+}
