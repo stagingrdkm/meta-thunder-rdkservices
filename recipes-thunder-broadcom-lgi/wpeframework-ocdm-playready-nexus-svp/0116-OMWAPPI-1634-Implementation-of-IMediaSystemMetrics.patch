@@ -1,0 +1,71 @@
+From ded2e09fb08e031fc709fa41f002bb92b86bff27 Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Wed, 17 May 2023 10:31:25 +0200
+Subject: [PATCH] 0116-OMWAPPI-1634-Implementation-of-IMediaSystemMetrics
+
+---
+ MediaSession.cpp | 5 +++++
+ MediaSession.h   | 6 +++++-
+ MediaSystem.cpp  | 7 +++++++
+ 3 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index d16e875..ffae1ca 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -1115,4 +1115,9 @@ void MediaKeySession::CleanDecryptContexts()
+     }
+ }
+ 
++CDMi_RESULT MediaKeySession::Metrics(uint32_t& bufferLength, uint8_t buffer[]) const {
++    bufferLength = 0;
++    return CDMi_METHOD_NOT_IMPLEMENTED;
++}
++
+ }  // namespace CDMi
+diff --git a/MediaSession.h b/MediaSession.h
+index 9f08b76..0c952b4 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -104,7 +104,7 @@ struct OutputProtection {
+ namespace CDMi {
+ 
+ 
+-class MediaKeySession : public IMediaKeySession, public IMediaKeySessionExt {
++class MediaKeySession : public IMediaKeySession, public IMediaKeySessionExt, public IMediaSystemMetrics {
+ private:
+     enum KeyState {
+         // Has been initialized.
+@@ -224,6 +224,10 @@ private:
+     }
+     CDMi_RESULT SetKeyId(DRM_APP_CONTEXT *pDrmAppCtx, const uint8_t keyLength, const uint8_t keyId[]);
+     CDMi_RESULT SelectDrmHeader(DRM_APP_CONTEXT *pDrmAppCtx, const uint32_t headerLength, const uint8_t header[]);
++
++    // IMediaSessionMetrics overrides
++    // ------------------------------------------------------------------------------------------
++    CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const override;
+ private:
+     DRM_APP_CONTEXT *m_poAppContext;
+     DRM_DECRYPT_CONTEXT *   m_oDecryptContext; 
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 9da7f42..5b2cbca 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -1027,6 +1027,13 @@ public:
+         return CDMi_SUCCESS;
+     }
+ 
++    // IMediaSystemMetrics overrides
++    // ------------------------------------------------------------------------------------------
++    CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const {
++        bufferLength = 0;
++        return CDMi_METHOD_NOT_IMPLEMENTED;
++    }
++
+ private:
+     DRM_WCHAR* drmdir_;
+ 
+-- 
+2.25.1
+
+
