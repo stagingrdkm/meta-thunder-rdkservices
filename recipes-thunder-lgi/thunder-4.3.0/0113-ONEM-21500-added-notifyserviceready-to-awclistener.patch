@@ -1,0 +1,34 @@
+(2021.10.08) Yuri Khalayev (yuri_khalayev@epam.com)
+[ONEM-21500] Added notifyServiceReady implementation to AWCListener
+
+---
+ Source/processcontainers/implementations/AWCImplementation/AWC.cpp |    6 ++++++
+ Source/processcontainers/implementations/AWCImplementation/AWC.h   |    1 +
+ 2 files changed, 7 insertions(+)
+
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWC.cpp
+===================================================================
+--- git.orig/Source/extensions/processcontainers/implementations/AWCImplementation/AWC.cpp
++++ git/Source/extensions/processcontainers/implementations/AWCImplementation/AWC.cpp
+@@ -53,3 +53,9 @@ void AWCListener::notifyStateChange(int
+     TRACE_L3("%s req_id=%d app_state=%d status=%d pid=%u", _TRACE_FUNCTION_, req_id, app_state, status, pid);
+     _notifier->notify(req_id, app_state, status, pid);
+ }
++
++void AWCListener::notifyServiceReady()
++{
++    TRACE_L3("%s", _TRACE_FUNCTION_);
++    // no action
++}
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWC.h
+===================================================================
+--- git.orig/Source/extensions/processcontainers/implementations/AWCImplementation/AWC.h
++++ git/Source/extensions/processcontainers/implementations/AWCImplementation/AWC.h
+@@ -31,6 +31,7 @@ public:
+     ~AWCListener() {};
+     void notifyWindowChange(int window_id, awc::AWCClient::awc_window_state_t window_state, unsigned int pid) override;
+     void notifyStateChange(int req_id, awc::awc_app_state_t app_state, int status, unsigned int pid) override;
++    void notifyServiceReady();
+ private:
+     AWCStateChangeNotifier * _notifier;
+ };

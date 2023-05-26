@@ -1,0 +1,11 @@
+[Unit]
+Description=WPEFramework socket for rtremote communication
+
+[Socket]
+SocketMode=0660
+SocketUser=wpeframework
+SocketGroup=xdialaccess
+Accept=no
+Service=wpeframework.service
+
+ListenStream=/run/rtremote/rt_remote_soc.2

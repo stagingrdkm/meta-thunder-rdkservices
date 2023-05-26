@@ -1,0 +1,31 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Mon, 29 Nov 2021 10:36:49 +0100
+Subject: [PATCH] [ONEM-23238] Unified handling of logging configuration for
+ SysLog
+
+---
+ Source/tracing/Logging.h | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/Source/tracing/Logging.h b/Source/tracing/Logging.h
+index b34b1551..105935c9 100644
+--- a/Source/tracing/Logging.h
++++ b/Source/tracing/Logging.h
+@@ -313,8 +313,12 @@ namespace Logging {
+                 // if nessecary..
+                 Trace::TraceUnit::Instance().Announce(*this);
+ 
+-                // Logs, by default, are enabled.
+-                m_Enabled |= 0x01;
++                bool enabled = false;
++                if (Trace::TraceUnit::Instance().IsDefaultCategory("SysLog", m_CategoryName, enabled)) {
++                    if (enabled) {
++                        m_Enabled = m_Enabled | 0x01;
++                    }
++                }
+             }
+             ~LoggingControl() override
+             {
+-- 
+2.25.1
+

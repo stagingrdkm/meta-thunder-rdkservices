@@ -1,0 +1,104 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Thu, 27 Jan 2022 10:56:02 +0100
+Subject: [PATCH] [ONEM-24449] Load fallback logging configuration
+
+For the cases when configuration not provided on not correclty parsed
+fallback default configuration is loaded from logCfgDefault.json file stored
+in wpeframwork configuration folder.
+---
+ Source/WPEFramework/PluginHost.cpp | 28 ++++++++++++++++++----------
+ Source/tracing/TraceUnit.cpp       | 11 +++++++----
+ Source/tracing/TraceUnit.h         |  2 +-
+ 3 files changed, 26 insertions(+), 15 deletions(-)
+
+diff --git a/Source/WPEFramework/PluginHost.cpp b/Source/WPEFramework/PluginHost.cpp
+index 75cf1796..9f8b44a8 100644
+--- a/Source/WPEFramework/PluginHost.cpp
++++ b/Source/WPEFramework/PluginHost.cpp
+@@ -392,6 +392,17 @@ POP_WARNING()
+         ExitHandler::Destruct();
+     }
+ 
++    static bool loadTraceSettingsFromFile(const string & fileLocation) {
++        bool loaded = false;
++        Core::File input(fileLocation);
++        if (input.Open(true)) {
++            loaded = input.Size() > 0 && Trace::TraceUnit::Instance().Defaults(input);
++            TRACE_FORMATTING("Load tracing configuration from: %s size: %llu result: %d\n", fileLocation.c_str(), input.Size(), loaded);
++            input.Close();
++        }
++        return loaded;
++    }
++
+ #ifdef __WINDOWS__
+     int _tmain(int argc, _TCHAR* argv[])
+ #else
+@@ -547,17 +558,14 @@ POP_WARNING()
+             }
+             
+             if (_config->MessagingCategoriesFile()) {
+-
+                 messagingSettings = Core::Directory::Normalize(Core::File::PathName(options.configFile)) + _config->MessagingCategories();
+-
+-                Core::File input (messagingSettings);
+-
+-                if (input.Open(true)) {
+-#if defined(__CORE_MESSAGING__)
+-                    Core::Messaging::MessageUnit::Instance().Configure(input);
+-#else
+-                    Trace::TraceUnit::Instance().Defaults(input);
+-#endif
++                if (!loadTraceSettingsFromFile(messagingSettings)) {
++                    // fallback to default
++                    messagingSettings = Core::Directory::Normalize(Core::File::PathName(options.configFile)) + "logCfgDefault.json";
++                    TRACE_FORMATTING("Tracing configuration not provided or invalid, use default fallback: %s\n", messagingSettings.c_str());
++                    if (!loadTraceSettingsFromFile(messagingSettings)) {
++                        TRACE_FORMATTING("Could not open fallback logging configuration: %s\n", messagingSettings.c_str());
++                    }
+                 }
+             }
+ 
+diff --git a/Source/tracing/TraceUnit.cpp b/Source/tracing/TraceUnit.cpp
+index 998dc8b7..58d3cf9c 100644
+--- a/Source/tracing/TraceUnit.cpp
++++ b/Source/tracing/TraceUnit.cpp
+@@ -307,16 +307,19 @@ namespace Trace {
+         UpdateEnabledCategories(serialized);
+     }
+ 
+-    void TraceUnit::Defaults(Core::File& file) {
++    bool TraceUnit::Defaults(Core::File& file) {
++        bool parsed = false;
+         Core::JSON::ArrayType<Setting::JSON> serialized;
+         Core::OptionalType<Core::JSON::Error> error;
+         serialized.IElement::FromFile(file, error);
+         if (error.IsSet() == true) {
+             SYSLOG(WPEFramework::Logging::ParsingError, (_T("Parsing failed with %s"), ErrorDisplayMessage(error.Value()).c_str()));
++        } else {
++            parsed = true;
++            // Deal with existing categories that might need to be enable/disabled.
++            UpdateEnabledCategories(serialized);
+         }
+-
+-        // Deal with existing categories that might need to be enable/disabled.
+-        UpdateEnabledCategories(serialized);
++        return parsed;
+     }
+ 
+     void TraceUnit::UpdateEnabledCategories(const Core::JSON::ArrayType<Setting::JSON>& info)
+diff --git a/Source/tracing/TraceUnit.h b/Source/tracing/TraceUnit.h
+index 9150d8c3..b12eb4c3 100644
+--- a/Source/tracing/TraceUnit.h
++++ b/Source/tracing/TraceUnit.h
+@@ -206,7 +206,7 @@ namespace Trace {
+         bool IsDefaultCategory(const string& module, const string& category, bool& enabled) const;
+         string Defaults() const;
+         void Defaults(const string& jsonCategories);
+-        void Defaults(Core::File& file);
++        bool Defaults(Core::File& file);
+ 
+         void Trace(const char fileName[], const uint32_t lineNumber, const char className[], const ITrace* const information);
+ 
+-- 
+2.25.1
+

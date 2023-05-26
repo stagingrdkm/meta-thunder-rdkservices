@@ -1,0 +1,334 @@
+From bd171ec0306fb6aacc984f804fa867fa6be55970 Mon Sep 17 00:00:00 2001
+From: Douglas Adler <douglas_adler2@comcast.com>
+Date: Mon, 8 Mar 2021 16:14:38 +0000
+Subject: [PATCH] RDK-31882 : Add GstCaps parsing in OCDM to
+ wpeframework-clientlibraries
+Source: COMCAST
+License: Apache-2.0
+Upstream-Status: N/A
+
+Reason for change: Amlogic needs to handle Audio data outside the SVP path
+Test Procedure: Verify that CDM module is detecting the stream type
+Risks: None
+
+Signed-off-by: Douglas Adler <douglas_adler2@comcast.com>
+---
+ .../adapter/gstreamer/open_cdm_adapter.cpp    | 45 ++++++++++++++++---
+ Source/ocdm/adapter/open_cdm_adapter.h        | 26 ++++++++++-
+ Source/ocdm/open_cdm.cpp                      | 29 ++++++++++--
+ Source/ocdm/open_cdm.h                        | 20 ++++++++-
+ Source/ocdm/open_cdm_impl.h                   | 17 +++++--
+ 5 files changed, 122 insertions(+), 15 deletions(-)
+
+diff --git a/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp b/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp
+index 2145782..40854b1 100644
+--- a/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp
++++ b/Source/ocdm/adapter/gstreamer/open_cdm_adapter.cpp
+@@ -42,8 +42,14 @@ inline bool mappedBuffer(GstBuffer *buffer, bool writable, uint8_t **data, uint3
+     return true;
+ }
+ 
+-OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSampleBuffer, const uint32_t subSampleCount,
+-                                               GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15)
++OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
++                                                GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15)
++{
++    return opencdm_gstreamer_session_decrypt_ex(session, buffer, subSample, subSampleCount, IV, keyID, initWithLast15, NULL);
++}
++
++OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSampleBuffer, const uint32_t subSampleCount,
++                                               GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15, GstCaps* caps)
+ {
+     OpenCDMError result (ERROR_INVALID_SESSION);
+ 
+@@ -93,6 +99,16 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+             gst_structure_get_uint(protectionMeta->info, "skip_byte_block", &pattern.clear_blocks);
+         }
+ 
++       // Generate a GstCaps string for stream info in CDM module
++        uint8_t*    caps_str = NULL;
++        uint16_t    caps_len = 0;
++        if(caps != NULL) {
++            caps_str = (uint8_t*)gst_caps_to_string(caps);
++            if(caps_str != nullptr) {
++                caps_len = strlen((const char*)caps_str);
++            }
++        }
++
+         uint8_t *mappedData = reinterpret_cast<uint8_t* >(dataMap.data);
+         uint32_t mappedDataSize = static_cast<uint32_t >(dataMap.size);
+         uint8_t *mappedIV = reinterpret_cast<uint8_t* >(ivMap.data);
+@@ -137,8 +153,9 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+             }
+             gst_byte_reader_set_pos(reader, 0);
+ 
++            result = opencdm_session_decrypt(session, encryptedData, totalEncrypted, encScheme, pattern, mappedIV, mappedIVSize, 
++                                             mappedKeyID, mappedKeyIDSize, initWithLast15, caps_str, caps_len);
+ 
+-            result = opencdm_session_decrypt(session, encryptedData, totalEncrypted, encScheme, pattern, mappedIV, mappedIVSize, mappedKeyID, mappedKeyIDSize, initWithLast15);
+             // Re-build sub-sample data.
+             index = 0;
+             unsigned total = 0;
+@@ -155,7 +172,12 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+             free(encryptedData);
+             gst_buffer_unmap(subSampleBuffer, &sampleMap);
+         } else {
+-            result = opencdm_session_decrypt(session, mappedData, mappedDataSize, encScheme, pattern, mappedIV, mappedIVSize, mappedKeyID, mappedKeyIDSize, initWithLast15);
++            result = opencdm_session_decrypt(session, mappedData, mappedDataSize, encScheme, pattern, mappedIV, mappedIVSize, 
++                                             mappedKeyID, mappedKeyIDSize, initWithLast15, caps_str, caps_len);
++        }
++
++        if(caps_str != nullptr) {
++            g_free(caps_str);
+         }
+ 
+         if (keyID != nullptr) {
+@@ -316,11 +338,24 @@ OpenCDMError opencdm_gstreamer_session_decrypt_buffer(struct OpenCDMSession* ses
+             sampleInfo.keyId = mappedKeyID;
+             sampleInfo.keyIdLength = mappedKeyIDSize;
+ 
++            uint8_t*    caps_str = NULL;
++            uint16_t    caps_len = 0;
++            if(caps != NULL) {
++                caps_str = (uint8_t*)gst_caps_to_string(caps);
++                if(caps_str != nullptr) {
++                    caps_len = strlen((const char*)caps_str);
++                }
++            }
++
+             result = opencdm_session_decrypt_v2(session,
+                                                 mappedData,
+                                                 mappedDataSize,
+                                                 &sampleInfo,
+-                                                spPtr);
++                                                spPtr,
++                                                caps_str,
++                                                caps_len);
++
++            g_free(caps_str);
+ 
+             //Clean up
+             if(subSampleInfoPtr != nullptr) {
+diff --git a/Source/ocdm/adapter/open_cdm_adapter.h b/Source/ocdm/adapter/open_cdm_adapter.h
+index 404baf3..aa988c8 100644
+--- a/Source/ocdm/adapter/open_cdm_adapter.h
++++ b/Source/ocdm/adapter/open_cdm_adapter.h
+@@ -44,6 +44,8 @@ extern "C" {
+  * \param subSampleCount count of subsamples
+  * \param IV Gstreamer buffer containing initial vector (IV) used during decryption.
+  * \param keyID Gstreamer buffer containing keyID to use for decryption
++ * \param initWithLast15 Init flag
++ * \param caps GstCaps structure
+  *
+  * This method handles the Subsample mapping by consolidating all the encrypted data into one buffer before decrypting. This means the Subsample mappings are
+  * not passed on to the DRM implementation side.
+@@ -55,8 +57,28 @@ extern "C" {
+ 
+  * \return Zero on success, non-zero on error.
+  */
+-    EXTERNAL OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
+-                                                   GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15);
++    EXTERNAL OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
++                                                   GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15, GstCaps* caps = NULL);
++
++
++/**
++ * \brief Performs decryption based on adapter implementation.
++ *
++ * This method accepts encrypted data and will typically decrypt it out-of-process (for security reasons). The actual data copying is performed
++ * using a memory-mapped file (for performance reasons). If the DRM system allows access to decrypted data (i.e. decrypting is not
++ * performed in a TEE), the decryption is performed in-place.
++ * \param session \ref OpenCDMSession instance.
++ * \param buffer Gstreamer buffer containing encrypted data and related meta data. If applicable, decrypted data will be stored here after this call returns.
++ * \param subSample Gstreamer buffer containing subsamples size which has been parsed from protection meta data.
++ * \param subSampleCount count of subsamples
++ * \param IV Gstreamer buffer containing initial vector (IV) used during decryption.
++ * \param keyID Gstreamer buffer containing keyID to use for decryption
++ * \param initWithLast15 Init flag
++ * \return Zero on success, non-zero on error.
++ */
++/** This provides implementation to support the older API. */
++   EXTERNAL OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
++                                                    GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15);
+ 
+ /**
+  * \brief Performs decryption based on adapter implementation.
+diff --git a/Source/ocdm/open_cdm.cpp b/Source/ocdm/open_cdm.cpp
+index 8aafae7..77c7e58 100644
+--- a/Source/ocdm/open_cdm.cpp
++++ b/Source/ocdm/open_cdm.cpp
+@@ -435,6 +435,25 @@ OpenCDMError opencdm_session_resetoutputprotection(struct OpenCDMSession* sessio
+     return (result);
+ }
+ 
++/**
++ * Set a name/value pair into the CDM
++ * \param session \ref OpenCDMSession instance.
++ * \return Zero on success, non-zero on error.
++ */
++OpenCDMError opencdm_session_set_parameter(struct OpenCDMSession* session, 
++    const std::string& name, 
++    const std::string& value)
++{
++    OpenCDMError result(ERROR_INVALID_SESSION);
++
++    if (session != nullptr) {
++        session->SetParameter(name, value);
++        result = OpenCDMError::ERROR_NONE;
++    }
++
++    return (result);
++}
++
+ /**
+  * Closes a session.
+  * \param session \ref OpenCDMSession instance.
+@@ -467,6 +486,8 @@ OpenCDMError opencdm_session_close(struct OpenCDMSession* session)
+  * \param encryptedLength Length of encrypted data buffer (in bytes).
+  * \param IV Initial vector (IV) used during decryption.
+  * \param IVLength Length of IV buffer (in bytes).
++ * \param streamInfo data blob with information about the current stream.
++ * \param streamInfoLength Length of info buffer (in bytes).
+  * \return Zero on success, non-zero on error.
+  * REPLACING: uint32_t decrypt(void* session, uint8_t*, const uint32_t, const
+  * uint8_t*, const uint16_t);
+@@ -478,7 +499,9 @@ OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+     const EncryptionPattern pattern,
+     const uint8_t* IV, const uint16_t IVLength,
+     const uint8_t* keyId, const uint16_t keyIdLength,
+-    uint32_t initWithLast15 /* = 0 */)
++    uint32_t initWithLast15 /* = 0 */,
++    uint8_t* streamInfo /* = NULL */,
++    uint16_t streamInfoLength /*  = 0 */)
+ {
+     OpenCDMError result(ERROR_INVALID_SESSION);
+     if (session != nullptr) {
+@@ -493,7 +516,7 @@ OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+         sampleInfo.keyId = const_cast<uint8_t*>(keyId);
+         sampleInfo.keyIdLength = keyIdLength;
+         result = encryptedLength > 0 ? static_cast<OpenCDMError>(session->Decrypt(
+-            encrypted, encryptedLength, const_cast<const SampleInfo*>(&sampleInfo), initWithLast15, nullptr)) : ERROR_NONE;
++            encrypted, encryptedLength, const_cast<const SampleInfo*>(&sampleInfo), initWithLast15, nullptr, streamInfo, streamInfoLength)) : ERROR_NONE;
+     }
+ 
+     return (result);
+@@ -510,7 +533,7 @@ OpenCDMError opencdm_session_decrypt_v2(struct OpenCDMSession* session,
+     if (session != nullptr) {
+         uint32_t initWithLast15 = 0;
+         result = encryptedLength > 0 ? static_cast<OpenCDMError>(session->Decrypt(
+-            encrypted, encryptedLength, sampleInfo, initWithLast15, properties)) : ERROR_NONE;
++            encrypted, encryptedLength, sampleInfo, initWithLast15, properties, NULL, 0)) : ERROR_NONE;
+     }
+ 
+     return (result);
+diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
+index 60547c3..fd87c46 100644
+--- a/Source/ocdm/open_cdm.h
++++ b/Source/ocdm/open_cdm.h
+@@ -55,6 +55,7 @@
+ 
+ #include <stdint.h>
+ #include <string.h>
++#include <string>
+ 
+ #include <stdio.h>
+ #include <list>
+@@ -461,6 +462,17 @@ EXTERNAL OpenCDMError opencdm_session_metadata(const struct OpenCDMSession* sess
+  */
+ EXTERNAL OpenCDMError opencdm_session_resetoutputprotection(struct OpenCDMSession* session);
+ 
++/**
++ * Set a name/value pair into the CDM
++ * \param session \ref OpenCDMSession instance.
++ * \param name \ref Name of parameter
++ * \param value \ref Value of parameter
++ * \return Zero on success, non-zero on error.
++ */
++OpenCDMError opencdm_session_set_parameter(struct OpenCDMSession* session,
++    const std::string& name,
++    const std::string& value);
++
+ /**
+  * Gets Session ID for a session.
+  * \param session \ref OpenCDMSession instance.
+@@ -550,7 +562,9 @@ EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+     const EncryptionPattern pattern, 
+     const uint8_t* IV, uint16_t IVLength,
+     const uint8_t* keyId, const uint16_t keyIdLength,
+-    uint32_t initWithLast15 = 0);
++    uint32_t initWithLast15 = 0,
++    uint8_t* streamInfo = NULL,
++    uint16_t streamInfoLength = 0);
+ 
+ #else
+ EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+@@ -560,7 +574,9 @@ EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+     const EncryptionPattern pattern,
+     const uint8_t* IV, uint16_t IVLength,
+     const uint8_t* keyId, const uint16_t keyIdLength,
+-    uint32_t initWithLast15);
++    uint32_t initWithLast15,
++    uint8_t* streamInfo,
++    uint16_t streamInfoLength);
+ #endif // __cplusplus
+ 
+ 
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index b15bff8..c886bfa 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -401,7 +401,9 @@ private:
+         uint32_t Decrypt(uint8_t* encryptedData, uint32_t encryptedDataLength,
+             const ::SampleInfo* sampleInfo,
+             uint32_t initWithLast15,
+-            const ::MediaProperties* properties)
++            const ::MediaProperties* properties,
++            const uint8_t* streamInfo /* = NULL */,
++            const uint16_t streamInfoLength /* = 0 */)
+         {
+             int ret = 0;
+ 
+@@ -446,6 +448,7 @@ private:
+                 SetEncScheme(static_cast<uint8_t>(encScheme));
+                 SetEncPattern(pattern.encrypted_blocks,pattern.clear_blocks);
+                 InitWithLast15(initWithLast15);
++                SetStreamInfo(streamInfoLength, streamInfo);
+                 if(properties != nullptr) {
+                     SetMediaProperties(properties->height, properties->width, properties->media_type);
+                 }
+@@ -603,6 +606,12 @@ public:
+ 
+         _session->ResetOutputProtection();
+     }
++    inline void SetParameter(const std::string& name, const std::string& value)
++    {
++        ASSERT (_session != nullptr);
++
++        _session->SetParameter(name, value);
++    }
+     inline int Remove()
+     {
+ 
+@@ -627,7 +636,8 @@ public:
+     uint32_t Decrypt(uint8_t* encryptedData, const uint32_t encryptedDataLength,
+         const ::SampleInfo* sampleInfo,
+         uint32_t initWithLast15,
+-        const ::MediaProperties* properties)
++        const ::MediaProperties* properties,
++        const uint8_t* streamInfo, const uint16_t streamInfoLength)
+     {
+         uint32_t result = OpenCDMError::ERROR_INVALID_DECRYPT_BUFFER;
+ 
+@@ -643,7 +653,8 @@ public:
+             result = decryptSession->Decrypt(encryptedData, encryptedDataLength, 
+                 sampleInfo,
+                 initWithLast15,
+-                properties);
++                properties,
++                streamInfo, streamInfoLength);
+             if(result)
+             {
+                 TRACE_L1("Decrypt() failed with return code: %x", result);
+-- 
+2.25.1
+

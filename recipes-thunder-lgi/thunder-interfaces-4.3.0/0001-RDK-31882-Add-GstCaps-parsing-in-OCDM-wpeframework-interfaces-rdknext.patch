@@ -1,0 +1,105 @@
+From 9500ecacc7e3aaab7f0c954cb936ba9403b34c0f Mon Sep 17 00:00:00 2001
+From: Douglas Adler <douglas_adler2@comcast.com>
+Date: Mon, 8 Mar 2021 15:21:56 +0000
+Subject: [PATCH] RDK-31882 : Add GstCaps parsing in OCDM
+
+Reason for change: Amlogic needs to handle Audio data outside the SVP path
+Test Procedure: Verify that CDM module is detecting the stream type
+Risks: None
+
+Signed-off-by: Douglas Adler <douglas_adler2@comcast.com>
+---
+ interfaces/IDRM.h               | 22 ++++++++++++++++++++--
+ interfaces/IContentDecryption.h | 22 +++++++++++++++++++
+
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/interfaces/IDRM.h b/interfaces/IDRM.h
+index 62e3e59..7d7c6b0 100644
+--- a/interfaces/IDRM.h
++++ b/interfaces/IDRM.h
+@@ -311,6 +311,20 @@ public:
+     virtual void OnKeyStatusesUpdated() const = 0;
+ };
+ 
++class ICapsParser {
++public:
++    ICapsParser(void) {}
++    virtual ~ICapsParser(void) {}
++
++    virtual void Parse(const uint8_t* info, uint16_t infoLength) = 0;
++
++    // Get stream video size
++    virtual const uint16_t GetHeight() const = 0;
++    virtual const uint16_t GetWidth() const = 0;
++    // Get stream type
++    virtual const MediaType GetMediaType() const = 0;
++};
++
+ // IMediaKeySession defines the MediaKeySession interface.
+ class IMediaKeySession {
+ public:
+@@ -391,8 +405,12 @@ public:
+         uint8_t* f_pbClearContentOpaque)
+         = 0;
+ 
+-    virtual CDMi_RESULT ResetOutputProtection() { return (CDMi_METHOD_NOT_IMPLEMENTED); }
+-    virtual CDMi_RESULT SetParameter(const std::string& name, const std::string& value) { return (CDMi_METHOD_NOT_IMPLEMENTED); }
++    // These are new methods that might not have been implemented by the 
++    // base implementations. If they are not implemented, the system will
++    // probably not need it, but it will continue to build :-)
++    virtual CDMi_RESULT ResetOutputProtection() {return CDMi_SUCCESS;}
++    virtual CDMi_RESULT SetParameter(const std::string& name, const std::string& value) {return CDMi_SUCCESS;}
++    virtual CDMi_RESULT SetCapsParser(const ICapsParser* parser) { return CDMi_SUCCESS; }
+ };
+ 
+ // IMediaKeySession defines the MediaKeySession interface.
+diff --git a/interfaces/IContentDecryption.h b/interfaces/IContentDecryption.h
+index 721cbb2..f1b4481 100644
+--- a/interfaces/IContentDecryption.h
++++ b/interfaces/IContentDecryption.h
+@@ -73,6 +73,8 @@ namespace Exchange {
+             uint16_t StreamHeight;
+             uint16_t StreamWidth;
+             uint8_t  StreamType;
++            uint16_t StreamInfoLength;
++            uint8_t StreamInfo[2048];
+         };
+ 
+     public:
+@@ -134,6 +136,15 @@ namespace Exchange {
+         {
+             return ((reinterpret_cast<const Administration*>(AdministrationBuffer())->IVLength & 0x80) != 0);
+         }
++        void SetStreamInfo(const uint16_t length, const uint8_t* data)
++        {
++            Administration* admin = reinterpret_cast<Administration*>(AdministrationBuffer());
++            admin->StreamInfoLength = (length > sizeof(Administration::StreamInfo) ? sizeof(Administration::StreamInfo)
++                                                                                   : length);
++            if (data != nullptr) {
++                ::memcpy(admin->StreamInfo, data, admin->StreamInfoLength);
++            }
++        }
+         void SetIV(const uint8_t ivDataLength, const uint8_t ivData[])
+         {
+             Administration* admin = reinterpret_cast<Administration*>(AdministrationBuffer());
+@@ -238,6 +249,16 @@ namespace Exchange {
+             VERIFY(length <= 16);
+             return (length > 0 ? &admin->KeyId[1] : nullptr);
+         }
++        const uint8_t* StreamInfo() const
++        {
++            const Administration* admin = reinterpret_cast<const Administration*>(AdministrationBuffer());
++            return (admin->StreamInfo);
++        }
++        const uint16_t StreamInfoLength() const
++        {
++            const Administration* admin = reinterpret_cast<const Administration*>(AdministrationBuffer());
++            return (admin->StreamInfoLength);
++        }
+     };
+ }
+ }
+-- 
+2.25.1
+

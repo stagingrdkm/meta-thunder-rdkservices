@@ -1,0 +1,33 @@
+diff --git a/Source/CMakeLists.txt b/Source/CMakeLists.txt
+index d60176bf..652541e0 100644
+--- a/Source/CMakeLists.txt
++++ b/Source/CMakeLists.txt
+@@ -91,13 +91,7 @@ if(MESSAGING)
+     add_subdirectory(messaging)
+ endif()
+ 
+-if(COM)
+-    add_subdirectory(com)
+-endif()
+ 
+-if(PLUGINS)
+-    add_subdirectory(plugins)
+-endif()
+ 
+ if(PROCESS)
+     add_subdirectory(WPEProcess)
+@@ -107,4 +101,12 @@ if(EXECUTABLE)
+     add_subdirectory(WPEFramework)
+ endif()
+ 
+-add_subdirectory(extensions)
+\ No newline at end of file
++add_subdirectory(extensions)
++
++if(COM)
++    add_subdirectory(com)
++endif()
++
++if(PLUGINS)
++    add_subdirectory(plugins)
++endif()

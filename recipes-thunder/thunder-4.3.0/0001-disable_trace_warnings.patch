@@ -1,0 +1,12 @@
+diff --git a/Source/core/Trace.h b/Source/core/Trace.h
+index 65e8f69e..b8864d3c 100644
+--- a/Source/core/Trace.h
++++ b/Source/core/Trace.h
+@@ -73,7 +73,6 @@ namespace WPEFramework {
+ 
+ #if defined(CORE_TRACE_NOT_ALLOWED) && !defined(__WINDOWS__) 
+ #define TRACE_FORMATTING(fmt, ...)                                                                            \
+-    _Pragma ("GCC warning \"Using 'TRACE_Lx' outside of Thunder Core is deprecated\"")                        \
+     TRACE_FORMATTING_IMPL(fmt, ##__VA_ARGS__)
+ #else
+ #define TRACE_FORMATTING(fmt, ...)                                                                            \

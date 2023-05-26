@@ -1,0 +1,28 @@
+From 266d0cb67cc7227068d2cebef832b4c0d70b0f2f Mon Sep 17 00:00:00 2001
+From: Marcin Mielczarczyk <marcin.mielczarczyk@redembedded.com>
+Date: Sat, 10 Sep 2022 21:46:13 +0200
+Subject: [PATCH] [ARRISEOS-42363] Don't flush libraries in Dispatch
+
+When flush of libWPEFrameworkWebKitBrowserImpl.so library happens in
+Dispatch() there are cases where the other thread is still using it
+which leads to core dump of WPEProcess.
+---
+ Source/WPEProcess/Process.cpp | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/Source/WPEProcess/Process.cpp b/Source/WPEProcess/Process.cpp
+index a4e47c6b..38d7b9ef 100644
+--- a/Source/WPEProcess/Process.cpp
++++ b/Source/WPEProcess/Process.cpp
+@@ -82,8 +82,6 @@ namespace Process {
+ 
+         public:
+             void Dispatch() {
+-                Core::ServiceAdministrator::Instance().FlushLibraries();
+-
+                 uint32_t instances = Core::ServiceAdministrator::Instance().Instances();
+ 
+                 if (instances != 0) {
+-- 
+2.25.1
+

@@ -1,0 +1,973 @@
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Mon, 8 May 2023 15:53:48 +0200
+
+Platform vault implementation; see design here:
+https://wikiprojects.upc.biz/display/CTOM/iCrypto+for+AVPKv5
+
+OpenSSL is used for encryption/decryption of the data,
+Nexus OTP encryption is used for storing AES keys on the flash.
+
+---
+ .../Icrypto-nexus/Administrator.h             |   8 +-
+ .../Icrypto-nexus/CMakeLists.txt              |   9 +
+ .../Icrypto-nexus/Implementation.cpp          |  35 +-
+ .../implementation/Icrypto-nexus/Platform.h   |   4 +
+ .../PlatformSecurity/KeyCache.hpp             | 101 +++++
+ .../PlatformSecurity/PlatformAES.cpp          | 279 ++++++++++++
+ .../PlatformSecurity/PlatformVault.cpp        | 416 ++++++++++++++++++
+ 7 files changed, 842 insertions(+), 10 deletions(-)
+ create mode 100644 Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/KeyCache.hpp
+ create mode 100644 Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/PlatformAES.cpp
+ create mode 100644 Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/PlatformVault.cpp
+
+Index: git/Source/cryptography/implementation/Icrypto-nexus/Administrator.h
+===================================================================
+--- git.orig/Source/cryptography/implementation/Icrypto-nexus/Administrator.h
++++ git/Source/cryptography/implementation/Icrypto-nexus/Administrator.h
+@@ -90,6 +90,11 @@ template<cryptographyvault VaultID, type
+ using AESFactoryType = FactoryType<Platform::ICipherImplementation, VaultID, IMPL, const aes_mode, const uint32_t /* secret id */>;
+ using IAESFactory = IFactoryType<Platform::ICipherImplementation, const aes_mode, const uint32_t /* secret id */>;
+ 
++namespace Platform { namespace Common { class KeyCache; }};
++template<cryptographyvault VaultID, typename IMPL>
++using AESWithKeyCacheFactoryType = FactoryType<Platform::ICipherImplementation, VaultID, IMPL, const aes_mode, const uint32_t /* key id */, const Platform::Common::KeyCache*>;
++using IAESWithKeyCacheFactory = IFactoryType<Platform::ICipherImplementation, const aes_mode, const uint32_t /* key id */, const Platform::Common::KeyCache*>;
++
+ template<cryptographyvault VaultID, typename IMPL>
+ using DHFactoryType = FactoryType<Platform::IDiffieHellmanImplementation, VaultID, IMPL>;
+ using IDHFactory = IFactoryType<Platform::IDiffieHellmanImplementation>;
+@@ -169,7 +174,8 @@ private:
+         , FactoryMap<IVaultFactory>
+         , FactoryMap<IHMACFactory>
+         , FactoryMap<IAESFactory>
+-        , FactoryMap<IDHFactory> { } _factories;
++        , FactoryMap<IDHFactory>
++        , FactoryMap<IAESWithKeyCacheFactory> { } _factories;
+ 
+     cryptographyvault _defaultId;
+ };
+Index: git/Source/cryptography/implementation/Icrypto-nexus/CMakeLists.txt
+===================================================================
+--- git.orig/Source/cryptography/implementation/Icrypto-nexus/CMakeLists.txt
++++ git/Source/cryptography/implementation/Icrypto-nexus/CMakeLists.txt
+@@ -47,6 +47,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_C
+ 
+ find_package(NEXUS REQUIRED)
+ find_package(NXCLIENT REQUIRED)
++find_package(OpenSSL REQUIRED)
+ 
+ add_library(${TARGET} STATIC
+     Nexus.cpp
+@@ -60,6 +61,8 @@ add_library(${TARGET} STATIC
+     SageNetflix/NetflixSecurity.cpp
+     CobaltSecurity/Vault.cpp
+     CobaltSecurity/HMAC.cpp
++    PlatformSecurity/PlatformVault.cpp
++    PlatformSecurity/PlatformAES.cpp
+ )
+ 
+ target_link_libraries(${TARGET}
+@@ -81,3 +84,9 @@ target_include_directories(${TARGET}
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
+         $<BUILD_INTERFACE:${CMAKE_SYSROOT}${CMAKE_INSTALL_PREFIX}/include/tl>)
++
++target_link_libraries(${TARGET}
++    PUBLIC
++        OpenSSL::SSL
++        OpenSSL::Crypto
++)
+Index: git/Source/cryptography/implementation/Icrypto-nexus/Implementation.cpp
+===================================================================
+--- git.orig/Source/cryptography/implementation/Icrypto-nexus/Implementation.cpp
++++ git/Source/cryptography/implementation/Icrypto-nexus/Implementation.cpp
+@@ -175,22 +175,39 @@ uint8_t hash_calculate(struct HashImplem
+ // Ciphers
+ //
+ 
+-struct CipherImplementation* cipher_create_aes(const VaultImplementation* vault, const aes_mode mode, const uint32_t key_id)
++struct CipherImplementation *cipher_create_aes(const VaultImplementation *vault, const aes_mode mode, const uint32_t key_id)
+ {
+     ASSERT(vault != nullptr);
+ 
+-    Platform::ICipherImplementation* impl = nullptr;
++    Platform::ICipherImplementation *impl = nullptr;
+ 
+-    IAESFactory* factory = Administrator::Instance().Factory<IAESFactory>(Platform::Implementation(vault)->Id());
+-    if (factory != nullptr) {
+-        impl = factory->Create(mode, key_id);
+-        if (impl == nullptr) {
+-            TRACE_L1(_T("AES mode %i not supported on vault %i"), mode, Platform::Implementation(vault)->Id());
++    auto vaultImpl = Platform::Implementation(vault);
++    const auto vaultId = vaultImpl->Id();
++
++    if (vaultId == CRYPTOGRAPHY_VAULT_PLATFORM) {
++        IAESWithKeyCacheFactory *factory_with_keycache = Administrator::Instance().Factory<IAESWithKeyCacheFactory>(vaultId);
++        if (factory_with_keycache != nullptr) {
++            auto *keyCache = vaultImpl->GetKeyCache();
++            printf("cipher_create_aes keyCache: %p\n", keyCache);
++            impl = factory_with_keycache->Create(mode, key_id, keyCache);
++            if (impl == nullptr) {
++                TRACE_L1(_T("AES mode %i not supported on vault %i"), mode, Platform::Implementation(vault)->Id());
++            }
++        } else {
++            TRACE_L1(_T("AES cipher not supported on vault %i"), Platform::Implementation(vault)->Id());
+         }
+     } else {
+-        TRACE_L1(_T("AES cipher not supported on vault %i"), Platform::Implementation(vault)->Id());
++        IAESFactory *factory = Administrator::Instance().Factory<IAESFactory>(vaultId);
++        if (factory != nullptr) {
++            impl = factory->Create(mode, key_id);
++        } else {
++            TRACE_L1(_T("AES cipher not supported on vault %i"), Platform::Implementation(vault)->Id());
++        }
+     }
+ 
++    if (impl == nullptr) {
++        TRACE_L1(_T("AES mode %i not supported on vault %i"), mode, vaultId);
++    }
+     return (Handle(impl));
+ }
+ 
+Index: git/Source/cryptography/implementation/Icrypto-nexus/Platform.h
+===================================================================
+--- git.orig/Source/cryptography/implementation/Icrypto-nexus/Platform.h
++++ git/Source/cryptography/implementation/Icrypto-nexus/Platform.h
+@@ -57,6 +57,8 @@ namespace Implementation {
+ 
+ namespace Platform {
+ 
++    namespace Common { class KeyCache; };
++
+     struct IVaultImplementation {
+         virtual ~IVaultImplementation() { }
+ 
+@@ -75,6 +77,8 @@ namespace Platform {
+         virtual uint32_t Create(const char locator[],const key_type keyType,uint32_t* id) = 0;
+         virtual uint32_t Flush() = 0;
+ 
++        // get the KeyCache, if the implementation supports it
++        virtual const Common::KeyCache* GetKeyCache() const { return nullptr;} ;
+     };
+ 
+     inline VaultImplementation* Handle(IVaultImplementation* impl) { return reinterpret_cast<VaultImplementation*>(impl); }
+Index: git/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/KeyCache.hpp
+===================================================================
+--- /dev/null
++++ git/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/KeyCache.hpp
+@@ -0,0 +1,101 @@
++#pragma once
++
++#include <map>
++#include <stdint.h>
++
++#include <sys/random.h>
++#include <chrono>
++#include <memory>
++#include <tuple>
++#include <thread>
++
++#include <openssl/crypto.h>
++
++namespace Implementation
++{
++    namespace Platform
++    {
++        namespace Common
++        {
++            class KeyCache
++            {
++                std::map<uint32_t, std::tuple<std::unique_ptr<uint8_t[]>, size_t>> keys;
++                uint32_t nextKeyId = 1;
++
++            public:
++
++                KeyCache() {}
++
++                ~KeyCache()
++                {
++                    clear();
++                }
++                KeyCache(const KeyCache &) = delete;
++                KeyCache &operator=(const KeyCache) = delete;
++
++                void clear()
++                {
++                    for (auto &entry : keys)
++                    {
++                        OPENSSL_cleanse(std::get<0>(entry.second).get(), std::get<1>(entry.second));
++                    }
++                    keys.clear();
++                }
++
++                std::tuple<const uint8_t *, size_t> GetKey(uint32_t key_id) const
++                {
++                    auto it = keys.find(key_id);
++                    if (it == keys.end())
++                    {
++                        return std::make_tuple(nullptr, 0);
++                    }
++                    else
++                    {
++                        return std::make_tuple(std::get<0>(it->second).get(), std::get<1>(it->second));
++                    }
++                }
++
++                /* returns 0 on failure, key_id otherwise */
++                uint32_t PutKey(std::unique_ptr<uint8_t[]> key, size_t len)
++                {
++                    if (nextKeyId == 0)
++                    {
++                        // wrapped around!
++                        return 0;
++                    }
++                    uint32_t id = nextKeyId++;
++                    keys[id] = std::make_tuple(std::move(key), len);
++                    return id;
++                }
++
++                std::unique_ptr<uint8_t[]> GenKey(size_t len)
++                {
++                    std::unique_ptr<uint8_t[]> ret = std::unique_ptr<uint8_t[]>(new uint8_t[len]);
++                    auto key = ret.get();
++
++                    using namespace std::chrono;
++
++                    const auto start = steady_clock::now();
++                    const auto maxtime = seconds(15);
++                    size_t retrieved = 0;
++                    ssize_t r;
++                    do
++                    {
++                        r = getrandom(key + retrieved, len - retrieved, GRND_RANDOM | GRND_NONBLOCK);
++                        if (r != -1)
++                        {
++                            retrieved += r;
++                        }
++                        if (retrieved < len)
++                            std::this_thread::sleep_for(milliseconds(250));
++                    } while (retrieved < len && (r > -1 || errno == EAGAIN || errno == EINTR) && steady_clock::now() - start < maxtime);
++
++                    if (retrieved != len)
++                        ret.reset();
++
++                    return ret;
++                }
++            };
++        }
++    }
++}
+\ No newline at end of file
+Index: git/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/PlatformAES.cpp
+===================================================================
+--- /dev/null
++++ git/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/PlatformAES.cpp
+@@ -0,0 +1,279 @@
++#include "../../../Module.h"
++
++#include "../Administrator.h"
++#include "../Platform.h"
++
++#include "KeyCache.hpp"
++
++#include <core/core.h>
++#include <cryptalgo/cryptalgo.h>
++
++#include <openssl/hmac.h>
++#include <openssl/sha.h>
++#include <openssl/evp.h>
++
++#include <limits.h>
++#include <stdint.h>
++
++#include <cipher_implementation.h>
++#include <openssl/err.h>
++
++#define LOG_ERROR(X)                                                            \
++    {                                                                           \
++        printf("ERROR: %s at %s %s:%d\n", X, __FILE__, __FUNCTION__, __LINE__); \
++    }
++
++namespace Implementation
++{
++    class OpenSSLAESImpl
++    {
++    public:
++        OpenSSLAESImpl(const OpenSSLAESImpl &) = delete;
++        OpenSSLAESImpl &operator=(const OpenSSLAESImpl) = delete;
++        OpenSSLAESImpl() = delete;
++
++        OpenSSLAESImpl(const EVP_CIPHER *cipher, const uint8_t *keyData, const uint8_t keyLength, const uint8_t ivLength)
++            : _context(nullptr), _cipher(cipher), _keyBuf(keyData), _keyLength(keyLength), _ivLength(ivLength)
++        {
++            ASSERT(cipher != nullptr);
++            ASSERT(ivLength != 0);
++            ASSERT(keyLength != 0);
++            ASSERT(keyData != 0);
++
++            _context = EVP_CIPHER_CTX_new();
++            ASSERT(_context != nullptr);
++        }
++
++        ~OpenSSLAESImpl() {
++            if (_context != nullptr) {
++                EVP_CIPHER_CTX_free(_context);
++            }
++        }
++
++        int32_t Encrypt(const uint8_t ivLength, const uint8_t iv[],
++                        const uint32_t inputLength, const uint8_t input[],
++                        const uint32_t maxOutputLength, uint8_t output[])
++        {
++            return (Operation(true, ivLength, iv, inputLength, input, maxOutputLength, output));
++        }
++
++        int32_t Decrypt(const uint8_t ivLength, const uint8_t iv[],
++                        const uint32_t inputLength, const uint8_t input[],
++                        const uint32_t maxOutputLength, uint8_t output[])
++        {
++            return (Operation(false, ivLength, iv, inputLength, input, maxOutputLength, output));
++        }
++
++        int32_t Operation(bool encrypt,
++                          const uint8_t ivLength, const uint8_t iv[],
++                          const uint32_t inputLength, const uint8_t input[],
++                          const uint32_t maxOutputLength, uint8_t output[])
++        {
++            int32_t result = 0;
++
++            ASSERT(input != nullptr);
++            ASSERT(inputLength != 0);
++
++            if (ivLength != _ivLength)
++            {
++                TRACE_L1(_T("Invalid IV length! [%i]"), ivLength);
++            }
++            else if (maxOutputLength < inputLength)
++            {
++                // Note: Pitfall, AES CBC/ECB will use padding
++                TRACE_L1(_T("Too small output buffer, expected: %i bytes"), inputLength);
++                result = (-inputLength);
++            }
++            else
++            {
++                int len = 0;
++                int initResult = EVP_CipherInit(_context, _cipher, _keyBuf, iv, encrypt);
++                if (initResult == 0)
++                {
++                    TRACE_L1(_T("EVP_CipherInit_ex() failed"));
++                }
++                else
++                {
++                    if (EVP_CipherUpdate(_context, output, &len, input, inputLength) == 0)
++                    {
++                        TRACE_L1(_T("EVP_CipherUpdate() failed"));
++                    }
++                    else
++                    {
++                        result = len;
++                        // Note: EVP_CipherFinal_ex() can still write to the output buffer!
++                        // EVP_CipherFinal_ex() returns 0 for a decryption failure or 1 for success. (https://www.openssl.org/docs/man3.1/man3/EVP_CipherFinal_ex.html)
++                        if (EVP_CipherFinal_ex(_context, (output + len), &len) == 0)
++                        {
++                            char buff[1024];
++                            ERR_error_string(ERR_get_error(), buff);
++                            TRACE_L1(_T("EVP_CipherFinal_ex() failed"));
++                            fprintf(stderr, "EVP_CipherFinal_ex() failed: %s\n", buff);
++                            result = 0;
++                        }
++                        else
++                        {
++                            result += len;
++                            TRACE_L2(_T("Completed %scryption, input size: %i, output size: %i"),
++                                     (encrypt ? "en" : "de"), inputLength, result);
++                        }
++                    }
++                }
++            }
++
++            return (result);
++        }
++
++    private:
++        EVP_CIPHER_CTX *_context;
++        const EVP_CIPHER *_cipher;
++        const uint8_t *_keyBuf;
++        uint8_t _keyLength;
++        uint8_t _ivLength;
++    };
++
++    const EVP_CIPHER *AESCipher(const uint8_t keySize, const aes_mode mode)
++    {
++        const EVP_CIPHER *cipher = nullptr;
++
++        typedef const EVP_CIPHER *(*cipherfn)(void);
++
++        static const cipherfn cipherTable[][7] = {
++            {EVP_aes_128_ecb, EVP_aes_128_cbc, EVP_aes_128_ofb, EVP_aes_128_cfb1, EVP_aes_128_cfb8, EVP_aes_128_cfb128, EVP_aes_128_ctr},
++            {EVP_aes_192_ecb, EVP_aes_192_cbc, EVP_aes_192_ofb, EVP_aes_192_cfb1, EVP_aes_192_cfb8, EVP_aes_192_cfb128, EVP_aes_192_ctr},
++            {EVP_aes_256_ecb, EVP_aes_256_cbc, EVP_aes_256_ofb, EVP_aes_256_cfb1, EVP_aes_256_cfb8, EVP_aes_256_cfb128, EVP_aes_256_ctr}};
++
++        uint8_t idx = -1;
++        switch (mode)
++        {
++        case aes_mode::AES_MODE_ECB:
++            idx = 0;
++            break;
++        case aes_mode::AES_MODE_CBC:
++            idx = 1;
++            break;
++        case aes_mode::AES_MODE_OFB:
++            idx = 2;
++            break;
++        case aes_mode::AES_MODE_CFB1:
++            idx = 3;
++            break;
++        case aes_mode::AES_MODE_CFB8:
++            idx = 4;
++            break;
++        case aes_mode::AES_MODE_CFB128:
++            idx = 5;
++            break;
++        case aes_mode::AES_MODE_CTR:
++            idx = 6;
++            break;
++        default:
++            TRACE_L1(_T("Unsupported AES cipher block mode %i"), mode);
++        }
++
++        if (idx != UCHAR_MAX)
++        {
++            if (keySize == 16)
++            {
++                cipher = cipherTable[0][idx]();
++            }
++            else if (keySize == 24)
++            {
++                cipher = cipherTable[1][idx]();
++            }
++            else if (keySize == 32)
++            {
++                cipher = cipherTable[2][idx]();
++            }
++            else
++            {
++                TRACE_L1(_T("Unsupported AES key size: %i bits"), (keySize * 8));
++            }
++        }
++
++        return (cipher);
++    }
++
++    namespace Platform
++    {
++        namespace Common
++        {
++            class PlatformAESCBCCipher : public Platform::ICipherImplementation
++            {
++                const KeyCache* keyCache;
++                uint32_t keyId;
++                const uint8_t *keyData;
++                size_t keyDataLen;
++                const EVP_CIPHER *asCipher;
++                std::unique_ptr<OpenSSLAESImpl> cipherImpl;
++
++                PlatformAESCBCCipher(const PlatformAESCBCCipher &) = delete;
++                PlatformAESCBCCipher &operator=(const PlatformAESCBCCipher) = delete;
++                PlatformAESCBCCipher() = delete;
++
++            public:
++                PlatformAESCBCCipher(const KeyCache* keyCache, const uint32_t keyId)
++                    : keyCache(keyCache), keyId(keyId)
++                {
++                    auto key = keyCache->GetKey(keyId);
++                    keyData = std::get<0>(key);
++                    keyDataLen = std::get<1>(key);
++                    if (keyData == nullptr)
++                    {
++                        LOG_ERROR("no key data in KeyCache")
++                        // we're in a constructor invoked from 'factory' ... not many options other than throwing
++                        throw std::runtime_error("no key data in KeyCache");
++                    }
++
++                    asCipher = AESCipher(keyDataLen, aes_mode::AES_MODE_CBC);
++                    ASSERT(asCipher != nullptr);
++
++                    cipherImpl = std::unique_ptr<OpenSSLAESImpl>(new OpenSSLAESImpl(asCipher, keyData, keyDataLen, 16));
++                }
++
++                ~PlatformAESCBCCipher() override = default;
++
++                uint32_t Encrypt(const uint8_t ivLength, const uint8_t iv[],
++                                 const uint32_t inputLength, const uint8_t input[],
++                                 const uint32_t maxOutputLength, uint8_t output[]) const override
++                {
++                    return cipherImpl->Encrypt(ivLength, iv,
++                                               inputLength, input,
++                                               maxOutputLength, output);
++                }
++
++                uint32_t Decrypt(const uint8_t ivLength, const uint8_t iv[],
++                                 const uint32_t inputLength, const uint8_t input[],
++                                 const uint32_t maxOutputLength, uint8_t output[]) const override
++                {
++                    return cipherImpl->Decrypt(ivLength, iv,
++                                               inputLength, input,
++                                               maxOutputLength, output);
++                }
++            };
++
++            class AESFactory : public AESWithKeyCacheFactoryType<CRYPTOGRAPHY_VAULT_PLATFORM, PlatformAESCBCCipher>
++            {
++                Platform::ICipherImplementation *Create(const aes_mode mode, const uint32_t key_id, const KeyCache* keyCache) override
++                {
++                    Platform::ICipherImplementation *impl = nullptr;
++
++                    if (mode == aes_mode::AES_MODE_CBC)
++                    {
++                        impl = new PlatformAESCBCCipher(keyCache, key_id);
++                        ASSERT(impl != nullptr);
++                    }
++                    else
++                    {
++                        TRACE_L1(_T("AES block cipher mode not supported [%i]"), mode);
++                    }
++
++                    return (impl);
++                }
++            };
++        }
++
++        static PlatformRegistrationType<IAESWithKeyCacheFactory, Common::AESFactory> registration;
++
++    }
++}
+\ No newline at end of file
+Index: git/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/PlatformVault.cpp
+===================================================================
+--- /dev/null
++++ git/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/PlatformVault.cpp
+@@ -0,0 +1,423 @@
++/*
++ * Copyright (c) 2023, LIBERTY GLOBAL all rights reserved.
++ */
++
++#include <cstring>
++#include <nexus_config.h>
++#include <unistd.h>
++
++#include <tuple>
++
++#include "../../../Module.h"
++#include "../Administrator.h"
++#include "../Nexus.h"
++
++#include "nexus_platform.h"
++#include "nexus_memory.h"
++#include "drm_metadata.h"
++#include "drm_common.h"
++#include "drm_secure_store.h"
++
++#include "drm_common_swcrypto.h"
++
++#include "KeyCache.hpp"
++
++#include <sys/stat.h>
++
++#include <fstream>
++
++#include <openssl/crypto.h>
++
++#define LOG_ERROR(X)                                                                     \
++    {                                                                                    \
++        fprintf(stderr, "ERROR: %s at %s %s:%d\n", X, __FILE__, __FUNCTION__, __LINE__); \
++    }
++
++namespace Implementation
++{
++
++    namespace Platform
++    {
++
++        namespace Common
++        {
++
++            class Vault : public Platform::IVaultImplementation
++            {
++            private:
++                Vault(const Vault &) = delete;
++                Vault &operator=(const Vault) = delete;
++                Vault()
++                {
++                    if (Nexus::Initialized() == true)
++                    {
++                        TRACE_L1(_T("Platform Vault: NEXUS Initialized"));
++                    }
++                    else
++                    {
++                        TRACE_L1(_T("Platform Vault: could not initialize Nexus"));
++                        LOG_ERROR("Platform Vault: could not initialize Nexus")
++                        throw std::runtime_error("Platform Vault: could not initialize Nexus");
++                    }
++
++                    DrmRC rc = Drm_Success;
++                    DrmCommonInit_t commonDrmInit;
++                    BKNI_Memset(&commonDrmInit, 0x00, sizeof(DrmCommonInit_t));
++                    rc = DRM_Common_BasicInitialize(&commonDrmInit);
++                    if (rc != Drm_Success)
++                    {
++                        LOG_ERROR("DRM_Common_BasicInitialize() failed");
++                        throw std::runtime_error("DRM_Common_BasicInitialize() failed");
++                    }
++                }
++
++                ~Vault()
++                {
++                    Flush();
++                    DRM_Common_Finalize();
++                }
++
++                enum KeyType : uint8_t
++                {
++                    AES128_OTP = 1,  // AES 128 bit key encrypted using OTP key
++                    AES256_OTP = 2,  // AES 256 bit key encrypted using OTP key
++                    HMAC128_OTP = 3, // HMAC 128 bit key encrypted using OTP key
++                    HMAC160_OTP = 4, // HMAC 160 bit key encrypted using OTP key
++                    HMAC256_OTP = 5  // HMAC 256 bit key encrypted using OTP key
++                };
++
++                struct KeyImage
++                {
++                    uint8_t headerVersion;
++                    KeyType keyType;
++                    uint16_t keyLen;
++                    std::unique_ptr<uint8_t[]> keyData;
++                    ~KeyImage()
++                    {
++                        if (keyData)
++                        {
++                            OPENSSL_cleanse(keyData.get(), keyLen);
++                        }
++                    }
++
++                    void dump()
++                    {
++                        printf("KeyImage: headerVersion=%d keyType=%d keyLen=%d keyData null? %d\n", headerVersion, keyType, keyLen, bool(keyData));
++                    }
++                };
++
++                std::unique_ptr<KeyImage> loadKeyData(const char *locator)
++                {
++                    std::ifstream input(locator, std::ios::binary);
++                    char buff[4];
++                    std::unique_ptr<KeyImage> ret{new KeyImage};
++                    auto &keyImage = *(ret.get());
++                    if (input && input.read(buff, 4))
++                    {
++                        keyImage.headerVersion = buff[0];
++                        keyImage.keyType = (KeyType)buff[1];
++                        keyImage.keyLen = buff[2] << 8 | buff[3];
++                        keyImage.keyData.reset(new uint8_t[keyImage.keyLen]);
++                        auto gc = input.read(reinterpret_cast<char *>(keyImage.keyData.get()), keyImage.keyLen).gcount();
++                        auto eof = input.peek() == std::ifstream::traits_type::eof();
++                        if (gc == keyImage.keyLen && eof)
++                        {
++                            return ret;
++                        }
++                    }
++                    return {};
++                }
++
++                bool otpDecrypt(uint8_t *keyData, size_t len)
++                {
++                    return otpOperation(keyData, len, false);
++                }
++
++                bool otpEncrypt(uint8_t *keyData, size_t len)
++                {
++                    return otpOperation(keyData, len, true);
++                }
++
++                bool otpOperation(uint8_t *keyData, size_t len, bool encrypt)
++                {
++                    bool ret = false;
++                    if (len % 16 == 0)
++                    {
++                        /* Allocate a continuous physical address buffer for DMA */
++                        uint8_t *dmaBuf = nullptr;
++                        NEXUS_Memory_Allocate(len, NULL, (void **)&dmaBuf);
++                        if (dmaBuf)
++                        {
++                            auto release = [len](uint8_t *ptr)
++                            {
++                                OPENSSL_cleanse(ptr, len);
++                                NEXUS_Memory_Free(ptr);
++                            };
++                            std::unique_ptr<uint8_t[], decltype(release)> dmaBuffGuard(dmaBuf, release);
++                            memcpy(dmaBuf, keyData, len);
++                            DrmRC rc = DRM_SecureStore_BufferOperation(dmaBuf, len, dmaBuf, DrmDestinationType_eInPlace, encrypt ? DrmCryptoOperation_eEncrypt : DrmCryptoOperation_eDecrypt);
++                            if (rc == Drm_Success)
++                            {
++                                memcpy(keyData, dmaBuf, len);
++                                ret = true;
++                            }
++                            else
++                            {
++                                LOG_ERROR("SecureStore_BufferOperation failed!");
++                            }
++                        }
++                        else
++                        {
++                            LOG_ERROR("failed to NEXUS_Memory_Allocate");
++                        }
++                    }
++                    else
++                    {
++                        LOG_ERROR("data needs to be 16-byte aligned");
++                    }
++                    return ret;
++                }
++
++                std::tuple<std::unique_ptr<uint8_t[]>, size_t> addHeaderAndEncrypt(uint8_t headerVersion, KeyType keyType, std::unique_ptr<uint8_t[]> &newkey, size_t keyLen)
++                {
++                    ASSERT(keyLen < (1 << 16));
++                    std::unique_ptr<uint8_t[]> encrypted_data{new uint8_t[4 + keyLen]};
++                    uint8_t *buff = encrypted_data.get();
++                    buff[0] = headerVersion;
++                    buff[1] = keyType;
++                    buff[2] = keyLen >> 8;
++                    buff[3] = keyLen & 0xFF;
++
++                    std::memcpy(buff + 4, newkey.get(), keyLen);
++
++                    otpEncrypt(buff + 4, keyLen);
++
++                    return std::make_tuple(std::move(encrypted_data), keyLen + 4);
++                }
++
++                bool writeEncryptedKeyFile(const char *locator, std::tuple<std::unique_ptr<uint8_t[]>, size_t> data)
++                {
++                    std::ofstream output(locator, std::ios::binary);
++                    const char *buffer = reinterpret_cast<const char *>(std::get<0>(data).get());
++                    size_t sz = std::get<1>(data);
++
++                    if (output.write(buffer, sz))
++                    {
++                        return true;
++                    }
++                    else
++                    {
++                        // what to do?
++                        return false;
++                    }
++                }
++
++            public:
++                static Vault &Instance()
++                {
++                    static Vault instance;
++                    return (instance);
++                }
++
++                cryptographyvault Id() const override
++                {
++                    return cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM;
++                }
++
++                uint16_t Size(const uint32_t id) const override
++                {
++                    return 0;
++                }
++
++                uint32_t Import(const uint16_t length, const uint8_t data[]) override
++                {
++                    return 0;
++                }
++
++                uint16_t Export(const uint32_t id, const uint16_t max_length, uint8_t data[]) const override
++                {
++                    return 0;
++                }
++
++                uint32_t Set(const uint16_t length, const uint8_t data[]) override
++                {
++                    return 0;
++                }
++
++                uint16_t Get(const uint32_t id, const uint16_t max_length, uint8_t data[]) const override
++                {
++                    return 0;
++                }
++
++                bool Delete(const uint32_t id) override
++                {
++                    return false;
++                }
++
++                uint32_t Exists(const char locator[], bool *result) override
++                {
++                    uint32_t ret = WPEFramework::Core::ERROR_GENERAL;
++                    struct stat statbuf;
++                    int rv = stat(locator, &statbuf);
++                    *result = (rv == 0);
++                    // for 'no such file' still return 'ERROR_NONE' ('result' is still false)
++                    if (rv == 0 || errno == ENOENT)
++                    {
++                        ret = WPEFramework::Core::ERROR_NONE;
++                    }
++                    return ret;
++                }
++
++                uint32_t Load(const char locator[], uint32_t *id) override
++                {
++                    uint32_t result = WPEFramework::Core::ERROR_GENERAL;
++                    // initially set the key to '0' / 'unknown'
++                    *id = 0;
++                    // 1. read
++                    std::unique_ptr<KeyImage> loadedKeyData = loadKeyData(locator);
++                    if (loadedKeyData)
++                    {
++                        if (loadedKeyData->headerVersion == 0x1)
++                        {
++                            if (loadedKeyData->keyType == KeyType::AES256_OTP)
++                            {
++                                if (loadedKeyData->keyLen == 32)
++                                {
++                                    // 2. decrypt
++                                    if (otpDecrypt(loadedKeyData->keyData.get(), loadedKeyData->keyLen))
++                                    {
++                                        // 3. generate key_id
++                                        // 4. put in KeyCache, under key_id
++                                        *id = keyCache.PutKey(std::move(loadedKeyData->keyData), loadedKeyData->keyLen);
++                                        if (*id != 0)
++                                        {
++                                            result = WPEFramework::Core::ERROR_NONE;
++                                        }
++                                        else
++                                        {
++                                            LOG_ERROR("failed to put key in cache!");
++                                        }
++                                    }
++                                    else
++                                    {
++                                        // failed to decrypt the key!
++                                        LOG_ERROR("failed to decrypt the key!")
++                                    }
++                                }
++                                else
++                                {
++                                    // unexpected key data length!
++                                    LOG_ERROR("unexpected key data length!")
++                                }
++                            }
++                            else
++                            {
++                                // unsupported key type!
++                                LOG_ERROR("unsupported key type!")
++                            }
++                        }
++                        else
++                        {
++                            // we do not expect header != 0x1
++                            LOG_ERROR("we do not expect header != 0x1")
++                        }
++                    }
++                    else
++                    {
++                        // failed to load key data!
++                        LOG_ERROR("failed to load key data!")
++                    }
++
++                    return result;
++                }
++
++                uint32_t Create(const char locator[], const key_type keyType, uint32_t *id) override
++                {
++                    uint32_t result = WPEFramework::Core::ERROR_GENERAL;
++                    // initially set the key to '0' / 'unknown'
++                    *id = 0;
++                    bool fileExists = false;
++                    if (WPEFramework::Core::ERROR_NONE == Exists(locator, &fileExists) && !fileExists)
++                    {
++                        std::unique_ptr<uint8_t[]> newkey = keyCache.GenKey(32);
++                        if (newkey)
++                        {
++                            // 2. encrypt key
++                            std::tuple<std::unique_ptr<uint8_t[]>, size_t> encryptedKeyWithHeader = addHeaderAndEncrypt(0x1, KeyType::AES256_OTP, newkey, 32);
++                            if (std::get<0>(encryptedKeyWithHeader) != nullptr)
++                            {
++                                // 3. write key to 'locator' path
++                                if (writeEncryptedKeyFile(locator, std::move(encryptedKeyWithHeader)))
++                                {
++                                    // 4. generate key_id
++                                    // 5. put in KeyCache, under key_id
++                                    *id = keyCache.PutKey(std::move(newkey), 32);
++                                    if (*id != 0)
++                                    {
++                                        result = WPEFramework::Core::ERROR_NONE;
++                                    }
++                                    else
++                                    {
++                                        // failed to put new key - probably out of ids ...
++                                        LOG_ERROR("failed to put new key - probably out of ids ...")
++                                    }
++                                }
++                                else
++                                {
++                                    // failed to write the key!
++                                    LOG_ERROR("failed to write the key!")
++                                }
++                            }
++                            else
++                            {
++                                // failed to encrytp the new key!
++                                LOG_ERROR("failed to encrytp the new key!")
++                            }
++                        }
++                        else
++                        {
++                            // couldn't create key!
++                            LOG_ERROR("couldn't create key!")
++                        }
++                    }
++                    else
++                    {
++                        // file already exists
++                        LOG_ERROR(fileExists ? "file already exists" : "problem checking locator")
++                    }
++
++                    return result;
++                }
++
++                uint32_t Flush() override
++                {
++                    keyCache.clear();
++                    return WPEFramework::Core::ERROR_NONE;
++                }
++
++                const Common::KeyCache* GetKeyCache() const override
++                {
++                    return &keyCache;
++                };
++
++            private:
++
++                Common::KeyCache keyCache;
++            }; // class VaultImplementation
++
++            class VaultFactory : public VaultFactoryType<cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM, Vault>
++            {
++                Platform::IVaultImplementation *Create(const cryptographyvault id) override
++                {
++                    ASSERT(id == cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
++                    return (&Vault::Instance());
++                }
++            }; // class VaultFactory
++
++        } // namespace Common
++
++        static PlatformRegistrationType<IVaultFactory, Common::VaultFactory> registration(false);
++
++    } // namespace Platform
++
++} // namespace Implementation

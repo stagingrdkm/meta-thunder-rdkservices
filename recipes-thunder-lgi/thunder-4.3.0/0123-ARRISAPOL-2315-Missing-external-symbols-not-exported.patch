@@ -1,0 +1,61 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 4 Jan 2022 11:11:44 +0100
+Subject: [PATCH] [ARRISAPOL-2315] Missing external symbols not exported
+
+---
+ Source/com/Messages.h      | 4 ++--
+ Source/core/IPCConnector.h | 2 +-
+ Source/core/Proxy.h        | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Source/com/Messages.h b/Source/com/Messages.h
+index 4dacd3fc..c9e00775 100644
+--- a/Source/com/Messages.h
++++ b/Source/com/Messages.h
+@@ -76,7 +76,7 @@ namespace RPC {
+             }
+         };
+ 
+-        class Input {
++        class EXTERNAL Input {
+         private:
+             Input(const Input&) = delete;
+             Input& operator=(const Input&) = delete;
+@@ -150,7 +150,7 @@ namespace RPC {
+             Frame _data;
+         };
+ 
+-        class Output {
++        class EXTERNAL Output {
+         private:
+             Output(const Output&) = delete;
+             Output& operator=(const Output&) = delete;
+diff --git a/Source/core/IPCConnector.h b/Source/core/IPCConnector.h
+index a00d7e88..56971b4f 100644
+--- a/Source/core/IPCConnector.h
++++ b/Source/core/IPCConnector.h
+@@ -268,7 +268,7 @@ namespace Core {
+     };
+ 
+     template <const uint32_t IDENTIFIER, typename PARAMETERS, typename RESPONSE>
+-    class IPCMessageType : public IIPC {
++    class EXTERNAL IPCMessageType : public IIPC {
+     private:
+         template <typename PACKAGE, const uint32_t REALIDENTIFIER>
+         class RawSerializedType : public Core::IMessage, public IReferenceCounted {
+diff --git a/Source/core/Proxy.h b/Source/core/Proxy.h
+index c5b46f7..86e0e1c 100644
+--- a/Source/core/Proxy.h
++++ b/Source/core/Proxy.h
+@@ -1213,7 +1213,7 @@ namespace Core {
+     };
+ 
+     template <typename PROXYELEMENT>
+-    class ProxyPoolType {
++    class EXTERNAL ProxyPoolType {
+     private:
+         using ContainerElement = ProxyContainerType< ProxyPoolType<PROXYELEMENT>, PROXYELEMENT>;
+         using ContainerList = std::list< std::pair<IProxyContainerElement*, PROXYELEMENT*> >;
+-- 
+2.25.1
+
