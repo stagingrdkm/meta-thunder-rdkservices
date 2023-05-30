@@ -1,0 +1,158 @@
+From 759aa6de354ead501009a37366290a10bc0e8c41 Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Tue, 27 Sep 2022 16:41:26 +0200
+Subject: [PATCH] [JSONRPCLINK] Make sure all resources are cleared at
+ destruction. (#1090)
+
+And while testing we ran into a deadlock (abba) resolved it by moving status retrieval through
+atomic reporting. This locking was part of the Helgrind fixes (by locking) now moving to the
+atomic.
+---
+ Source/core/Proxy.h              |  7 ++++++-
+ Source/core/StreamJSON.h         |  5 ++---
+ Source/websocket/JSONRPCLink.h   |  4 ++++
+ Source/websocket/WebSocketLink.h | 28 +++++++++++-----------------
+ 4 files changed, 23 insertions(+), 21 deletions(-)
+
+diff --git a/Source/core/Proxy.h b/Source/core/Proxy.h
+index 4f8f0267..4e842917 100644
+--- a/Source/core/Proxy.h
++++ b/Source/core/Proxy.h
+@@ -792,7 +792,12 @@ POP_WARNING()
+                 // And did we succeed ?
+                 return (l_Index != PROXY_LIST_ERROR);
+             }
+-
++            void Clear() {
++                for (unsigned int teller = 0; teller != m_Current; teller++) {
++                    m_List[teller]->Release();
++                }
++                m_Current = 0;
++            }
+             void Clear(const unsigned int a_Start, const unsigned int a_Count)
+             {
+                 ASSERT((a_Start + a_Count) <= m_Current);
+diff --git a/Source/core/StreamJSON.h b/Source/core/StreamJSON.h
+index d3b2da9a..97eb5918 100644
+--- a/Source/core/StreamJSON.h
++++ b/Source/core/StreamJSON.h
+@@ -46,6 +46,7 @@ namespace Core {
+             }
+             ~SerializerImpl()
+             {
++                _sendQueue.Clear();
+             }
+ 
+         public:
+@@ -149,7 +150,6 @@ namespace Core {
+                 return (loaded);
+             }
+ 
+-
+         private:
+             inline uint16_t Deserialize(const Core::ProxyType<Core::JSON::IElement>& source, const uint8_t* stream, const uint16_t length) {
+                 return(source->Deserialize(reinterpret_cast<const char*>(stream), length, _offset));
+@@ -234,8 +234,7 @@ PUSH_WARNING(DISABLE_WARNING_THIS_IN_MEMBER_INITIALIZER_LIST)
+         }
+ POP_WARNING()
+ 
+-        virtual ~StreamJSONType()
+-        {
++        virtual ~StreamJSONType() {
+             _channel.Close(Core::infinite);
+         }
+ 
+diff --git a/Source/websocket/JSONRPCLink.h b/Source/websocket/JSONRPCLink.h
+index 9b6c5a08..9921732e 100644
+--- a/Source/websocket/JSONRPCLink.h
++++ b/Source/websocket/JSONRPCLink.h
+@@ -498,6 +498,10 @@ namespace WPEFramework {
+ 			virtual ~LinkType()
+ 			{
+ 				_channel->Unregister(*this);
++
++				for (auto& element : _pendingQueue) {
++					element.second.Abort(element.first);
++				}
+ 			}
+ 
+ 		public:
+diff --git a/Source/websocket/WebSocketLink.h b/Source/websocket/WebSocketLink.h
+index 937aa54f..f891f012 100644
+--- a/Source/websocket/WebSocketLink.h
++++ b/Source/websocket/WebSocketLink.h
+@@ -395,15 +395,11 @@ POP_WARNING()
+         public:
+             bool IsOpen() const
+             {
+-                Core::SafeSyncType<Core::CriticalSection> lock(_adminLock);
+-
+-                return ((ACTUALLINK::IsOpen() == true) && ((_state & SUSPENDED) == 0));
++                return ((ACTUALLINK::IsOpen() == true) && ((State() & SUSPENDED) == 0));
+             }
+             bool IsSuspended() const
+             {
+-                Core::SafeSyncType<Core::CriticalSection> lock(_adminLock);
+-
+-                return ((ACTUALLINK::IsSuspended() == true) || ((_state & SUSPENDED) != 0));
++                return ((ACTUALLINK::IsSuspended() == true) || ((State() & SUSPENDED) != 0));
+             }
+             bool IsClosed() const
+             {
+@@ -411,21 +407,15 @@ POP_WARNING()
+             }
+             bool IsWebServer() const
+             {
+-                Core::SafeSyncType<Core::CriticalSection> lock(_adminLock);
+-
+-                return ((_state & WEBSERVER) != 0);
++                return ((State() & WEBSERVER) != 0);
+             }
+             bool IsUpgrading() const
+             {
+-                Core::SafeSyncType<Core::CriticalSection> lock(_adminLock);
+-
+-                return ((_state & UPGRADING) != 0);
++                return ((State() & UPGRADING) != 0);
+             }
+             bool IsWebSocket() const
+             {
+-                Core::SafeSyncType<Core::CriticalSection> lock(_adminLock);
+-
+-                return ((_state & WEBSOCKET) != 0);
++                return ((State() & WEBSOCKET) != 0);
+             }
+             bool IsCompleted() const
+             {
+@@ -517,7 +507,7 @@ POP_WARNING()
+                 _adminLock.Lock();
+ 
+                 if (IsSuspended() == false) {
+-                    if ((_state & WEBSOCKET) != 0) {
++                    if ((State() & WEBSOCKET) != 0) {
+                         // Send out a close message
+                         // TODO: Creat a message we can SEND
+                     }
+@@ -703,6 +693,10 @@ POP_WARNING()
+             }
+ 
+         private:
++            inline uint16_t State() const
++            {
++                return (_state.load(Core::memory_order::memory_order_relaxed));
++            }
+             uint32_t CheckForClose(uint32_t waitTime)
+             {
+                 uint32_t result = 0;
+@@ -906,7 +900,7 @@ POP_WARNING()
+             WebSocket::Protocol _handler;
+             ParentClass& _parent;
+             mutable Core::CriticalSection _adminLock;
+-            uint8_t _state;
++            std::atomic<uint8_t> _state;
+             SerializerImpl _serializerImpl;
+             DeserializerImpl _deserialiserImpl;
+             string _path;
+-- 
+2.25.1
+
