@@ -32,6 +32,9 @@ SRC_URI += " \
            file://activationevent.patch \
 "
 
+# backport from 4.3
+SRC_URI += "file://0001-JSONRPCLINK-Make-sure-all-resources-are-cleared-at-d.patch"
+
 inherit systemd update-rc.d python3native
 
 WPEFRAMEWORK_PERSISTENT_PATH = "/opt/persistent/rdkservices"
