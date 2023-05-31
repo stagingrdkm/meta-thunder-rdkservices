@@ -11,6 +11,7 @@ SRC_URI += "file://0110-OMWAPPI-910-Increase-subsamples-limit-for-4k-content.pat
 SRC_URI += "file://0111-ONEM-29742-setParameter-for-ISession.patch"
 SRC_URI += "file://0007-ONEM-24354-Clear-content-of-buffers-on-deinit.patch"
 SRC_URI += "file://0113-OMWAPPI-1794-JDolbyOutput.diffcode"
+SRC_URI += "file://0111-ARRISAPP-394-add_STEREO_SURROUND_MAT_FOLLOW-th4.patch"
 
 require thunder-interfaces-4.1.0/interfaces.inc
 

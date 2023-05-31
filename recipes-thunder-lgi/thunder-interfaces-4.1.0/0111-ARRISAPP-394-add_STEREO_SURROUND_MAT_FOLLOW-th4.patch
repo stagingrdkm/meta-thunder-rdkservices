@@ -1,0 +1,17 @@
+ARRISAPP-394 add STEREO_SURROUND_MAT_FOLLOW
+author: tomasz.karczewski@consult.red
+
+diff --git a/interfaces/IDolby.h b/interfaces/IDolby.h
+index 9afe774..614feac 100644
+--- a/interfaces/IDolby.h
++++ b/interfaces/IDolby.h
+@@ -50,7 +50,8 @@ namespace Exchange {
+                 PASSTHRU,
+                 DOLBYDIGITAL,
+                 DOLBYDIGITALPLUS,
+-                SOUNDMODE_AUTO
++                SOUNDMODE_AUTO,
++                STEREO_SURROUND_MAT_FOLLOW
+             };
+ 
+             // @event @uncompliant:extended
