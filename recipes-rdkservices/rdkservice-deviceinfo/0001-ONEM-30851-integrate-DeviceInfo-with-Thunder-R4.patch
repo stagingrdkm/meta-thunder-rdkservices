@@ -1,0 +1,54 @@
+From c62d148b916588a06f6808d1a0d6f26ab85be774 Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Wed, 31 May 2023 16:58:27 +0200
+Subject: [PATCH] [ONEM-30851] integrate DeviceInfo with Thunder R4
+
+---
+ CMakeLists.txt            | 4 ++++
+ DeviceInfo/DeviceInfo.cpp | 7 ++++++-
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 403db220..8d9e1578 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -38,6 +38,10 @@ include(CmakeHelperFunctions)
+ 
+ get_directory_property(SEVICES_DEFINES COMPILE_DEFINITIONS)
+ 
++if (USE_THUNDER_R4)
++    add_definitions(-DUSE_THUNDER_R4)
++endif (USE_THUNDER_R4)
++
+ if(PLUGIN_PACKAGER)
+     add_subdirectory(Packager)
+ endif()
+diff --git a/DeviceInfo/DeviceInfo.cpp b/DeviceInfo/DeviceInfo.cpp
+index d1dc829a..703b99b6 100644
+--- a/DeviceInfo/DeviceInfo.cpp
++++ b/DeviceInfo/DeviceInfo.cpp
+@@ -53,7 +53,8 @@ namespace Plugin {
+         _skipURL = static_cast<uint8_t>(service->WebPrefix().length());
+         _subSystem = service->SubSystems();
+         _service = service;
+-        _systemId = Core::SystemInfo::Instance().Id(Core::SystemInfo::Instance().RawDeviceId(), ~0);
++	// it should be serial number set by manufacturer. RawDeviceId() is based on MAC address and is not public method since 33c3f2d4b37580596dc2a8f0f502d69c55ff6b3e
++        // _systemId = Core::SystemInfo::Instance().Id(Core::SystemInfo::Instance().RawDeviceId(), ~0);
+ 
+         ASSERT(_subSystem != nullptr);
+ 
+@@ -139,7 +140,11 @@ namespace Plugin {
+             // TODO RB: I guess we should do something here to return other info (e.g. time) as well.
+ 
+             result->ContentType = Web::MIMETypes::MIME_JSON;
++#ifndef USE_THUNDER_R4
+             result->Body(Core::proxy_cast<Web::IBody>(response));
++#else
++            result->Body(Core::ProxyType<Web::IBody>(response));
++#endif /* USE_THUNDER_R4 */	    
+         } else {
+             result->ErrorCode = Web::STATUS_BAD_REQUEST;
+             result->Message = _T("Unsupported request for the [DeviceInfo] service.");
+-- 
+2.25.1
+
