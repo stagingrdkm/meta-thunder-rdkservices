@@ -6,6 +6,4 @@ PACKAGES = "packagegroup-thunder-firebolt-rdkservices"
 RDEPENDS_${PN} += "rdkservice-displayinfo"
 RDEPENDS_${PN} += "rdkservice-playerinfo"
 RDEPENDS_${PN} += "rdkservice-hdcpprofile"
-
-# not yet included
-#RDEPENDS_${PN} += "rdkservice-deviceinfo"
+RDEPENDS_${PN} += "rdkservice-deviceinfo"
