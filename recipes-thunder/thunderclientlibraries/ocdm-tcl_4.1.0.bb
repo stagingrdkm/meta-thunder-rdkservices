@@ -5,6 +5,7 @@ PR = "r0"
 require include/thunder_clientlibraries_${PV}.inc
 
 SRC_URI += "file://0001-RDK-29803-SoC-Independent-SVP-support.patch"
+SRC_URI += "file://0001-OMWAPPI-1634-align-metrics-API.patch"
 
 RDEPENDS_${PN}_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'sage_svp', ' gst-svp-ext', '', d)}"
 RDEPENDS_${PN}_append_dunfell = "${@bb.utils.contains('DISTRO_FEATURES', 'rdk_svp', ' gst-svp-ext', '', d)}"

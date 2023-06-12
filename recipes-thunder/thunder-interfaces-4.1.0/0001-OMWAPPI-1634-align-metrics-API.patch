@@ -1,0 +1,114 @@
+From 0aed1d38d149629b5cdad415db4e6d1ac3732458 Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Tue, 23 May 2023 16:06:38 +0200
+Subject: [PATCH] [OMWAPPI-1634] align metrics API
+
+The commit aligns our metrics API implementation to the upstreamed implementation:
+https://github.com/rdkcentral/ThunderInterfaces/commit/4323ddcc765da8414707cff74a4d6529f4b7a331
+
+---
+ interfaces/IDRM.h  | 16 ++++++++++++++++
+ interfaces/IOCDM.h | 22 +++++++++++++++++++---
+ 2 files changed, 35 insertions(+), 3 deletions(-)
+
+diff --git a/interfaces/IDRM.h b/interfaces/IDRM.h
+index e34af19..84eac9b 100644
+--- a/interfaces/IDRM.h
++++ b/interfaces/IDRM.h
+@@ -198,6 +198,10 @@ namespace CDMi {
+ typedef enum {
+     CDMi_SUCCESS = 0,
+     CDMi_S_FALSE = 1,
++    CDMi_MORE_DATA_AVAILABLE = 2,
++    CDMi_INTERFACE_NOT_IMPLEMENTED = 3,
++    CDMi_BUFFER_TOO_SMALL = 4,
++    CDMi_INVALID_ACCESSOR = 0x80000001,
+     CDMi_KEYSYSTEM_NOT_SUPPORTED = 0x80000002,
+     CDMi_INVALID_SESSION = 0x80000003,
+     CDMi_INVALID_DECRYPT_BUFFER = 0x80000004,
+@@ -520,6 +524,18 @@ public:
+         = 0;
+ };
+ 
++struct IMediaSystemMetrics {
++    virtual ~IMediaSystemMetrics() = default;
++
++    virtual CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const = 0;
++};
++
++struct IMediaSessionMetrics {
++    virtual ~IMediaSessionMetrics() = default;
++
++    virtual CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const = 0;
++};
++
+ struct ISystemFactory {
+     virtual ~ISystemFactory() = default;
+     virtual IMediaKeys* Instance() = 0;
+diff --git a/interfaces/IOCDM.h b/interfaces/IOCDM.h
+index 0d1ccd7..f42d34a 100644
+--- a/interfaces/IOCDM.h
++++ b/interfaces/IOCDM.h
+@@ -19,26 +19,29 @@
+  
+ #pragma once
+ 
+-
+ #include "Module.h"
+ 
+-
+ namespace WPEFramework {
+ namespace Exchange {
+ 
+-
+ enum OCDM_RESULT : uint32_t {
+     OCDM_SUCCESS = 0,
+     OCDM_S_FALSE = 1,
++    OCDM_MORE_DATA_AVAILABLE = 2,
++    OCDM_INTERFACE_NOT_IMPLEMENTED = 3,
++    OCDM_BUFFER_TOO_SMALL = 4,
++    OCDM_INVALID_ACCESSOR = 0x80000001,
+     OCDM_KEYSYSTEM_NOT_SUPPORTED = 0x80000002,
+     OCDM_INVALID_SESSION = 0x80000003,
+     OCDM_INVALID_DECRYPT_BUFFER = 0x80000004,
+     OCDM_OUT_OF_MEMORY = 0x80000005,
++    OCDM_METHOD_NOT_IMPLEMENTED = 0x80000006,
+     OCDM_FAIL = 0x80004005,
+     OCDM_INVALID_ARG = 0x80070057,
+     OCDM_SERVER_INTERNAL_ERROR = 0x8004C600,
+     OCDM_SERVER_INVALID_MESSAGE = 0x8004C601,
+     OCDM_SERVER_SERVICE_SPECIFIC = 0x8004C604,
++    OCDM_BUSY_CANNOT_INITIALIZE = 0x8004DD00
+ };
+ 
+ // ISession defines the interface towards a DRM context that can decrypt data
+@@ -98,6 +101,12 @@ struct ISession : virtual public Core::IUnknown {
+     // Provides keysystem-specific metadata of the session
+     virtual std::string Metadata() const = 0;
+ 
++    // Provides keysystem-specific metricdata of the session
++    virtual OCDM_RESULT Metricdata(
++        uint32_t& bufferSize /* @inout */,
++        uint8_t buffer[] /* @out @length:bufferSize */) const
++        = 0;
++
+     // Report the current status of the Session with respect to the KeyExchange.
+     virtual KeyStatus Status() const = 0;
+     virtual KeyStatus Status(const uint8_t keyID[] /* @in @length:keyIDLength */, const uint8_t keyIDLength) const = 0;
+@@ -182,6 +191,13 @@ struct IAccessorOCDM : virtual public Core::IUnknown {
+     // Provides keysystem-specific metadata
+     virtual OCDM_RESULT Metadata(const std::string& keySystem, std::string& metadata /* @out */) const = 0;
+ 
++    // Provides keysystem-specific metricdata
++    virtual OCDM_RESULT Metricdata(
++        const std::string& keySystem,
++        uint32_t& bufferSize /* @inout */,
++        uint8_t buffer[] /* @out @length:bufferSize */) const
++        = 0;
++
+     // Create a MediaKeySession using the supplied init data and CDM data.
+     virtual OCDM_RESULT
+     CreateSession(const string& keySystem, const int32_t licenseType,
+-- 
+2.25.1
+

@@ -35,7 +35,7 @@ SRC_URI+="file://0002-ONEM-25410-error-reporting.patch"
 SRC_URI+="file://OMWAPPI-930-Add-Widevine-v16-support-to-OCDM.patch;striplevel=1"
 SRC_URI+="file://OMWAPPI-914-widevine_cbcs_support.patch"
 SRC_URI+="file://OMWAPPI-914-widevine_pass_subsample_information.patch"
-SRC_URI += "file://OMWAPPI-1316-Implementation-of-IMediaSystemMetrics.patch"
+SRC_URI += "file://OMWAPPI-1634-Implementation-of-IMediaSystemMetrics.patch"
 SRC_URI += "file://OMWAPPI-1492-Implement-Widewine-settings-in-WideVine.patch"
 
 SRC_URI += "file://FindNEXUS.cmake;subdir=OCDM-Widevine-Nexus-SVP/cmake"

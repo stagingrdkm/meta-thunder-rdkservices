@@ -24,5 +24,5 @@ SRC_URI += "file://FindNXCLIENT.cmake;subdir=OCDM-Playready-Nexus-SVP/cmake"
 SRC_URI += "${@oe.utils.version_less_or_equal('URSR_VERSION', '20', '', \
            'file://SWRDKV-2593.wpeframework-ocdm-playready-nexus-svp_updating_for_ursr20.2.patch;striplevel=1', d)}"
 
-SRC_URI += "file://0116-OMWAPPI-1316-Implementation-of-IMediaSystemMetrics.patch"
+SRC_URI += "file://0116-OMWAPPI-1634-Implementation-of-IMediaSystemMetrics.patch"
 SRC_URI += "file://0117-ONEM-29883-fix-asserts.patch"
