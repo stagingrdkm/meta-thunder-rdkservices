@@ -39,12 +39,12 @@ index 62e3e59..7d7c6b0 100644
  // IMediaKeySession defines the MediaKeySession interface.
  class IMediaKeySession {
  public:
-@@ -391,8 +405,12 @@ public:
+@@ -390,8 +390,12 @@ POP_WARNING()
          uint8_t* f_pbClearContentOpaque)
          = 0;
  
 -    virtual CDMi_RESULT ResetOutputProtection() { return (CDMi_METHOD_NOT_IMPLEMENTED); }
--    virtual CDMi_RESULT SetParameter(const std::string& name, const std::string& value) { return (CDMi_METHOD_NOT_IMPLEMENTED); }
+-    virtual CDMi_RESULT SetParameter(const std::string& name VARIABLE_IS_NOT_USED, const std::string& value VARIABLE_IS_NOT_USED) { return (CDMi_METHOD_NOT_IMPLEMENTED); }
 +    // These are new methods that might not have been implemented by the 
 +    // base implementations. If they are not implemented, the system will
 +    // probably not need it, but it will continue to build :-)
