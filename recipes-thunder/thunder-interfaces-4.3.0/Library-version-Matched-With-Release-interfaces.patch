@@ -1,16 +1,26 @@
-diff --git a/CMakeLists.txt b/CMakeLists.txt
-index c88235f..9fd5211 100644
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.12)
- project(Interfaces)
+diff --git a/definitions/CMakeLists.txt b/definitions/CMakeLists.txt
+index adacc7b..69ab395 100644
+--- a/definitions/CMakeLists.txt
++++ b/definitions/CMakeLists.txt
+@@ -21,7 +21,7 @@ project(Definitions)
+ 
  find_package(WPEFramework)
  
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
  
- set(INTERFACES_PATTERNS "I*.h" CACHE STRING "Patterns matching files for which stubs should be generated")
- set(JSONRPC_PATTERNS "*.json" CACHE STRING "Patterns matching files for which json stubs should be generated")
--- 
-2.25.1
-
+ find_package(CompileSettingsDebug REQUIRED)
+ find_package(JsonGenerator REQUIRED)
+diff --git a/interfaces/CMakeLists.txt b/interfaces/CMakeLists.txt
+index 055064e..d4b901c 100644
+--- a/interfaces/CMakeLists.txt
++++ b/interfaces/CMakeLists.txt
+@@ -21,7 +21,7 @@ project(Marshalling)
+ 
+ find_package(WPEFramework)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ find_package(CompileSettingsDebug REQUIRED)
+ find_package(ProxyStubGenerator REQUIRED)

@@ -8,12 +8,12 @@ PROVIDES += "wpeframework-interfaces"
 RPROVIDES_${PN} += "wpeframework-interfaces"
 
 DEPENDS = "wpeframework wpeframework-tools-native"
-#           file://Library-version-Matched-With-Release-interfaces.patch
 
 SRC_URI = "git://github.com/rdkcentral/ThunderInterfaces.git;protocol=https;branch=R4;name=wpeframework-interfaces \
            file://SplitDeviceCapablities.patch \
            file://0018-notifyclient-event-added.patch \
            file://0020-Adding-the-VoiceCommand-API-for-Netflix-plugin.patch \
+           file://Library-version-Matched-With-Release-interfaces.patch \
            "
 
 # R4.3
