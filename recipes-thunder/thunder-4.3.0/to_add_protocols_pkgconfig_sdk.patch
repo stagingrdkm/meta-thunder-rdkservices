@@ -13,14 +13,13 @@ diff --git a/Source/com/CMakeLists.txt b/Source/com/CMakeLists.txt
 index 566d34e2..55eaa6d2 100644
 --- a/Source/com/CMakeLists.txt
 +++ b/Source/com/CMakeLists.txt
-@@ -135,4 +135,7 @@ install(
-         INCLUDES DESTINATION include/${NAMESPACE}   # default include path
+@@ -101,3 +101,6 @@ install(
  )
-
--InstallCMakeConfig(TARGETS ${TARGET})
-\ No newline at end of file
-+InstallCMakeConfig(TARGETS ${TARGET})
+ 
+ InstallCMakeConfig(TARGETS ${TARGET})
 +InstallPackageConfig(
-+               TARGETS ${TARGET}
-+              DESCRIPTION "Enable ease of development for COM support." )
++                TARGETS ${TARGET}
++                DESCRIPTION "Enable ease of development for COM support." )
+-- 
+2.25.1
 

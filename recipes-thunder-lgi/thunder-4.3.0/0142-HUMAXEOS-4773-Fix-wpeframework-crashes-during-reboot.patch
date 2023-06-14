@@ -35,7 +35,7 @@ diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServ
 index d96cf7ec..d92e0880 100644
 --- a/Source/WPEFramework/PluginServer.h
 +++ b/Source/WPEFramework/PluginServer.h
-@@ -130,7 +130,11 @@ namespace PluginHost {
+@@ -127,7 +127,11 @@ namespace PluginHost {
              {
                  Run();
              }
@@ -46,8 +46,8 @@ index d96cf7ec..d92e0880 100644
 +                WaitIfJoined();
 +            }
  
-         private:
-             Dispatcher _dispatch;
+         public:
+             void Idle() {
 diff --git a/Source/core/WorkerPool.h b/Source/core/WorkerPool.h
 index d8faf6e6..52d8b876 100644
 --- a/Source/core/WorkerPool.h
