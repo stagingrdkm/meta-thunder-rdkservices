@@ -46,23 +46,13 @@ TARGET_CXXFLAGS += "-D__ERRORRESULT__=errno"
 # file://0146-ONEM-22659-Synchronization-in-Release-changed.patch - skipping, https://github.com/rdkcentral/Thunder/pull/759 : 'I can confirm this was a bug that has been resolved in R3. So this pull request should not be applied to R3'
 
 # Source/tracing issue patches
-#            file://0107-ONEM-18296-tracing-use-direct-output.patch
-#            file://0121-ONEM-23238-Unified-handling-of-logging-configuration.patch
-#            file://0127-ONEM-22947-Additional-EXTERNAL.patch
-
-
-
-#            file://0143-ARRISAPOL-2718-Add-JSONRPC-helper-prints.patch
-#            file://0144-ARRISEOS-42363-Don-t-flush-libraries-in-Dispatch.patch
-
+#            file://0107-ONEM-18296-tracing-use-direct-output.patch - not applicable, 5fa4dfad849eac58c803b8c72c4c491b2c6aee7c removes tracing
+#            file://0121-ONEM-23238-Unified-handling-of-logging-configuration.patch - not applicable, 5fa4dfad849eac58c803b8c72c4c491b2c6aee7c removes tracing
+#            file://0143-ARRISAPOL-2718-Add-JSONRPC-helper-prints.patch - it is not useful anymore
+#            file://0144-ARRISEOS-42363-Don-t-flush-libraries-in-Dispatch.patch - fixed with b31ef9d48e434573e0c31d427be5bd03e53b10c2
 #            file://0147-ARRISAPP-140-Fix-assert-on-call-to-opencdm_dispose.patch - already there
 #            file://0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch - already there
-
-#            file://0125-ONEM-24034-Setup-group-and-permissions-for-socket.patch
-#            file://0124-ARRISEOS-40990-Missing-logs-from-syslog.patch
-#            file://0128-ONEM-24449-Load-fallback-logging-configuration.patch
-#            file://0132-HUMAXEOSR-995-Block-plugins-activation-when-WPE.patch
-#            file://0135-ARRISEOS-41575-extend_timeout_to_25sec.patch
+#            file://0128-ONEM-24449-Load-fallback-logging-configuration.patch - seems useless since 5fa4dfad849eac58c803b8c72c4c491b2c6aee7c removes tracing
 
 SRC_URI += "file://wpeframework.service.xdial.in \
             file://wpeframework.service.no-container.in \
@@ -77,6 +67,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0113-ONEM-21500-added-notifyserviceready-to-awclistener.patch \
             file://0118-ONEM-15903-error-reporting-deinit.patch \
             file://0126-ONEM-22947_allow_assert_with_trace.patch \
+            file://0127-ONEM-22947-Additional-EXTERNAL.patch \
             file://0129-ONEMPERS-285-Limit-thunder-container-access-to-global-tmp.patch \
             file://0131-HUMAXEOSR-995-Termination-thread-introduced.patch \
             file://0133-ONEMPERS-367-Avoid-sending-unknown-method-response.patch \
@@ -85,12 +76,16 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0146-ARRISEOS-43856-add-join-and-return-value-for-termination-thread.patch \
             file://0148-FindSlauncher-lost-letter.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
+            file://0125-ONEM-24034-Setup-group-and-permissions-for-socket.patch \
             file://no_color_in_trace.patch \
             file://0117-ONEM-22611-So-locations-restricted.patch \
             file://0123-ARRISAPOL-2315-Missing-external-symbols-not-exp.patch \
+            file://0124-ARRISEOS-40990-Missing-logs-from-syslog.patch \
+            file://0132-HUMAXEOSR-995-Block-plugins-activation-when-WPE.patch \
+            file://0135-ARRISEOS-41575-extend_timeout_to_25sec.patch \
+            file://0149-ONEM-30824-fix-find-lxc-cmake-includes-path.patch \
             file://linking_com_with_processcontainers.patch \
             file://use_connectionMap_instead_of_reporter.patch \
-            file://0149-ONEM-30824-fix-find-lxc-cmake-includes-path.patch \
             file://0150-ONEM-31207-thunder-only-direct-output-for-tracing.patch \
 "
 

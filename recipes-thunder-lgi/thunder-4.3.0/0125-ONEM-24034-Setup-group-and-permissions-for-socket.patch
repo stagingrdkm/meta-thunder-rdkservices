@@ -9,7 +9,7 @@ diff --git a/Source/core/SocketPort.cpp b/Source/core/SocketPort.cpp
 index cf1ac85d..a45b1d74 100644
 --- a/Source/core/SocketPort.cpp
 +++ b/Source/core/SocketPort.cpp
-@@ -29,6 +29,7 @@
+@@ -30,6 +30,7 @@
  #include <arpa/inet.h>
  #include <fcntl.h>
  #include <net/if.h>
@@ -17,7 +17,7 @@ index cf1ac85d..a45b1d74 100644
  #define __ERRORRESULT__ errno
  #define __ERROR_AGAIN__ EAGAIN
  #define __ERROR_WOULDBLOCK__ EWOULDBLOCK
-@@ -703,6 +704,29 @@ namespace WPEFramework {
+@@ -720,6 +721,29 @@ namespace WPEFramework {
              }
          }
  
@@ -47,7 +47,7 @@ index cf1ac85d..a45b1d74 100644
          SOCKET SocketPort::ConstructSocket(NodeId& localNode, const string& specificInterface)
          {
              ASSERT(localNode.IsValid() == true);
-@@ -847,6 +871,12 @@ namespace WPEFramework {
+@@ -864,6 +888,12 @@ namespace WPEFramework {
  #endif
                          {
                              BufferAlignment(l_Result);
@@ -60,10 +60,9 @@ index cf1ac85d..a45b1d74 100644
                              return (l_Result);
                          }
                      }
-@@ -1434,4 +1464,4 @@ namespace WPEFramework {
-         }
+@@ -1461,3 +1491,4 @@ namespace WPEFramework {
  
          }
--    } // namespace Solution::Core
-\ No newline at end of file
-+    } // namespace Solution::Core
+     } // namespace Solution::Core
++
+

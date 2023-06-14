@@ -27,8 +27,8 @@ index ded6d947..4bb96502 100644
 -        class Output {
 +        class EXTERNAL Output {
          public:
-             Output(const Output&) = delete;
-             Output& operator=(const Output&) = delete;
+             enum mode : uint8_t {
+                 CACHED_ADDREF   = 0x01,
 diff --git a/Source/core/IPCConnector.h b/Source/core/IPCConnector.h
 index f24c595a..ab382fd7 100644
 --- a/Source/core/IPCConnector.h
@@ -46,7 +46,7 @@ diff --git a/Source/core/Proxy.h b/Source/core/Proxy.h
 index 8697928a..4f8f0267 100644
 --- a/Source/core/Proxy.h
 +++ b/Source/core/Proxy.h
-@@ -1393,7 +1393,7 @@ POP_WARNING()
+@@ -1417,7 +1417,7 @@ POP_WARNING()
          };
  
          template <typename PROXYELEMENT>

@@ -44,9 +44,9 @@ index b08455ed..e76beb0b 100644
  MODULE_NAME_DECLARATION(BUILD_REFERENCE)
  
  namespace WPEFramework {
-@@ -678,7 +684,7 @@ int main(int argc, char** argv)
-         Core::Messaging::MessageUnit::Instance().Close();
- #endif
+@@ -662,7 +668,7 @@ int main(int argc, char** argv)
+         //close messaging unit before singletons are cleared
+         Messaging::MessageUnit::Instance().Close();
      }
 -
 +    ODH_ERROR_REPORT_DEINIT();

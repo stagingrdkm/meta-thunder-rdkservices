@@ -7,10 +7,11 @@ undefined symbol: _ZNK12WPEFramework4Core12IteratorTypeINSt7__cxx114listIPNS_5Tr
 After demangle:
 
 WPEFramework::Core::IteratorType<std::__cxx11::list<WPEFramework::Trace::ITraceControl*, std::allocator<WPEFramework::Trace::ITraceControl*> >, WPEFramework::Trace::ITraceControl*, std::_List_iterator<WPEFramework::Trace::ITraceControl*> >::Count() const
+
+Adjusted for R4.3 due to 5fa4dfad849eac58c803b8c72c4c491b2c6aee7c
 ---
- Source/core/IIterator.h        | 2 +-
- Source/tracing/ITraceControl.h | 2 +-
- 2 files changed, 2 insertions(+), 2 deletions(-)
+ Source/core/IIterator.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/Source/core/IIterator.h b/Source/core/IIterator.h
 index 3d6236d6..b5a7c905 100644
@@ -25,19 +26,6 @@ index 3d6236d6..b5a7c905 100644
      public:
          IteratorType()
              : m_Container(nullptr)
-diff --git a/Source/tracing/ITraceControl.h b/Source/tracing/ITraceControl.h
-index 958fcaed..ae0eb8f2 100644
---- a/Source/tracing/ITraceControl.h
-+++ b/Source/tracing/ITraceControl.h
-@@ -29,7 +29,7 @@ namespace WPEFramework {
- namespace Trace {
-     const uint16_t TRACINGBUFFERSIZE = 1024;
- 
--    struct ITraceControl {
-+    struct EXTERNAL ITraceControl {
-         virtual ~ITraceControl() = default;
-         virtual void Destroy() = 0;
-         virtual const char* Category() const = 0;
 -- 
 2.25.1
 
