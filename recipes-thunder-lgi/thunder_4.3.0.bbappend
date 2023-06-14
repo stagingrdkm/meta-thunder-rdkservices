@@ -84,9 +84,9 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0132-HUMAXEOSR-995-Block-plugins-activation-when-WPE.patch \
             file://0135-ARRISEOS-41575-extend_timeout_to_25sec.patch \
             file://0149-ONEM-30824-fix-find-lxc-cmake-includes-path.patch \
-            file://linking_com_with_processcontainers.patch \
-            file://use_connectionMap_instead_of_reporter.patch \
             file://0150-ONEM-31207-thunder-only-direct-output-for-tracing.patch \
+            file://0150-ONEM-30919-linking_com_with_processcontainers.patch \
+            file://0151-ONEM-30919-use_connectionMap_instead_of_reporter.patch \
 "
 
 # 0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch taken from R4 (is on R4.1.1)
