@@ -12,11 +12,11 @@ diff --git a/Source/core/CMakeLists.txt b/Source/core/CMakeLists.txt
 index 317bede7..3ad62c65 100644
 --- a/Source/core/CMakeLists.txt
 +++ b/Source/core/CMakeLists.txt
-@@ -145,6 +145,7 @@ set(PUBLIC_HEADERS
+@@ -144,6 +144,7 @@ set(PUBLIC_HEADERS
+         CallsignTLS.h
          TokenizedStringList.h
-         MessageDispatcher.h
-         MessageUnit.h
-+        SyslogToJournal.h
+         MessageStore.h
++	 SyslogToJournal.h
          )
  
  # non-buildable interface target to carry the definitions
@@ -38,10 +38,10 @@ diff --git a/Source/core/core.h b/Source/core/core.h
 index c514528d..cd2c2279 100644
 --- a/Source/core/core.h
 +++ b/Source/core/core.h
-@@ -115,6 +115,7 @@
+@@ -103,6 +103,7 @@
+ #include "CallsignTLS.h"
  #include "TokenizedStringList.h"
- #include "MessageDispatcher.h"
- #include "MessageUnit.h"
+ #include "MessageStore.h"
 +#include "SyslogToJournal.h"
  
  #ifdef __WINDOWS__

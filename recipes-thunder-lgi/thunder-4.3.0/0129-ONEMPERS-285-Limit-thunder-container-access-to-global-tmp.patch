@@ -27,7 +27,7 @@ index 4e35ed06..441f17e6 100644
  map_set(${CONFIG} binding ${BINDING})
  map_set(${CONFIG} ipv6 ${IPV6_SUPPORT})
  if(LEGACY_INITIALZE)
-@@ -180,7 +183,7 @@ ans(PLUGIN_WEBKITBROWSEREXTENSION_TRACING)
+@@ -179,7 +182,7 @@ ans(PLUGIN_WEBKITBROWSEREXTENSION_TRACING)
  
  if(NOT VIRTUALINPUT)
      map()
@@ -36,7 +36,7 @@ index 4e35ed06..441f17e6 100644
      kv(type "device")
      if(KEY_OUTPUT_DISABLED)
          kv(output false)
-@@ -190,15 +193,16 @@ if(NOT VIRTUALINPUT)
+@@ -189,15 +192,16 @@ if(NOT VIRTUALINPUT)
  
      map_append(${CONFIG} input ${PLUGIN_INPUT_DEVICE})
  else(VIRTUALINPUT)
@@ -58,7 +58,7 @@ index 4e35ed06..441f17e6 100644
 +    map_append(${CONFIG} input ${PLUGIN_INPUT_DEVICE})
  endif(NOT VIRTUALINPUT)
  
- 
+ map()
 -- 
 2.25.1
 

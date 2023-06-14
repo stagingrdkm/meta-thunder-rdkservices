@@ -9,27 +9,35 @@ Dbus interface is syncrhonous and confirmation of stop may not pass due to this 
 This patch extends timeout for next 10 sec and next 5 , having checks of the status in the intervals:
 10 sec, 10 sec ,5 sec. 25 sec in total.
 ---
- Source/com/Communicator.cpp | 5 ++---
- 1 file changed, 2 insertions(+), 3 deletions(-)
+ Source/com/Communicator.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
 
-diff --git a/Source/com/Communicator.cpp b/Source/com/Communicator.cpp
-index 7e30a0b1..fc00812e 100644
---- a/Source/com/Communicator.cpp
-+++ b/Source/com/Communicator.cpp
-@@ -352,11 +352,10 @@ namespace RPC {
-                             _process.Kill(true);
-                             nextinterval = Communicator::HardKillCheckWaitTime();
-                         } else {
--                            ASSERT(false);
--                            nextinterval = 0;
-+                            nextinterval = 10;
-                         }
-                         break;
--                case 2: _container->Stop(0);
-+                case 2: if(_process.Id() != 0) _container->Stop(0);
-                         nextinterval = 5;
-                         break;
-                 default:
+diff --git a/Source/com/Communicator.h b/Source/com/Communicator.h
+index d3e99e13..84f874f8 100644
+--- a/Source/com/Communicator.h
++++ b/Source/com/Communicator.h
+@@ -772,7 +772,7 @@ namespace RPC {
+             Core::instance_id ParentPID() const override {
+                 return (static_cast<Core::instance_id>(_container->Pid()));
+             }
+-            uint32_t EndProcess() override {
++	     uint32_t EndProcess() override {
+                 uint32_t nextinterval = 0;
+                 Core::Process process(static_cast<uint32_t>(_container->Pid()));
+ 
+@@ -793,10 +793,10 @@ namespace RPC {
+                             }
+                             else {
+                                 ASSERT(false);
+-                                nextinterval = 0;
++                                nextinterval = 10;
+                             }
+                             break;
+-                    case 2: _container->Stop(0);
++                    case 2: if(process.Id() != 0) _container->Stop(0);
+                             nextinterval = 5;
+                             break;
+                     default:
 -- 
 2.25.1
 

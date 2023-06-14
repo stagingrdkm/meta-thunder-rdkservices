@@ -10,15 +10,15 @@ diff --git a/Source/core/Trace.h b/Source/core/Trace.h
 index 56b860f3..3e746a17 100644
 --- a/Source/core/Trace.h
 +++ b/Source/core/Trace.h
-@@ -66,7 +66,7 @@ namespace WPEFramework {
- #else
+@@ -64,7 +64,7 @@ namespace WPEFramework {
+ #ifdef __WINDOWS__
  #define TRACE_FORMATTING_IMPL(fmt, ...)                                                                                                     \
      do {                                                                                                                                    \
 -        ::fprintf(stderr, "\033[1;32m[%s:%d](%s)<PID:%d><TID:%d>" fmt "\n\033[0m", &__FILE__[WPEFramework::Core::FileNameOffset(__FILE__)], __LINE__, __FUNCTION__, TRACE_PROCESS_ID, TRACE_THREAD_ID, ##__VA_ARGS__);  \
 +        ::fprintf(stderr, "[%s:%d](%s)<%d:%d>" fmt "\n", &__FILE__[WPEFramework::Core::FileNameOffset(__FILE__)], __LINE__, __FUNCTION__, TRACE_PROCESS_ID, TRACE_THREAD_ID, ##__VA_ARGS__);  \
          fflush(stderr);                                                                                                                 \
      } while (0)
- #endif
+ #else
 -- 
 2.25.1
 

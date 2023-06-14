@@ -7,9 +7,10 @@ SRC_URI_remove = "git://github.com/rdkcentral/Thunder.git;protocol=https;branch=
 SRC_URI = "git://github.com/rdkcentral/ThunderTools.git;protocol=https;branch=R4;name=thundertools"
 SRCREV_thundertools="13a2c71dec3cfab814a41b6a86dd8ea09ee17698"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=c3349dc67b2f8c28fc99b300eb39e3cc"
-#SRC_URI_append = " file://0002-StubGenerator.patch \
-#                   file://0005-RDKTV-16258-lambda_crash_error.patch \
-#                  "
+
+#file://0002-StubGenerator.patch already fixed with f1c0b98878bd236c7345ffd0d11b38fd880c8d60
+#file://0005-RDKTV-16258-lambda_crash_error.patch this part of code was rewritten with 32127c8cd5a840fb7a640875fb2835a5eb0e489d
+
 PROVIDES += "wpeframework-tools-native"
 
 inherit cmake pkgconfig native python3native
