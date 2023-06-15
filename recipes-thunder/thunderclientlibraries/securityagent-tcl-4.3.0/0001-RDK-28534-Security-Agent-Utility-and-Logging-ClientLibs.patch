@@ -61,7 +61,7 @@ Index: git/Source/securityutility/app/CMakeLists.txt
 +
 +target_link_libraries(${TARGET}
 +        PRIVATE
-+        securityagent::securityagent
++        WPEFrameworkSecurityAgent
 +)
 +
 +set_target_properties(${TARGET} PROPERTIES
@@ -226,7 +226,7 @@ Index: git/Source/securityutility/lib/CMakeLists.txt
 +
 +target_link_libraries(${TARGET}
 +        PRIVATE
-+        securityagent::securityagent
++        WPEFrameworkSecurityAgent
 +)
 +
 +set_target_properties(${TARGET} PROPERTIES
