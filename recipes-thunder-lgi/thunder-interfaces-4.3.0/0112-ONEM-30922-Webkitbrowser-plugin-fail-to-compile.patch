@@ -1,0 +1,36 @@
+From ee5d7a5f3c0fd65215d4524aa4c723160cc36cb3 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Fri, 16 Jun 2023 13:42:11 +0200
+Subject: [PATCH] ONEM-30922: Webkitbrowser plugin fail to compile
+
+'Register' is not a member of 'WPEFramework::Exchange::JBrowserCookieJar'
+  128 |                 Exchange::JBrowserCookieJar::Register(*this, _cookieJar);
+
+Looks like generator does not generate in 4.3 that method.
+
+generator author comments:
+=> There is a name clash, JBrowserCookieJar.h is generated from both IBrowser.h/IBrowserCookieJar and jsonrpc/CookieJar.json and the latter overwrites the former.
+
+=> You could change "class": "BrowserCookieJar" to something else so it doesn't end up with same file name, but it seems to me that CookieJar.json is a duplicate, becuse the same property is already defined in IBrowserCookieJar... ?
+
+=> Changing "class": "BrowserCookieJar" to something else like "class": "WebBrowserCookieJar" should also unclash the files. Perhaps that's the simplest solution.
+---
+ jsonrpc/CookieJar.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/jsonrpc/CookieJar.json b/jsonrpc/CookieJar.json
+index 9876be8..9956a62 100644
+--- a/jsonrpc/CookieJar.json
++++ b/jsonrpc/CookieJar.json
+@@ -2,7 +2,7 @@
+   "$schema": "interface.schema.json",
+   "jsonrpc": "2.0",
+   "info": {
+-    "class": "BrowserCookieJar",
++    "class": "WebBrowserCookieJar",
+     "title": "Browser CookieJar API",
+     "description": "Browser CookieJar JSON-RPC interface"
+   },
+-- 
+2.25.1
+
