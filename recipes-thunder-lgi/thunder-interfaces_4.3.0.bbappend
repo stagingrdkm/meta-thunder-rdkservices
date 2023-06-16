@@ -11,5 +11,6 @@ SRC_URI += "file://0111-ONEM-29742-setParameter-for-ISession.patch"
 SRC_URI += "file://0007-ONEM-24354-Clear-content-of-buffers-on-deinit.patch"
 SRC_URI += "file://0111-ARRISAPP-394-add_STEREO_SURROUND_MAT_FOLLOW-th4.patch"
 SRC_URI += "file://0112-ONEM-30922-Webkitbrowser-plugin-fail-to-compile.patch"
+SRC_URI += "file://0113-ONEM-30922-Webkitbrowser-plugin-duplicate-CookieJarParamsData.patch"
 
 require thunder-interfaces-4.3.0/interfaces.inc

@@ -1,0 +1,30 @@
+From 0555ac1b243b598329a404c7f94e850d93de1c29 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Fri, 16 Jun 2023 17:52:31 +0200
+Subject: [PATCH] ONEM-30922: Webkitbrowser plugin fail to compile
+
+TOPDIR/tmp/work/armv7vet2hf-neon-vfpv4-rdkmllib32-linux-gnueabi/lib32-webkitbrowser-plugin/3.0+gitAUTOINC+53d5fe3596-r1/git/WebKitBrowser/WebKitBrowser.h:49:7: error: redefinition of 'class WPEFramework::JsonData::BrowserCookieJar::CookieJarParamsData'
+   49 | class CookieJarParamsData : public Core::JSON::Container {
+---
+ interfaces/IBrowser.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+Disable generation of that code
+
+diff --git a/interfaces/IBrowser.h b/interfaces/IBrowser.h
+index 66795b3..40ed2c7 100644
+--- a/interfaces/IBrowser.h
++++ b/interfaces/IBrowser.h
+@@ -233,7 +233,9 @@ namespace Exchange {
+         virtual void Register(INotification* sink) = 0;
+         virtual void Unregister(INotification* sink) = 0;
+ 
++        /* @json:omit */
+         virtual uint32_t CookieJar(uint32_t& version /* @out */, uint32_t& checksum /* @out */, string& payload /* @out */) const = 0;
++        /* @json:omit */
+         virtual uint32_t CookieJar(const uint32_t version, const uint32_t checksum, const string& payload) = 0;
+     };
+ 
+-- 
+2.25.1
+
