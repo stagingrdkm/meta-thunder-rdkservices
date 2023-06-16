@@ -12,7 +12,7 @@ index 8691697e..f0700833 100644
 --- a/Source/WPEFramework/PluginServer.cpp
 +++ b/Source/WPEFramework/PluginServer.cpp
 @@ -397,12 +397,17 @@ namespace PluginHost
- 
+                 _administrator.Activation(callSign, this);
                  Unlock();
  
 -                REPORT_DURATION_WARNING( { ErrorMessage(_handler->Initialize(this)); }, WarningReporting::TooLongPluginState, WarningReporting::TooLongPluginState::StateChange::ACTIVATION, callSign.c_str());
@@ -60,7 +60,7 @@ index d92e0880..0a421c21 100644
              inline void Security(const bool enabled)
              {
                  _adminLock.Lock();
-@@ -3386,6 +3396,7 @@ POP_WARNING()
+@@ -3416,6 +3426,7 @@ POP_WARNING()
              IAuthenticate* _authenticationHandler;
              ConfigObserver _configObserver;
              CompositPlugins _compositPlugins;
