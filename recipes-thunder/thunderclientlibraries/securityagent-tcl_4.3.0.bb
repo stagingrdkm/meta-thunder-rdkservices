@@ -9,3 +9,7 @@ SRC_URI += "file://0001-RDK-28534-Security-Agent-Utility-and-Logging-ClientLibs.
 PACKAGECONFIG ?= "securityagent securityutility"
 PACKAGECONFIG[securityagent]    = "-DSECURITYAGENT=ON, -DSECURITYAGENT=OFF"
 PACKAGECONFIG[securityutility]  = "-DSECURITYUTILITY=ON, -DSECURITYUTILITY=OFF"
+
+do_install_append() {
+    install -m 0644 ${D}${libdir}/pkgconfig/WPEFrameworkSecurityAgent.pc ${D}${libdir}/pkgconfig/securityagent.pc
+}
