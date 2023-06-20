@@ -91,6 +91,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://linking_com_with_processcontainers.patch \
             file://use_connectionMap_instead_of_reporter.patch \
             file://0149-ONEM-30824-fix-find-lxc-cmake-includes-path.patch \
+            file://0150-ONEM-31207-thunder-only-direct-output-for-tracing.patch \
 "
 
 # 0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch taken from R4 (is on R4.1.1)

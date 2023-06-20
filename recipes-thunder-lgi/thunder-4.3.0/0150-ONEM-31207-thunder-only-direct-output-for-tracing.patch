@@ -1,0 +1,109 @@
+From ecd99fee0308137f0c0de012698ae4e7736a47d8 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Tue, 20 Jun 2023 10:48:28 +0000
+Subject: [PATCH] ONEM-31207 thunder: only direct output for tracing
+
+Similar to 0107-ONEM-18296-tracing-use-direct-output.patch
+that was applied to old versions of Thunder, we want to
+log messages to be only forwarded to the output, and skip
+forwarding the logs through sockets (this solution is not
+Nagra-compliant)
+
+Configurable through cmake flag: TRACING_ONLY_DIRECT_OUTPUT
+---
+ Source/messaging/CMakeLists.txt  |  7 ++++++
+ Source/messaging/MessageUnit.cpp | 40 ++++++++++++++++++++++++++++++++
+ 2 files changed, 47 insertions(+)
+
+diff --git a/Source/messaging/CMakeLists.txt b/Source/messaging/CMakeLists.txt
+index bfebe299..d8b09814 100644
+--- a/Source/messaging/CMakeLists.txt
++++ b/Source/messaging/CMakeLists.txt
+@@ -70,6 +70,13 @@ target_include_directories( ${TARGET}
+           $<INSTALL_INTERFACE:include/${NAMESPACE}>
+         )
+ 
++option(TRACING_ONLY_DIRECT_OUTPUT
++        "Only direct output for tracing." OFF)
++
++if(TRACING_ONLY_DIRECT_OUTPUT)
++    SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -DTRACING_ONLY_DIRECT_OUTPUT")
++endif()
++
+ install(
+         TARGETS ${TARGET}  EXPORT ${TARGET}Targets  # for downstream dependencies
+         ARCHIVE DESTINATION lib COMPONENT libs      # static lib
+diff --git a/Source/messaging/MessageUnit.cpp b/Source/messaging/MessageUnit.cpp
+index e81ded07..c310f81e 100644
+--- a/Source/messaging/MessageUnit.cpp
++++ b/Source/messaging/MessageUnit.cpp
+@@ -122,6 +122,35 @@ namespace WPEFramework {
+             return (Core::SingletonType<MessageUnit>::Instance());
+         }
+ 
++#ifdef TRACING_ONLY_DIRECT_OUTPUT
++        /**
++         * @brief in case of direct output, we do nothing
++         */
++        uint32_t MessageUnit::Open(const string& pathName, const uint16_t socketPort, const string& configuration, const bool background, const flush flushMode)
++        {
++            _direct.Mode(_settings.IsBackground(), _settings.IsAbbreviated());
++
++            Core::Messaging::IStore::Set(this);
++
++            // according to received config,
++            // let all announced controls know, whether they should push messages
++            Update();
++            return Core::ERROR_NONE;
++        }
++
++        uint32_t MessageUnit::Open(const uint32_t instanceId)
++        {
++            _direct.Mode(_settings.IsBackground(), _settings.IsAbbreviated());
++
++            Core::Messaging::IStore::Set(this);
++
++            // according to received config,
++            // let all announced controls know, whether they should push messages
++            Update();
++            return Core::ERROR_NONE;
++        }
++
++#else // TRACING_ONLY_DIRECT_OUTPUT
+         /**
+         * @brief Open MessageUnit. This method is used on the WPEFramework side.
+         *        This method:
+@@ -203,6 +232,7 @@ namespace WPEFramework {
+ 
+             return (result);
+         }
++#endif // TRACING_ONLY_DIRECT_OUTPUT
+ 
+         void MessageUnit::Close()
+         {
+@@ -232,6 +262,15 @@ namespace WPEFramework {
+             return (_settings.IsEnabled(control));
+         }
+ 
++#ifdef TRACING_ONLY_DIRECT_OUTPUT
++        /**
++         * @brief Push a message and its information to a buffer
++         */
++        /* virtual */ void MessageUnit::Push(const Core::Messaging::IStore::Information& info, const Core::Messaging::IEvent* message)
++        {
++            _direct.Output(info, message);
++        }
++#else // TRACING_ONLY_DIRECT_OUTPUT
+         /**
+         * @brief Push a message and its information to a buffer
+         */
+@@ -261,5 +300,6 @@ namespace WPEFramework {
+                 }
+             }
+         }
++#endif // TRACING_ONLY_DIRECT_OUTPUT
+     }
+ }
+-- 
+2.30.0
+
