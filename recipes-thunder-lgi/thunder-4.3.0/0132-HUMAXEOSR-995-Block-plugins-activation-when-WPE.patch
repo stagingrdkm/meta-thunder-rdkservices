@@ -3,9 +3,9 @@ Date: Mon, 21 Feb 2022 23:31:04 +0100
 Subject: [PATCH] [HUMAXEOSR-995] Block plugins activation when WPEFramework
  termination started
 ---
- Source/WPEFramework/PluginServer.cpp | 11 ++++++++---
+ Source/WPEFramework/PluginServer.cpp | 12 +++++++++---
  Source/WPEFramework/PluginServer.h   | 11 +++++++++++
- 2 files changed, 19 insertions(+), 3 deletions(-)
+ 2 files changed, 20 insertions(+), 3 deletions(-)
 
 diff --git a/Source/WPEFramework/PluginServer.cpp b/Source/WPEFramework/PluginServer.cpp
 index 8691697e..f0700833 100644
@@ -32,6 +32,14 @@ index 8691697e..f0700833 100644
  
                      if( _administrator.Configuration().LegacyInitialize() == false ) {
                          Deactivate(reason::INITIALIZATION_FAILED);
+@@ -1036,6 +1041,7 @@ POP_WARNING()
+ 
+     void Server::Close()
+     {
++        _services.BlockPluginActivation();
+         Plugin::Controller* destructor(_controller->ClassType<Plugin::Controller>());
+         destructor->AddRef();
+         _connections.Close(100);
 diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
 index d92e0880..0a421c21 100644
 --- a/Source/WPEFramework/PluginServer.h
