@@ -21,7 +21,7 @@ EXTRA_OECMAKE += "-DTRACE_SETTINGS=logCfg.json"
 # this is not setup of umask to 0 value, but leave the value that is originally set
 EXTRA_OECMAKE += "-DUMASK=000"
 EXTRA_OECMAKE += "-DHIDE_NON_EXTERNAL_SYMBOLS=ON"
-EXTRA_OECMAKE += "-DCOMMUNICATOR=/run/wpeframework/communicator"
+EXTRA_OECMAKE += "-DCOMMUNICATOR=/run/wpeframework/communicator\|511,wpeframeworkaccess"
 EXTRA_OECMAKE += "-DINPUT_LOCATOR=/run/wpeframework/keyhandler"
 EXTRA_OECMAKE += "-DKEY_OUTPUT_DISABLED=true"
 EXTRA_OECMAKE += "-DWARNING_REPORTING=OFF"
