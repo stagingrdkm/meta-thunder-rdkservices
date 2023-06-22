@@ -130,7 +130,7 @@ diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
 index 1f368d9..2b36f55 100644
 --- a/Source/ocdm/open_cdm.h
 +++ b/Source/ocdm/open_cdm.h
-@@ -178,17 +178,22 @@ typedef enum {
+@@ -177,17 +177,22 @@ typedef enum {
  typedef enum {
      ERROR_NONE = 0,
      ERROR_UNKNOWN = 1,
@@ -154,7 +154,7 @@ index 1f368d9..2b36f55 100644
  } OpenCDMError;
  
  /**
-@@ -383,6 +388,23 @@ EXTERNAL OpenCDMError opencdm_system_set_server_certificate(
+@@ -382,6 +387,23 @@ EXTERNAL OpenCDMError opencdm_system_set_server_certificate(
      struct OpenCDMSystem* system,
      const uint8_t serverCertificate[], const uint16_t serverCertificateLength);
  
@@ -178,8 +178,8 @@ index 1f368d9..2b36f55 100644
  /**
   * \brief Create DRM session (for actual decrypting of data).
   *
-@@ -579,6 +601,22 @@ EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
-     uint16_t streamInfoLength);
+@@ -563,6 +585,22 @@ EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+     uint32_t initWithLast15);
  #endif // __cplusplus
  
 +/**
@@ -223,7 +223,7 @@ index effcb4e..bcdd764 100644
      // Create a MediaKeySession using the supplied init data and CDM data.
      virtual Exchange::OCDM_RESULT
      CreateSession(const string& keySystem, const int32_t licenseType,
-@@ -572,6 +575,12 @@ public:
+@@ -569,6 +572,12 @@ public:
  
          return _session->Metadata();
      }
