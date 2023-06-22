@@ -1,6 +1,6 @@
 --- old/MediaSessionExt.cpp	2020-10-05 14:35:34.919057449 -0400
 +++ new/MediaSessionExt.cpp	2020-10-05 14:44:52.136096967 -0400
-@@ -84,17 +84,17 @@
+@@ -133,17 +133,17 @@ DRM_RESULT opencdm_output_levels_callback(
      } 
  
      MediaKeySession::DecryptContext * const decryptContext = const_cast<MediaKeySession::DecryptContext *>(static_cast<const MediaKeySession::DecryptContext*>(data));
@@ -21,7 +21,7 @@
          if (DRM_IDENTICAL_GUIDS(&dope.guidId, &g_guidMaxResDecode))
          {
              ASSERT(dope.dwVersion == 3);
-@@ -225,7 +225,7 @@
+@@ -286,7 +286,7 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
      // response. There is always only a single BID per server response.
  
      // BID
@@ -32,7 +32,7 @@
      // Microsoft says that a batch ID of all zeros indicates some sort of error
 --- old/MediaSession.cpp	2020-10-09 15:24:22.694528387 -0400
 +++ new/MediaSession.cpp	2020-10-12 16:34:41.594217761 -0400
-@@ -269,7 +269,7 @@
+@@ -360,7 +360,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
  {
      /*!+!hla fix this, implement for something. */
      DRM_RESULT dr = DRM_SUCCESS;
@@ -41,7 +41,7 @@
  
      BSTD_UNUSED(f_pKID);
      BSTD_UNUSED(f_pLID);
-@@ -280,7 +280,7 @@
+@@ -371,7 +371,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
          case DRM_PLAY_OPL_CALLBACK:
              printf("  Got DRM_PLAY_OPL_CALLBACK from Bind:\r\n");
              ChkArg( f_pvPolicyCallbackData != NULL );
@@ -50,7 +50,7 @@
  
              printf("    minOPL:\r\n");
              printf("    wCompressedDigitalVideo   = %d\r\n", oplPlay->minOPL.wCompressedDigitalVideo);
-@@ -362,6 +362,12 @@
+@@ -453,6 +453,12 @@ DRM_RESULT MediaKeySession::PolicyCallback(
              printf("\r\n\r\n");
          }
              break;
@@ -61,5 +61,5 @@
 +        }
 +            break;
          default:
-             printf("  Callback from Bind with unknown callback type of %d.\r\n", f_dwCallbackType);
+             LOGGER_NO_THIS(LERROR_, "Callback from Bind with unknown callback type of %d.", f_dwCallbackType);
  
