@@ -1,0 +1,138 @@
+--- git/MediaSession.h	2023-04-19 15:10:18.317138308 -0400
++++ git/MediaSession.h	2023-04-19 15:15:02.254814171 -0400
+@@ -55,6 +55,7 @@
+ #include <nxclient.h>
+ #include <nexus_platform.h>
+ #include <nexus_memory.h>
++#include <nexus_dma.h>
+ #include <bstd.h>           /* brcm includes */
+ #include <bkni.h>
+ 
+@@ -217,6 +218,8 @@ private:
+     }
+     CDMi_RESULT SetKeyId(DRM_APP_CONTEXT *pDrmAppCtx, const uint8_t keyLength, const uint8_t keyId[]);
+     CDMi_RESULT SelectDrmHeader(DRM_APP_CONTEXT *pDrmAppCtx, const uint32_t headerLength, const uint8_t header[]);
++    void PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize, bool flush);
++
+ private:
+     DRM_APP_CONTEXT *m_poAppContext;
+     DRM_DECRYPT_CONTEXT *   m_oDecryptContext; 
+@@ -245,6 +248,9 @@ private:
+ 
+     void *pNexusMemory;
+     uint32_t mNexusMemorySize;
++
++    NEXUS_DmaJobHandle mDmaJob;
++    NEXUS_DmaHandle mDmaHandle;
+ };
+ 
+ } // namespace CDMi
+--- git/MediaSession.cpp	2023-04-19 15:09:32.005540277 -0400
++++ git/MediaSession.cpp	2023-04-19 15:25:56.877969705 -0400
+@@ -231,6 +231,66 @@ bool parsePlayreadyInitializationData(const std::string& initData, std::string*
+     return false;
+ }
+ 
++void MediaKeySession::PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize, bool flush)
++{
++    NEXUS_Error rc;
++ 
++    if (mDmaJob == NULL) {
++        NEXUS_DmaJobSettings dmaJobSettings;
++        NEXUS_DmaJob_GetDefaultSettings(&dmaJobSettings);
++        dmaJobSettings.completionCallback.callback = NULL;
++        dmaJobSettings.bypassKeySlot = NEXUS_BypassKeySlot_eGR2R;
++
++        if (mDmaHandle == NULL) {
++            mDmaHandle = NEXUS_Dma_Open(NEXUS_ANY_ID, NULL);
++            if (mDmaHandle == NULL) {
++                fprintf(stderr, "%s: Failed to NEXUS_Dma_Open !!!\n", __FUNCTION__);
++                return;
++            }
++        }
++
++        mDmaJob = NEXUS_DmaJob_Create(mDmaHandle, &dmaJobSettings);
++
++        if (mDmaJob == NULL) {
++            fprintf(stderr, "%s: Failed to NEXUS_DmaJob_Create !!!\n", __FUNCTION__);
++            return;
++        }
++    }
++
++    NEXUS_DmaJobBlockSettings blockSettings;
++    NEXUS_DmaJob_GetDefaultBlockSettings(&blockSettings);
++    blockSettings.pSrcAddr = pSrc;
++    blockSettings.pDestAddr = pDest;
++    blockSettings.blockSize = nSize;
++    blockSettings.cached = false;
++
++    if (flush)
++        NEXUS_FlushCache(blockSettings.pSrcAddr, blockSettings.blockSize);
++
++    rc = NEXUS_DmaJob_ProcessBlocks(mDmaJob, &blockSettings, 1);
++    if (rc == NEXUS_DMA_QUEUED) {
++        for (;;) {
++            NEXUS_DmaJobStatus status;
++            rc = NEXUS_DmaJob_GetStatus(mDmaJob, &status);
++            if (rc != NEXUS_SUCCESS) {
++                fprintf(stderr, "%s: DmaJob_GetStatus err=%d\n", __FUNCTION__, rc);
++                return;
++            }
++            if (status.currentState == NEXUS_DmaJobState_eComplete ) {
++                break;
++            }
++            BKNI_Delay(1);
++        }
++    }
++    else if (rc != NEXUS_SUCCESS) {
++        fprintf(stderr, "%s: error in dma transfer, err:%d\n", __FUNCTION__, rc);
++        return;
++    }
++
++    return;
++}
++
++
+ bool MediaKeySession::LoadRevocationList(const char *revListFile)
+ {
+     DRM_RESULT dr = DRM_SUCCESS;
+@@ -425,7 +485,9 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+         , mBatchId()
+         , m_decryptInited(false)
+         , pNexusMemory(nullptr)
+-        , mNexusMemorySize(512 * 1024) {
++        , mNexusMemorySize(512 * 1024)
++        , mDmaJob(nullptr)
++        , mDmaHandle(nullptr) {
+ 
+     LOGGER(LINFO_, "Contruction MediaKeySession, Build: %s", __TIMESTAMP__ );
+     m_oDecryptContext = new DRM_DECRYPT_CONTEXT;
+@@ -775,6 +837,16 @@ CDMi_RESULT MediaKeySession::Close(void)
+         mNexusMemorySize = 0;
+     }
+ 
++    if (mDmaJob) {
++        NEXUS_DmaJob_Destroy(mDmaJob);
++        mDmaJob = nullptr;
++    }
++
++    if (mDmaHandle) {
++        NEXUS_Dma_Close(mDmaHandle);
++        mDmaHandle = nullptr;
++    }
++
+     m_piCallback = nullptr;
+     m_fCommit = FALSE;
+     m_decryptInited = false;
+@@ -871,6 +943,10 @@ CDMi_RESULT MediaKeySession::Decrypt(
+     // Copy provided payload to Input of Decryption.
+     ::memcpy(pNexusMemory, inData, inDataLength);
+     NEXUS_FlushCache(pNexusMemory, inDataLength);
++    if (sampleInfo->pattern.clear_blocks != 0) {
++        // Copy whole encrypted data into secure memory to include clear pattern
++        PrivateCopy((void *)pOpaqueData, (const void*)pNexusMemory, inDataLength, true);
++    }
+ 
+     if (sampleInfo->subSampleCount > 0) {
+       for (int i = 0; i < sampleInfo->subSampleCount; i++) {
+

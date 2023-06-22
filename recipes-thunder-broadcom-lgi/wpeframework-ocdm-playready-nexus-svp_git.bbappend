@@ -19,6 +19,8 @@ SRC_URI += "file://0112-ONEM-22983-Propagate-Playready-error-from-InitializeSyst
 SRC_URI += "file://0113-ONEM-22977_Store_Cleanup_improvements.patch"
 SRC_URI += "file://0114-ONEM-15903-error-reporting.patch"
 SRC_URI += "file://0115-OMWAPPI-913-playready_cbcs_support.patch"
+SRC_URI += "file://0116-OMWAPPI-1405-playready-cbcs_support.patch"
+SRC_URI += "file://SWRDKV-3799.wpeframework-ocdm-playready-nexus-svp_secure_copying_input.patch"
 SRC_URI += "file://FindNEXUS.cmake;subdir=OCDM-Playready-Nexus-SVP/cmake"
 SRC_URI += "file://FindNXCLIENT.cmake;subdir=OCDM-Playready-Nexus-SVP/cmake"
 SRC_URI += "${@oe.utils.version_less_or_equal('URSR_VERSION', '20', '', \
