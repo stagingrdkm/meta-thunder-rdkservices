@@ -41,7 +41,7 @@ index 2145782..40854b1 100644
  {
      OpenCDMError result (ERROR_INVALID_SESSION);
  
-@@ -93,6 +99,16 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+@@ -95,6 +101,16 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
              gst_structure_get_uint(protectionMeta->info, "skip_byte_block", &pattern.clear_blocks);
          }
  
@@ -58,7 +58,7 @@ index 2145782..40854b1 100644
          uint8_t *mappedData = reinterpret_cast<uint8_t* >(dataMap.data);
          uint32_t mappedDataSize = static_cast<uint32_t >(dataMap.size);
          uint8_t *mappedIV = reinterpret_cast<uint8_t* >(ivMap.data);
-@@ -137,8 +153,9 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+@@ -139,8 +155,9 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
              }
              gst_byte_reader_set_pos(reader, 0);
  
@@ -69,7 +69,7 @@ index 2145782..40854b1 100644
              // Re-build sub-sample data.
              index = 0;
              unsigned total = 0;
-@@ -155,7 +172,12 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+@@ -157,7 +174,12 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
              free(encryptedData);
              gst_buffer_unmap(subSampleBuffer, &sampleMap);
          } else {
@@ -83,7 +83,7 @@ index 2145782..40854b1 100644
          }
  
          if (keyID != nullptr) {
-@@ -316,11 +338,24 @@ OpenCDMError opencdm_gstreamer_session_decrypt_buffer(struct OpenCDMSession* ses
+@@ -320,11 +342,24 @@ OpenCDMError opencdm_gstreamer_session_decrypt_buffer(struct OpenCDMSession* ses
              sampleInfo.keyId = mappedKeyID;
              sampleInfo.keyIdLength = mappedKeyIDSize;
  
@@ -157,7 +157,7 @@ diff --git a/Source/ocdm/open_cdm.cpp b/Source/ocdm/open_cdm.cpp
 index 8aafae7..77c7e58 100644
 --- a/Source/ocdm/open_cdm.cpp
 +++ b/Source/ocdm/open_cdm.cpp
-@@ -435,6 +435,25 @@ OpenCDMError opencdm_session_resetoutputprotection(struct OpenCDMSession* sessio
+@@ -491,6 +491,25 @@ OpenCDMError opencdm_session_resetoutputprotection(struct OpenCDMSession* sessio
      return (result);
  }
  
@@ -183,7 +183,7 @@ index 8aafae7..77c7e58 100644
  /**
   * Closes a session.
   * \param session \ref OpenCDMSession instance.
-@@ -467,6 +486,8 @@ OpenCDMError opencdm_session_close(struct OpenCDMSession* session)
+@@ -523,6 +542,8 @@ OpenCDMError opencdm_session_close(struct OpenCDMSession* session)
   * \param encryptedLength Length of encrypted data buffer (in bytes).
   * \param IV Initial vector (IV) used during decryption.
   * \param IVLength Length of IV buffer (in bytes).
@@ -192,7 +192,7 @@ index 8aafae7..77c7e58 100644
   * \return Zero on success, non-zero on error.
   * REPLACING: uint32_t decrypt(void* session, uint8_t*, const uint32_t, const
   * uint8_t*, const uint16_t);
-@@ -478,7 +499,9 @@ OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+@@ -534,7 +555,9 @@ OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
      const EncryptionPattern pattern,
      const uint8_t* IV, const uint16_t IVLength,
      const uint8_t* keyId, const uint16_t keyIdLength,
@@ -203,16 +203,16 @@ index 8aafae7..77c7e58 100644
  {
      OpenCDMError result(ERROR_INVALID_SESSION);
      if (session != nullptr) {
-@@ -493,7 +516,7 @@ OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+@@ -549,7 +572,7 @@ OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
          sampleInfo.keyId = const_cast<uint8_t*>(keyId);
-         sampleInfo.keyIdLength = keyIdLength;
+         sampleInfo.keyIdLength = static_cast<uint8_t>(keyIdLength);
          result = encryptedLength > 0 ? static_cast<OpenCDMError>(session->Decrypt(
 -            encrypted, encryptedLength, const_cast<const SampleInfo*>(&sampleInfo), initWithLast15, nullptr)) : ERROR_NONE;
 +            encrypted, encryptedLength, const_cast<const SampleInfo*>(&sampleInfo), initWithLast15, nullptr, streamInfo, streamInfoLength)) : ERROR_NONE;
      }
  
      return (result);
-@@ -510,7 +533,7 @@ OpenCDMError opencdm_session_decrypt_v2(struct OpenCDMSession* session,
+@@ -566,7 +589,7 @@ OpenCDMError opencdm_session_decrypt_v2(struct OpenCDMSession* session,
      if (session != nullptr) {
          uint32_t initWithLast15 = 0;
          result = encryptedLength > 0 ? static_cast<OpenCDMError>(session->Decrypt(
@@ -225,7 +225,7 @@ diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
 index 60547c3..fd87c46 100644
 --- a/Source/ocdm/open_cdm.h
 +++ b/Source/ocdm/open_cdm.h
-@@ -55,6 +55,7 @@
+@@ -56,6 +56,7 @@
  
  #include <stdint.h>
  #include <string.h>
@@ -233,7 +233,7 @@ index 60547c3..fd87c46 100644
  
  #include <stdio.h>
  #include <list>
-@@ -461,6 +462,17 @@ EXTERNAL OpenCDMError opencdm_session_metadata(const struct OpenCDMSession* sess
+@@ -484,6 +485,17 @@ EXTERNAL OpenCDMError opencdm_session_metadata(const struct OpenCDMSession* sess
   */
  EXTERNAL OpenCDMError opencdm_session_resetoutputprotection(struct OpenCDMSession* session);
  
@@ -251,7 +251,7 @@ index 60547c3..fd87c46 100644
  /**
   * Gets Session ID for a session.
   * \param session \ref OpenCDMSession instance.
-@@ -550,7 +562,9 @@ EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+@@ -573,7 +585,9 @@ EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
      const EncryptionPattern pattern, 
      const uint8_t* IV, uint16_t IVLength,
      const uint8_t* keyId, const uint16_t keyIdLength,
@@ -262,7 +262,7 @@ index 60547c3..fd87c46 100644
  
  #else
  EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
-@@ -560,7 +574,9 @@ EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+@@ -583,7 +597,9 @@ EXTERNAL OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
      const EncryptionPattern pattern,
      const uint8_t* IV, uint16_t IVLength,
      const uint8_t* keyId, const uint16_t keyIdLength,
@@ -272,12 +272,12 @@ index 60547c3..fd87c46 100644
 +    uint16_t streamInfoLength);
  #endif // __cplusplus
  
- 
+ /**
 diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
 index b15bff8..c886bfa 100644
 --- a/Source/ocdm/open_cdm_impl.h
 +++ b/Source/ocdm/open_cdm_impl.h
-@@ -401,7 +401,9 @@ private:
+@@ -393,7 +393,9 @@ private:
          uint32_t Decrypt(uint8_t* encryptedData, uint32_t encryptedDataLength,
              const ::SampleInfo* sampleInfo,
              uint32_t initWithLast15,
@@ -288,7 +288,7 @@ index b15bff8..c886bfa 100644
          {
              int ret = 0;
  
-@@ -446,6 +448,7 @@ private:
+@@ -438,6 +440,7 @@ private:
                  SetEncScheme(static_cast<uint8_t>(encScheme));
                  SetEncPattern(pattern.encrypted_blocks,pattern.clear_blocks);
                  InitWithLast15(initWithLast15);
@@ -296,7 +296,7 @@ index b15bff8..c886bfa 100644
                  if(properties != nullptr) {
                      SetMediaProperties(properties->height, properties->width, properties->media_type);
                  }
-@@ -603,6 +606,12 @@ public:
+@@ -601,6 +604,12 @@ public:
  
          _session->ResetOutputProtection();
      }
@@ -309,7 +309,7 @@ index b15bff8..c886bfa 100644
      inline int Remove()
      {
  
-@@ -627,7 +636,8 @@ public:
+@@ -625,7 +634,8 @@ public:
      uint32_t Decrypt(uint8_t* encryptedData, const uint32_t encryptedDataLength,
          const ::SampleInfo* sampleInfo,
          uint32_t initWithLast15,
@@ -319,7 +319,7 @@ index b15bff8..c886bfa 100644
      {
          uint32_t result = OpenCDMError::ERROR_INVALID_DECRYPT_BUFFER;
  
-@@ -643,7 +653,8 @@ public:
+@@ -641,7 +651,8 @@ public:
              result = decryptSession->Decrypt(encryptedData, encryptedDataLength, 
                  sampleInfo,
                  initWithLast15,
