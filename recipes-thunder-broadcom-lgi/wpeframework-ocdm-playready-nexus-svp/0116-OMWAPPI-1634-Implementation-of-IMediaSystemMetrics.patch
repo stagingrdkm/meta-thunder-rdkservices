@@ -5,15 +5,15 @@ Subject: [PATCH] 0116-OMWAPPI-1634-Implementation-of-IMediaSystemMetrics
 
 ---
  MediaSession.cpp | 5 +++++
- MediaSession.h   | 6 +++++-
+ MediaSession.h   | 5 ++++-
  MediaSystem.cpp  | 7 +++++++
- 3 files changed, 17 insertions(+), 1 deletion(-)
+ 3 files changed, 16 insertions(+), 1 deletion(-)
 
 diff --git a/MediaSession.cpp b/MediaSession.cpp
-index d16e875..ffae1ca 100644
+index 03f132f..425573f 100644
 --- a/MediaSession.cpp
 +++ b/MediaSession.cpp
-@@ -1115,4 +1115,9 @@ void MediaKeySession::CleanDecryptContexts()
+@@ -1188,4 +1188,9 @@ void MediaKeySession::CleanDecryptContexts()
      }
  }
  
@@ -24,10 +24,10 @@ index d16e875..ffae1ca 100644
 +
  }  // namespace CDMi
 diff --git a/MediaSession.h b/MediaSession.h
-index 9f08b76..0c952b4 100644
+index 3874cf5..21e8797 100644
 --- a/MediaSession.h
 +++ b/MediaSession.h
-@@ -104,7 +104,7 @@ struct OutputProtection {
+@@ -105,7 +105,7 @@ struct OutputProtection {
  namespace CDMi {
  
  
@@ -36,11 +36,10 @@ index 9f08b76..0c952b4 100644
  private:
      enum KeyState {
          // Has been initialized.
-@@ -224,6 +224,10 @@ private:
-     }
-     CDMi_RESULT SetKeyId(DRM_APP_CONTEXT *pDrmAppCtx, const uint8_t keyLength, const uint8_t keyId[]);
+@@ -220,6 +220,9 @@ private:
      CDMi_RESULT SelectDrmHeader(DRM_APP_CONTEXT *pDrmAppCtx, const uint32_t headerLength, const uint8_t header[]);
-+
+     void PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize, bool flush);
+ 
 +    // IMediaSessionMetrics overrides
 +    // ------------------------------------------------------------------------------------------
 +    CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const override;
@@ -66,6 +65,7 @@ index 9da7f42..5b2cbca 100644
      DRM_WCHAR* drmdir_;
  
 -- 
-2.25.1
+2.40.1
+
 
 

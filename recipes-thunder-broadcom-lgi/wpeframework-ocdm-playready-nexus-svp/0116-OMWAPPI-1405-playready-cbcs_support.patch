@@ -1,0 +1,220 @@
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 647c665..0b7cbda 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -789,19 +789,12 @@ CDMi_RESULT MediaKeySession::Close(void)
+ }
+ 
+ CDMi_RESULT MediaKeySession::Decrypt(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const EncryptionScheme encryptionScheme,
+-        const EncryptionPattern& pattern,
+-        const uint8_t *f_pbIV,
+-        uint32_t f_cbIV,
+-        uint8_t *payloadData,
+-        uint32_t payloadDataSize,
+-        uint32_t *f_pcbOpaqueClearContent,
+-        uint8_t **f_ppbOpaqueClearContent,
+-        const uint8_t /* keyIdLength */,
+-        const uint8_t* /* keyId */,
+-        bool initWithLast15)
++        uint8_t*                 inData,
++        const uint32_t           inDataLength,
++        uint8_t**                outData,
++        uint32_t*                outDataLength,
++        const SampleInfo*        sampleInfo,
++        const IStreamProperties* properties)
+ {
+     SafeCriticalSection systemLock(drmAppContextMutex_);
+     if (!m_oDecryptContext) {
+@@ -811,67 +804,56 @@ CDMi_RESULT MediaKeySession::Decrypt(
+ 
+     DRM_RESULT dr = DRM_SUCCESS;
+     CDMi_RESULT cr = CDMi_S_FALSE;
+-    DRM_AES_COUNTER_MODE_CONTEXT oAESContext = {0, 0, 0};
+     void *pOpaqueData = nullptr;
+     NEXUS_MemoryBlockHandle pNexusMemoryBlock = nullptr;
+     static NEXUS_HeapHandle secureHeap = NEXUS_Heap_Lookup(NEXUS_HeapLookupType_eCompressedRegion);
++    DRM_DWORD encryptedRegionIvCounts = 1;
++    DRM_UINT64 iv_high = 0;
++    DRM_UINT64 iv_low = 0;
++    std::vector<uint32_t> encryptedRegionMapping;
++    DRM_DWORD encryptedRegionCounts = 0;
++    std::vector<DRM_DWORD> encryptedRegionSkip;
+ 
+     {
+-        ChkArg(payloadData != nullptr && payloadDataSize > 0);
++        ChkArg(inData != nullptr && inDataLength > 0);
+     }
+ 
+-    if (!initWithLast15) {
+-        if( f_pcbOpaqueClearContent == nullptr || f_ppbOpaqueClearContent == nullptr )
+-        {
+-            dr = DRM_E_INVALIDARG;
+-            ChkDR(dr);
+-        }
+-
+-        {
+-            // The current state MUST be KEY_READY otherwise error out.
+-            ChkBOOL(m_eKeyState == KEY_READY, DRM_E_INVALIDARG);
+-            ChkArg(f_pbIV != nullptr && f_cbIV == sizeof(DRM_UINT64));
+-        }
++    if( outDataLength == nullptr || outData == nullptr )
++    {
++        dr = DRM_E_INVALIDARG;
++        ChkDR(dr);
+     }
+ 
+-    // TODO: can be done in another way (now abusing "initWithLast15" variable)
+-    if (initWithLast15) {
+-        // Netflix case
+-       memcpy(&oAESContext, f_pbIV, sizeof(oAESContext));
+-    } else {
+-       // Regular case
+-       // FIXME: IV bytes need to be swapped ???
+-       // TODO: is this for-loop the same as "NETWORKBYTES_TO_QWORD"?
+-       unsigned char * ivDataNonConst = const_cast<unsigned char *>(f_pbIV); // TODO: this is ugly
+-       for (uint32_t i = 0; i < f_cbIV / 2; i++) {
+-          unsigned char temp = ivDataNonConst[i];
+-          ivDataNonConst[i] = ivDataNonConst[f_cbIV - i - 1];
+-          ivDataNonConst[f_cbIV - i - 1] = temp;
+-       }
++    {
++        // The current state MUST be KEY_READY otherwise error out.
++        ChkBOOL(m_eKeyState == KEY_READY, DRM_E_INVALIDARG);
++        ChkArg(sampleInfo->iv != nullptr && (sampleInfo->ivLength == sizeof(DRM_UINT64) || sampleInfo->ivLength == 2*sizeof(DRM_UINT64)));
++    }
+ 
+-       memcpy(&oAESContext.qwInitializationVector, f_pbIV, f_cbIV);
++    NETWORKBYTES_TO_QWORD(iv_high, sampleInfo->iv, 0);
++    if (sampleInfo->ivLength == 16) {
++        NETWORKBYTES_TO_QWORD(iv_low, sampleInfo->iv, 8);
+     }
+ 
+     // Reallocate input memory if needed.
+-    if (payloadDataSize >  mNexusMemorySize) {
+-
++    if (inDataLength >  mNexusMemorySize) {
+         void *newBuffer = nullptr;
+-        int rc = NEXUS_Memory_Allocate(payloadDataSize, nullptr, &newBuffer);
++        int rc = NEXUS_Memory_Allocate(inDataLength, nullptr, &newBuffer);
+         if( rc != 0 ) {
+-            LOGGER(LERROR_, "NexusMemory to small, use larger buffer. could not allocate memory %d", payloadDataSize);
++            LOGGER(LERROR_, "NexusMemory to small, use larger buffer. could not allocate memory %d", inDataLength);
+             goto ErrorExit;
+         }
+ 
+         NEXUS_Memory_Free(pNexusMemory);
+         pNexusMemory = newBuffer;
+-        mNexusMemorySize = payloadDataSize;
+-        LOGGER(LINFO_, "NexusMemory to small, use larger buffer.  %d", payloadDataSize);
++        mNexusMemorySize = inDataLength;
++        LOGGER(LINFO_, "NexusMemory to small, use larger buffer.  %d", inDataLength);
+     }
+ 
+-    pNexusMemoryBlock = NEXUS_MemoryBlock_Allocate(secureHeap, payloadDataSize, 0, nullptr);
++    pNexusMemoryBlock = NEXUS_MemoryBlock_Allocate(secureHeap, inDataLength, 0, nullptr);
+     if (!pNexusMemoryBlock) {
+ 
+-        LOGGER(LERROR_, "NexusBlockMemory could not allocate %d", payloadDataSize);
++        LOGGER(LERROR_, "NexusBlockMemory could not allocate %d", inDataLength);
+         goto ErrorExit;
+     }
+ 
+@@ -893,28 +875,51 @@ CDMi_RESULT MediaKeySession::Decrypt(
+     }
+ 
+     // Copy provided payload to Input of Decryption.
+-    ::memcpy(pNexusMemory, payloadData, payloadDataSize);
++    ::memcpy(pNexusMemory, inData, inDataLength);
++    NEXUS_FlushCache(pNexusMemory, inDataLength);
++
++    if (sampleInfo->subSampleCount > 0) {
++      for (int i = 0; i < sampleInfo->subSampleCount; i++) {
++        encryptedRegionMapping.push_back(sampleInfo->subSample[i].clear_bytes);
++        encryptedRegionMapping.push_back(sampleInfo->subSample[i].encrypted_bytes);
++      }
++    } else {
++        encryptedRegionMapping.push_back(0);
++        encryptedRegionMapping.push_back(inDataLength);
++    }
+ 
+-    uint32_t subsamples[2];
+-    subsamples[0] = 0;
+-    subsamples[1] = payloadDataSize;
++    encryptedRegionCounts = encryptedRegionMapping.size()/2;
+ 
+-    ChkDR(Drm_Reader_DecryptOpaque(
++    if (sampleInfo->pattern.encrypted_blocks != 0){
++        encryptedRegionSkip.push_back(sampleInfo->pattern.encrypted_blocks);
++        encryptedRegionSkip.push_back(sampleInfo->pattern.clear_blocks);
++    }
++
++    ChkDR(Drm_Reader_DecryptMultipleOpaque(
+             m_oDecryptContext,
+-            2,
+-            subsamples,
+-            oAESContext.qwInitializationVector,
+-            payloadDataSize,
++
++            encryptedRegionIvCounts,
++            &iv_high,
++            sampleInfo->ivLength == 16 ? &iv_low : nullptr,
++
++            &encryptedRegionCounts,
++            encryptedRegionMapping.size(),
++            encryptedRegionMapping.data(),
++
++            encryptedRegionSkip.size(),
++            encryptedRegionSkip.size() > 0 ? encryptedRegionSkip.data() : nullptr,
++
++            inDataLength,
+             (DRM_BYTE*)pNexusMemory,
+-            (DRM_DWORD*)&payloadDataSize,
++            (DRM_DWORD*)&inDataLength,
+             (DRM_BYTE**)&pOpaqueData));
+ 
+     cr = CDMi_SUCCESS;
+ 
+     // Copy and Return the Memory token in the incoming payload buffer.
+-    *f_pcbOpaqueClearContent = sizeof(m_TokenHandle);
+-    *f_ppbOpaqueClearContent = payloadData;
+-    memcpy(*f_ppbOpaqueClearContent, reinterpret_cast<uint8_t*>(&m_TokenHandle), sizeof(m_TokenHandle));
++    *outDataLength = sizeof(m_TokenHandle);
++    *outData = inData;
++    memcpy(*outData, reinterpret_cast<uint8_t*>(&m_TokenHandle), sizeof(m_TokenHandle));
+ 
+     NEXUS_MemoryBlock_Unlock(pNexusMemoryBlock);
+     NEXUS_MemoryBlock_Free(pNexusMemoryBlock);
+diff --git a/MediaSession.h b/MediaSession.h
+index 9f08b76..9d430d1 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -162,19 +162,12 @@ public:
+     virtual const char *GetSessionId(void) const override;
+     virtual const char *GetKeySystem(void) const override;
+     virtual CDMi_RESULT Decrypt(
+-        const uint8_t *f_pbSessionKey,
+-        uint32_t f_cbSessionKey,
+-        const EncryptionScheme encryptionScheme,
+-        const EncryptionPattern& pattern,
+-        const uint8_t *f_pbIV,
+-        uint32_t f_cbIV,
+-        uint8_t *f_pbData,
+-        uint32_t f_cbData,
+-        uint32_t *f_pcbOpaqueClearContent,
+-        uint8_t **f_ppbOpaqueClearContent,
+-        const uint8_t keyIdLength,
+-        const uint8_t* keyId,
+-        bool initWithLast15) override;
++        uint8_t*                 inData,
++        const uint32_t           inDataLength,
++        uint8_t**                outData,
++        uint32_t*                outDataLength,
++        const SampleInfo*        sampleInfo,
++        const IStreamProperties* properties);
+ 
+     virtual CDMi_RESULT ReleaseClearContent(
+         const uint8_t *f_pbSessionKey,
+
