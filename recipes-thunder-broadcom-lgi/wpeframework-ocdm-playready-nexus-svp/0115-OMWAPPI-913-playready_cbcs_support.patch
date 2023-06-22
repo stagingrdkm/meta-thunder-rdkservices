@@ -8,7 +8,7 @@ diff --git a/MediaSession.cpp b/MediaSession.cpp
 index 3eb0137..ac85848 100644
 --- a/MediaSession.cpp
 +++ b/MediaSession.cpp
-@@ -451,14 +451,12 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+@@ -453,14 +453,12 @@ DRM_RESULT MediaKeySession::PolicyCallback(
              playreadyInitData = initData;
          }
  
@@ -27,7 +27,7 @@ index 3eb0137..ac85848 100644
          ZEROMEM(m_rgchSessionID, sizeof(m_rgchSessionID));
          // Store the generated media session ID in base64 encoded form.
          ChkDR(DRM_B64_EncodeA((DRM_BYTE *)&oSessionID,
-@@ -522,12 +520,6 @@ bool MediaKeySession::playreadyGenerateKeyRequest() {
+@@ -524,12 +522,6 @@ bool MediaKeySession::playreadyGenerateKeyRequest() {
      DRM_DWORD cchSilentURL = 0;
  
      if(m_eKeyState == KEY_INIT){
@@ -40,7 +40,7 @@ index 3eb0137..ac85848 100644
          // Try to figure out the size of the license acquisition
          // challenge to be returned.
          dr = Drm_LicenseAcq_GenerateChallenge(m_poAppContext,
-@@ -590,6 +582,8 @@ bool MediaKeySession::playreadyGenerateKeyRequest() {
+@@ -592,6 +584,8 @@ bool MediaKeySession::playreadyGenerateKeyRequest() {
              ChkDR(dr);
          }
  
@@ -49,7 +49,7 @@ index 3eb0137..ac85848 100644
          // Supply a buffer to receive the license acquisition challenge.
          ChkDR(Drm_LicenseAcq_GenerateChallenge(m_poAppContext,
                                              g_rgpdstrRights,
-@@ -648,8 +642,7 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+@@ -657,8 +651,7 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
  
      BKNI_Memset(&oLicenseResponse, 0, sizeof(oLicenseResponse));
  
@@ -58,8 +58,8 @@ index 3eb0137..ac85848 100644
 +    ChkDR(SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()));
  
      LOGGER(LINFO_, "Processing license acquisition response...");
-     ChkDR(Drm_LicenseAcq_ProcessResponse(m_poAppContext,
-@@ -764,11 +757,11 @@ CDMi_RESULT MediaKeySession::Close(void)
+ 
+@@ -792,11 +785,11 @@ CDMi_RESULT MediaKeySession::Close(void)
  CDMi_RESULT MediaKeySession::Decrypt(
          const uint8_t *f_pbSessionKey,
          uint32_t f_cbSessionKey,
@@ -74,7 +74,7 @@ index 3eb0137..ac85848 100644
          uint32_t payloadDataSize,
          uint32_t *f_pcbOpaqueClearContent,
          uint8_t **f_ppbOpaqueClearContent,
-@@ -884,9 +877,10 @@ CDMi_RESULT MediaKeySession::Decrypt(
+@@ -912,9 +905,10 @@ CDMi_RESULT MediaKeySession::Decrypt(
  
      cr = CDMi_SUCCESS;
  
@@ -103,7 +103,7 @@ index 23d1dc5..0f46385 100644
  #include <vector>
  
  #include <nexus_config.h>
-@@ -157,11 +158,11 @@ public:
+@@ -163,11 +164,11 @@ public:
      virtual CDMi_RESULT Decrypt(
          const uint8_t *f_pbSessionKey,
          uint32_t f_cbSessionKey,
@@ -122,7 +122,7 @@ diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
 index a063988..3036cc1 100644
 --- a/MediaSessionExt.cpp
 +++ b/MediaSessionExt.cpp
-@@ -76,6 +76,10 @@ static void * PlayLevelUpdateCallback(void * data)
+@@ -78,6 +78,10 @@ static void * PlayLevelUpdateCallback(void * data)
  {
      CallbackInfo * callbackInfo = static_cast<CallbackInfo *>(data);
  
@@ -133,7 +133,7 @@ index a063988..3036cc1 100644
      std::stringstream keyMessage;
      keyMessage << "{";
      keyMessage << "\"compressed-video\": " << callbackInfo->_compressedVideo << ",";
-@@ -90,11 +94,9 @@ static void * PlayLevelUpdateCallback(void * data)
+@@ -92,11 +96,9 @@ static void * PlayLevelUpdateCallback(void * data)
      std::string keyMessageStr = keyMessage.str();
      const uint8_t * messageBytes = reinterpret_cast<const uint8_t *>(keyMessageStr.c_str());
  
@@ -192,3 +192,6 @@ index 8fe9c51..e260f80 100644
 +#include <core/core.h>
 +#include <tracing/tracing.h>
 +#include <websocket/websocket.h>
+-- 
+2.25.1
+
