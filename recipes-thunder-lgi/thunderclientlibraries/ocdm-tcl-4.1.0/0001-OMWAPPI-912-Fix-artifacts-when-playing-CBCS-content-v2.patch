@@ -1,0 +1,69 @@
+From 635229ba454221c527851d817f9ccf6a1f84aabf Mon Sep 17 00:00:00 2001
+From: Piotr Marcinkowski <piotr.marcinkowski@redembedded.com>
+Date: Fri, 31 Mar 2023 15:20:23 +0000
+Subject: [PATCH] OMWAPPI-912 Fix artifacts when playing CBCS content
+
+Currently subsamples are not being passed to OCDM as they are,
+meaning they get changed by extracting only their encrypted part
+to a separete buffer. That buffer, that consists only of combined
+encrypted data of all samples is then passed to underlying
+components - OCDM, SVP module, TEE. In order to indicate there
+are no unencrypted bytes in that buffer the clear_bytes value
+is set to 0 for each sub-sample.
+
+The initial version of this change was just setting clear_bytes
+in each subsampleInfo to zero. However in some cases that could
+lead to creating empty subsampleInfo with both clear_bytes and
+encrypted_bytes having zero values. This has been observed in
+case of subsampleInfo positioned as last in a sequence and was
+causing the decrypt function to end with an error.
+Hence the second  version of this change includes filtering such
+empty values (0,0) out - refer to OMWAPPI-1611 for more info.
+---
+ .../adapter/broadcom-svp/open_cdm_adapter.cpp    | 16 ++++++++++++++--
+ 1 file changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+index f6cc2dc..89db877 100644
+--- a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
++++ b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+@@ -197,12 +197,24 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+ 
+         //Create a SubSampleInfo Array with mapping
+         SubSampleInfo * subSampleInfoPtr = nullptr;
++        uint32_t nonEmptySubSampleInfoCount = subSampleCount;
+         if (subSample != nullptr) {
+             GstByteReader* reader = gst_byte_reader_new(mappedSubSample, mappedSubSampleSize);
+             subSampleInfoPtr = reinterpret_cast<SubSampleInfo*>(malloc(subSampleCount * sizeof(SubSampleInfo)));
+-            for (unsigned int position = 0; position < subSampleCount; position++) {
++            for (unsigned int i = 0, position = 0; i < subSampleCount; i++, position++) {
+                 gst_byte_reader_get_uint16_be(reader, &subSampleInfoPtr[position].clear_bytes);
++                // In some cases this can create an empty subsampleInfo (0,0)
++                subSampleInfoPtr[position].clear_bytes = 0;
+                 gst_byte_reader_get_uint32_be(reader, &subSampleInfoPtr[position].encrypted_bytes);
++                // Filter out empty subsampleInfo - they can cause decrypt method to return error
++                if (subSampleInfoPtr[position].clear_bytes == 0 && subSampleInfoPtr[position].encrypted_bytes == 0) {
++                    //TRACE_L1("Skipping empty subsampleInfo at position:%u", i);
++                    nonEmptySubSampleInfoCount--;
++                    // Since the current subsampleInfo gets skipped because it's empty (0,0)
++                    // then its position can be used by a next non-empty subsampleInfo
++                    // or left unused if it was the last position
++                    position--;
++                }
+             }
+             gst_byte_reader_set_pos(reader, 0);
+             gst_byte_reader_free(reader);
+@@ -210,7 +222,7 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+ 
+         SampleInfo sampleInfo;
+         sampleInfo.subSample = subSampleInfoPtr;
+-        sampleInfo.subSampleCount = subSampleCount;
++        sampleInfo.subSampleCount = nonEmptySubSampleInfoCount;
+         sampleInfo.scheme = encScheme;
+         sampleInfo.pattern.clear_blocks = pattern.clear_blocks;
+         sampleInfo.pattern.encrypted_blocks = pattern.encrypted_blocks;
+-- 
+2.40.0
+
+
+
