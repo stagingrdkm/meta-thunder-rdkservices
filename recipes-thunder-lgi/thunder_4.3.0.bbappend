@@ -10,8 +10,6 @@ DEPENDS_append = " dbus libodherr lxc systemd"
 
 SRC_URI += "file://0001-RDK-28534-Security-Agent-Utility-and-Logging-OnlyFindRFC.patch"
 
-SRC_URI_remove = "file://trace_log_flag_enabled.patch"
-
 EXTRA_OECMAKE += "${@in_debug_or_release_no_ops(bb, d, '-DBINDING=0.0.0.0')}"
 EXTRA_OECMAKE += "-DTRACING_ONLY_DIRECT_OUTPUT=ON"
 EXTRA_OECMAKE += "-DTRACE_SETTINGS=logCfg.json"

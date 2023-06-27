@@ -25,7 +25,6 @@ SRC_URI += " \
            file://to_add_protocols_pkgconfig_sdk.patch \
            file://0001-Thunder_json_quoted_string_parsing_fix.patch \
            file://0001_Reverted_changes_Fix_JSON_Reset_R3.5_for_SystemServicesPlugin.patch \
-           file://trace_log_flag_enabled.patch \
            file://0001-disable_trace_warnings.patch \
            file://0005-Thunder-R4.1-fixes.patch \
            file://activationevent.patch \

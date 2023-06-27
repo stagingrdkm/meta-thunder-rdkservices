@@ -24,7 +24,6 @@ SRC_URI += " \
            file://0001-Thunder_Trace_log_enable_error_fix.patch \
            file://to_add_protocols_pkgconfig_sdk.patch \
            file://0001_Reverted_changes_Fix_JSON_Reset_R3.5_for_SystemServicesPlugin.patch \
-           file://trace_log_flag_enabled.patch \
            file://0001-disable_trace_warnings.patch \
            file://activationevent.patch \
 "
