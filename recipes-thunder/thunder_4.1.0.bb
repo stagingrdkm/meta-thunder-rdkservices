@@ -18,7 +18,6 @@ SRC_URI += " \
            file://Library_version_matched_with_release_tag.patch \
            file://Remove_versioning_for_executables.patch \
            file://0003-OCDM-increase-RPC-comm-timeout.patch \
-           file://0001-RDK-28534-Security-Agent-Utility-and-Logging.patch \
            file://0004-Enable-BrowserConsoleLog-by-default.patch \
            file://0001-RDKTV-15393-clock_gettime.patch \
            file://LLAMA-2254_fix_netlink_buffer_size_error.patch \

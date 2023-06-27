@@ -8,9 +8,6 @@ DEPENDS_append = " breakpad"
 DEPENDS_append = " glib-2.0"
 DEPENDS_append = " dbus libodherr lxc systemd"
 
-# SecurityAgent plugin is not integrated, that patch was and is removed
-SRC_URI_remove = "file://0001-RDK-28534-Security-Agent-Utility-and-Logging.patch"
-# we need only part of that FindRFC.cmake
 SRC_URI += "file://0001-RDK-28534-Security-Agent-Utility-and-Logging-OnlyFindRFC.patch"
 
 SRC_URI_remove = "file://trace_log_flag_enabled.patch"
