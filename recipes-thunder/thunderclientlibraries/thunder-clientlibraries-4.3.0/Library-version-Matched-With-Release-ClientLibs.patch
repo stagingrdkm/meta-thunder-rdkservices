@@ -7,7 +7,7 @@ index f6dbd96..7498eda 100644
 
  project(bluetoothaudiosink)
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${PROJECT_NAME})
 
@@ -20,7 +20,7 @@ index 1bc2b75..891aa20 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${PROJECT_NAME})
 
@@ -33,7 +33,7 @@ index 38bb878..8b8e6b1 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${NAMESPACE}${PROJECT_NAME})
 
@@ -46,7 +46,7 @@ index 7a966bb..1ed3278 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${PROJECT_NAME})
 
@@ -59,7 +59,7 @@ index fb84cc7..5388500 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${PROJECT_NAME})
 
@@ -72,7 +72,7 @@ index 818b07a..3392053 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(MODULE_NAME ${NAMESPACE}LocalTracer)
 
@@ -92,7 +92,7 @@ index b7526a0..d1e3de8 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${PROJECT_NAME})
 
@@ -105,7 +105,7 @@ index 2eda446..023dc5c 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${PROJECT_NAME})
 
@@ -118,7 +118,7 @@ index 8e9fbd8..67854fc 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${PROJECT_NAME})
 
@@ -131,7 +131,7 @@ index c9dea3a..a8f8bbd 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${PROJECT_NAME})
 
@@ -144,7 +144,7 @@ index b6ab243..ae3149c 100644
  find_package(WPEFramework)
 
 -project_version(1.0.0)
-+project_version(4.1.0)
++project_version(4.3.0)
 
  set(TARGET ${NAMESPACE}${PROJECT_NAME})
 
