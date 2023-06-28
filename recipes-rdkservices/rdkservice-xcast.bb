@@ -5,10 +5,6 @@ PLUGINDIR="XCast"
 
 require rdkservices-common/common_plugin.inc
 
-EXTERNALSRC = ""
-SRC_URI += "${DEFAULT_NEXT_SRC_URI}"
-SRCREV_${PN}="${DEFAULT_NEXT_SRC_URI_REVISION}"
-
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 
 DEPENDS += "cjson rfc rtremote wpeframework-clientlibraries rtremote"
