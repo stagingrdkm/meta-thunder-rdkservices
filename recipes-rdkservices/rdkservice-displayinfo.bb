@@ -6,10 +6,6 @@ PLUGINDIR="DisplayInfo"
 
 require rdkservices-common/common_plugin.inc
 
-EXTERNALSRC = ""
-SRC_URI += "${DEFAULT_NEXT_SRC_URI}"
-SRCREV_${PN}="${DEFAULT_NEXT_SRC_URI_REVISION}"
-
 PACKAGECONFIG ?= "displayinfo"
 PACKAGECONFIG[displayinfo]  = "-DPLUGIN_DISPLAYINFO=ON -DUSE_DEVICESETTINGS=1,-DPLUGIN_DISPLAYINFO=OFF,"
 

@@ -6,13 +6,14 @@ PV = "3.0+git${SRCPV}"
 S = "${WORKDIR}/git"
 
 inherit onemw_externalsrc cmake pkgconfig systemd onemw_rdkversion
-EXTERNALSRC = "${MW_SRC_PATH}/rdkservices/"
+EXTERNALSRC = ""
 
 DEPENDS += "wpeframework-tools-native wpeframework wpeframework-interfaces"
 
-# rdkservices "next" location, Thunder R4
-DEFAULT_NEXT_SRC_URI="git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=th4_3_issues;name=${PN};destsuffix=git"
-DEFAULT_NEXT_SRC_URI_REVISION="81d279119e42ab9322a5c39b5698d1dc91542be4"
+# rdkservices location, Thunder R4
+RDKSERVICES_BRANCH="${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', 'lgi-thunder4.3-20230628', 'lgi-thunder4-20230518', d)}"
+SRC_URI += "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=${RDKSERVICES_BRANCH};name=${PN};destsuffix=git"
+SRCREV_${PN}="${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', '3c579e055a5a039afe23dfc9c62042b9052a56b0', '143c11fa5bc65dfae846f91589f601f68ac40a00', d)}"
 
 TOOLCHAIN = "gcc"
 EXTRA_OECMAKE += "-DCMAKE_SYSROOT=${STAGING_DIR_HOST}"

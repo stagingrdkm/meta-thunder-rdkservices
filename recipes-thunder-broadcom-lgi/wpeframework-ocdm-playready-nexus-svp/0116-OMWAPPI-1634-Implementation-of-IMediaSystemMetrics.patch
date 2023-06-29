@@ -10,7 +10,7 @@ Subject: [PATCH] 0116-OMWAPPI-1634-Implementation-of-IMediaSystemMetrics
  3 files changed, 16 insertions(+), 1 deletion(-)
 
 diff --git a/MediaSession.cpp b/MediaSession.cpp
-index d16e875..ffae1ca 100644
+index 03f132f..425573f 100644
 --- a/MediaSession.cpp
 +++ b/MediaSession.cpp
 @@ -1188,4 +1188,9 @@ void MediaKeySession::CleanDecryptContexts()
@@ -24,7 +24,7 @@ index d16e875..ffae1ca 100644
 +
  }  // namespace CDMi
 diff --git a/MediaSession.h b/MediaSession.h
-index 9f08b76..0c952b4 100644
+index 3874cf5..21e8797 100644
 --- a/MediaSession.h
 +++ b/MediaSession.h
 @@ -105,7 +105,7 @@ struct OutputProtection {

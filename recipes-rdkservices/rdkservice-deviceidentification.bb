@@ -5,10 +5,6 @@ PLUGINDIR="DeviceIdentification"
 
 require rdkservices-common/common_plugin.inc
 
-EXTERNALSRC = ""
-SRC_URI += "${DEFAULT_NEXT_SRC_URI}"
-SRCREV_${PN}="${DEFAULT_NEXT_SRC_URI_REVISION}"
-
 EXTRA_OECMAKE += " \
     -DPLUGIN_DEVICEIDENTIFICATION_AUTOSTART=true \
 "

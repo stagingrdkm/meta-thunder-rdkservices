@@ -208,7 +208,7 @@ Index: git/Source/securityutility/lib/CMakeLists.txt
 +
 +find_package(WPEFramework)
 +
-+project_version(4.1.0)
++project_version(4.3.0)
 +
 +set(TARGET ${PROJECT_NAME})
 +
