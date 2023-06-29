@@ -1,0 +1,30 @@
+From: Lukasz Wasylyk <lukasz.wasylyk@redembedded.com>
+Date: Tue, 25 Oct 2021 13:19:00 +0100
+Subject: ONEM-22611: So locations restricted.
+
+diff --git a/Source/WPEProcess/Process.cpp b/Source/WPEProcess/Process.cpp
+index 0eb3d3f6..9c4ed6af 100644
+--- a/Source/WPEProcess/Process.cpp
++++ b/Source/WPEProcess/Process.cpp
+@@ -324,21 +324,7 @@ namespace Process {
+         void* result = nullptr;
+ 
+         if ((options.Locator != nullptr) && (options.ClassName != nullptr)) {
+-            result = CheckInstance(options.PersistentPath, options.Locator, options.ClassName, options.InterfaceId, options.Version);
+-
+-            if (result == nullptr) {
+                 result = CheckInstance(options.SystemPath, options.Locator, options.ClassName, options.InterfaceId, options.Version);
+-
+-                if (result == nullptr) {
+-                    result = CheckInstance(options.DataPath, options.Locator, options.ClassName, options.InterfaceId, options.Version);
+-
+-                    if (result == nullptr) {
+-                        string searchPath(options.AppPath.empty() == false ? Core::Directory::Normalize(options.AppPath) : string());
+-
+-                        result = CheckInstance((searchPath + _T("Plugins/")), options.Locator, options.ClassName, options.InterfaceId, options.Version);
+-                    }
+-                }
+-            }
+         }
+ 
+         return (result);

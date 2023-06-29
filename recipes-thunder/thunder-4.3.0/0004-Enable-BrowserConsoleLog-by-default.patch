@@ -1,0 +1,39 @@
+From 53758afccfc690597999d270ee592a416411e0d9 Mon Sep 17 00:00:00 2001
+From: Ievgen Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Wed, 7 Apr 2021 14:20:43 -0400
+Subject: [PATCH] Enable BrowserConsoleLog by default
+
+Adjusted for R4.3 due to 783069252f94ec0e8d004cd4409e14566ffc1ef7,
+which removes the whole NOT MESSAGING configuration section.
+
+---
+ Source/WPEFramework/GenericConfig.cmake | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/Source/WPEFramework/GenericConfig.cmake b/Source/WPEFramework/GenericConfig.cmake
+index 048e8e80..d57a81b8 100644
+--- a/Source/WPEFramework/GenericConfig.cmake
++++ b/Source/WPEFramework/GenericConfig.cmake
+@@ -166,6 +166,19 @@ if (PLUGIN_WEBSERVER OR PLUGIN_WEBKITBROWSER OR PLUGIN_ESPIAL)
+     endif (PLUGIN_WEBSERVER)
+ endif()
+ 
++map()
++    kv(category "BrowserConsoleLog")
++    kv(module "Plugin_WebKitBrowser")
++    kv(enabled true)
++end()
++ans(PLUGIN_WEBKITBROWSER_TRACING)
++
++map()
++    kv(category "BrowserConsoleLog")
++    kv(module "Plugin_WebKitBrowserExtension")
++    kv(enabled true)
++end()
++ans(PLUGIN_WEBKITBROWSEREXTENSION_TRACING)
+ 
+ if(NOT VIRTUALINPUT)
+     map()
+-- 
+2.25.1
+

@@ -1,0 +1,60 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 4 Jan 2022 11:11:44 +0100
+Subject: [PATCH] [ARRISAPOL-2315] Missing external symbols not exported
+---
+ Source/com/Messages.h      | 4 ++--
+ Source/core/IPCConnector.h | 2 +-
+ Source/core/Proxy.h        | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Source/com/Messages.h b/Source/com/Messages.h
+index ded6d947..4bb96502 100644
+--- a/Source/com/Messages.h
++++ b/Source/com/Messages.h
+@@ -68,7 +68,7 @@ namespace RPC {
+             }
+         };
+ 
+-        class Input {
++        class EXTERNAL Input {
+         public:
+             Input(const Input&) = delete;
+             Input& operator=(const Input&) = delete;
+@@ -137,7 +137,7 @@ namespace RPC {
+             Frame _data;
+         };
+ 
+-        class Output {
++        class EXTERNAL Output {
+         public:
+             enum mode : uint8_t {
+                 CACHED_ADDREF   = 0x01,
+diff --git a/Source/core/IPCConnector.h b/Source/core/IPCConnector.h
+index f24c595a..ab382fd7 100644
+--- a/Source/core/IPCConnector.h
++++ b/Source/core/IPCConnector.h
+@@ -262,7 +262,7 @@ namespace Core {
+     };
+ 
+     template <const uint32_t IDENTIFIER, typename PARAMETERS, typename RESPONSE>
+-    class IPCMessageType : public IIPC, public IReferenceCounted {
++    class EXTERNAL IPCMessageType : public IIPC, public IReferenceCounted {
+     private:
+         using CompoundClass = IPCMessageType<IDENTIFIER, PARAMETERS, RESPONSE>;
+ 
+diff --git a/Source/core/Proxy.h b/Source/core/Proxy.h
+index 8697928a..4f8f0267 100644
+--- a/Source/core/Proxy.h
++++ b/Source/core/Proxy.h
+@@ -1417,7 +1417,7 @@ POP_WARNING()
+         };
+ 
+         template <typename PROXYELEMENT>
+-        class ProxyPoolType {
++        class EXTERNAL ProxyPoolType {
+         private:
+             using ContainerElement = ProxyContainerType< ProxyPoolType<PROXYELEMENT>, PROXYELEMENT, PROXYELEMENT>;
+             using ContainerList = std::list< Core::ProxyType<ContainerElement> >;
+-- 
+2.25.1
+

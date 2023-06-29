@@ -1,0 +1,33 @@
+From: Lukasz Wasylyk <lukasz.wasylyk@redembedded.com>
+Date: Tue, 29 Oct 2021 16:50:00 +0100
+Subject: ONEM-22947 - allow assert with separate flag, make sure all ASSERTs can compile
+
+diff --git a/Source/core/Trace.h b/Source/core/Trace.h
+index 54ceda36..93a19161 100644
+--- a/Source/core/Trace.h
++++ b/Source/core/Trace.h
+@@ -112,7 +112,7 @@ namespace WPEFramework {
+ #undef VERIFY
+ #endif
+ 
+-#ifdef __DEBUG__
++#if defined(__DEBUG__) || defined(__ENABLE_ASSERT__)
+ 
+ #define ASSERT(expr)                                                                                            \
+     do {                                                                                                        \
+diff --git a/Source/com/Administrator.h b/Source/com/Administrator.h
+index 99eb3017..0044f848 100644
+--- a/Source/com/Administrator.h
++++ b/Source/com/Administrator.h
+@@ -74,11 +74,9 @@ namespace RPC {
+                 _referenceCount -= dropCount;
+                 return(_referenceCount > 0);
+             }
+-#ifdef __DEBUG__
+             bool Flushed() const {
+                 return (_referenceCount == 0);
+             }
+-#endif
+ 
+         private:
+             uint32_t _interfaceId;

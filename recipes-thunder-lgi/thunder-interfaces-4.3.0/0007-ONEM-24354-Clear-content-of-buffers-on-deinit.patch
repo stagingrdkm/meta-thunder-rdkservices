@@ -1,0 +1,29 @@
+From 00cb5b46214edacb3f865486ef4700321cbd4259 Mon Sep 17 00:00:00 2001
+From: Lukasz Wasylyk <lukasz.wasylyk@redembedded.com>
+Date: 2021.02.17
+Subject: [ONEM-24354] OCDM buffer cleanup added
+---
+ interfaces/IContentDecryption.h | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/interfaces/IContentDecryption.h b/interfaces/IContentDecryption.h
+index e4a2862..9099721 100644
+--- a/interfaces/IContentDecryption.h
++++ b/interfaces/IContentDecryption.h
+@@ -102,7 +102,12 @@ namespace Exchange {
+             // Clear the administration space before using it.
+             ::memset(admin, 0, sizeof(Administration));
+         }
+-        ~DataExchange() = default;
++
++        ~DataExchange()
++        {
++          Reallocation(0);
++          Sync();
++        }
+ 
+     public:
+         void Clear() 
+-- 
+2.25.1
+

@@ -1,0 +1,54 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Fri, 25 Mar 2022 15:37:23 +0100
+Subject: [PATCH] [HUMAXEOSR-995] WPEProcess crash on termination with (_state
+ == IDLE) assert
+
+in the following overlapping condition:
+- internal service stop via slauncher
+- service stop from application via dbus and deactivate
+---
+ Source/WPEProcess/Process.cpp | 5 ++++-
+ Source/core/WorkerPool.h      | 4 ++++
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WPEProcess/Process.cpp b/Source/WPEProcess/Process.cpp
+index 90edd52..a4e47c6 100644
+--- a/Source/WPEProcess/Process.cpp
++++ b/Source/WPEProcess/Process.cpp
+@@ -77,6 +77,7 @@ namespace Process {
+ #endif
+             ~Sink() override
+             {
++                _job.Reset();
+             }
+ 
+         public:
+@@ -154,7 +155,9 @@ namespace Process {
+         }
+         void Stop()
+         {
+-            Core::WorkerPool::Shutdown();
++            // disable queue, stop executors, flush queue
++            Core::WorkerPool::Stop();
++            Core::WorkerPool::Flush();
+         }
+ 
+ 
+diff --git a/Source/core/WorkerPool.h b/Source/core/WorkerPool.h
+index 2cca548..8e6964b 100644
+--- a/Source/core/WorkerPool.h
++++ b/Source/core/WorkerPool.h
+@@ -242,6 +242,10 @@ namespace Core {
+         }
+ 
+     protected:
++        inline void Flush()
++        {
++            _threadPool.Queue().Flush();
++        }
+         inline void Shutdown()
+         {
+             _threadPool.Queue().Disable();
+-- 
+2.25.1
+

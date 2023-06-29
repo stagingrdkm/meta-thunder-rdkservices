@@ -1,0 +1,146 @@
+diff --git a/Source/bluetoothaudiosink/CMakeLists.txt b/Source/bluetoothaudiosink/CMakeLists.txt
+index ca2f58e..b070df0 100644
+--- a/Source/bluetoothaudiosink/CMakeLists.txt
++++ b/Source/bluetoothaudiosink/CMakeLists.txt
+@@ -21,7 +21,7 @@ find_package(WPEFramework)
+ 
+ project(BluetoothAudioSink)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${NAMESPACE}${PROJECT_NAME})
+ 
+diff --git a/Source/compositorclient/CMakeLists.txt b/Source/compositorclient/CMakeLists.txt
+index b6ff8ca..19b8087 100644
+--- a/Source/compositorclient/CMakeLists.txt
++++ b/Source/compositorclient/CMakeLists.txt
+@@ -21,7 +21,7 @@ find_package(WPEFramework)
+ 
+ project(compositorclient)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${PROJECT_NAME})
+ 
+diff --git a/Source/cryptography/CMakeLists.txt b/Source/cryptography/CMakeLists.txt
+index d519b69..33bde2a 100644
+--- a/Source/cryptography/CMakeLists.txt
++++ b/Source/cryptography/CMakeLists.txt
+@@ -21,7 +21,7 @@ find_package(WPEFramework)
+ 
+ project(Cryptography)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${NAMESPACE}${PROJECT_NAME})
+ 
+diff --git a/Source/deviceinfo/CMakeLists.txt b/Source/deviceinfo/CMakeLists.txt
+index c1eef12..7db2a53 100644
+--- a/Source/deviceinfo/CMakeLists.txt
++++ b/Source/deviceinfo/CMakeLists.txt
+@@ -21,7 +21,7 @@ find_package(WPEFramework)
+ 
+ project(DeviceInfo)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${NAMESPACE}${PROJECT_NAME})
+ 
+diff --git a/Source/displayinfo/CMakeLists.txt b/Source/displayinfo/CMakeLists.txt
+index 069448d..7b38be3 100644
+--- a/Source/displayinfo/CMakeLists.txt
++++ b/Source/displayinfo/CMakeLists.txt
+@@ -21,7 +21,7 @@ find_package(WPEFramework)
+ 
+ project(DisplayInfo)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${NAMESPACE}${PROJECT_NAME})
+ 
+diff --git a/Source/localtracer/CMakeLists.txt b/Source/localtracer/CMakeLists.txt
+index 818b07a..d2c5420 100644
+--- a/Source/localtracer/CMakeLists.txt
++++ b/Source/localtracer/CMakeLists.txt
+@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.7)
+ 
+ find_package(WPEFramework)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(MODULE_NAME ${NAMESPACE}LocalTracer)
+ 
+diff --git a/Source/ocdm/CMakeLists.txt b/Source/ocdm/CMakeLists.txt
+index 289f835..4311f33 100644
+--- a/Source/ocdm/CMakeLists.txt
++++ b/Source/ocdm/CMakeLists.txt
+@@ -21,7 +21,7 @@ find_package(WPEFramework)
+ 
+ project(ocdm)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${PROJECT_NAME})
+ 
+diff --git a/Source/playerinfo/CMakeLists.txt b/Source/playerinfo/CMakeLists.txt
+index f3aef86..0a4b217 100644
+--- a/Source/playerinfo/CMakeLists.txt
++++ b/Source/playerinfo/CMakeLists.txt
+@@ -21,7 +21,7 @@ cmake_minimum_required(VERSION 3.3)
+ 
+ find_package(WPEFramework)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${PROJECT_NAME})
+ 
+diff --git a/Source/provisionproxy/CMakeLists.txt b/Source/provisionproxy/CMakeLists.txt
+index bbfe257..d3d2bf5 100644
+--- a/Source/provisionproxy/CMakeLists.txt
++++ b/Source/provisionproxy/CMakeLists.txt
+@@ -21,7 +21,7 @@ find_package(WPEFramework)
+ 
+ project(ProvisionProxy)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${NAMESPACE}${PROJECT_NAME})
+ 
+diff --git a/Source/securityagent/CMakeLists.txt b/Source/securityagent/CMakeLists.txt
+index e1b981d..fd39f1b 100644
+--- a/Source/securityagent/CMakeLists.txt
++++ b/Source/securityagent/CMakeLists.txt
+@@ -21,7 +21,7 @@ find_package(WPEFramework)
+ 
+ project(SecurityAgent)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${NAMESPACE}${PROJECT_NAME})
+ 
+diff --git a/Source/virtualinput/CMakeLists.txt b/Source/virtualinput/CMakeLists.txt
+index f4cbf61..216900d 100644
+--- a/Source/virtualinput/CMakeLists.txt
++++ b/Source/virtualinput/CMakeLists.txt
+@@ -21,7 +21,7 @@ find_package(WPEFramework)
+ 
+ project(VirtualInput)
+ 
+-project_version(1.0.0)
++project_version(4.3.0)
+ 
+ set(TARGET ${NAMESPACE}${PROJECT_NAME})
+
+
+
+ 

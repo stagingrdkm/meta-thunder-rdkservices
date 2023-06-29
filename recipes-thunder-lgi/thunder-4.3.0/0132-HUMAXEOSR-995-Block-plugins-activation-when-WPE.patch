@@ -1,0 +1,81 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Mon, 21 Feb 2022 23:31:04 +0100
+Subject: [PATCH] [HUMAXEOSR-995] Block plugins activation when WPEFramework
+ termination started
+---
+ Source/WPEFramework/PluginServer.cpp | 12 +++++++++---
+ Source/WPEFramework/PluginServer.h   | 11 +++++++++++
+ 2 files changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/Source/WPEFramework/PluginServer.cpp b/Source/WPEFramework/PluginServer.cpp
+index 8691697e..f0700833 100644
+--- a/Source/WPEFramework/PluginServer.cpp
++++ b/Source/WPEFramework/PluginServer.cpp
+@@ -397,12 +397,17 @@ namespace PluginHost
+                 _administrator.Activation(callSign, this);
+                 Unlock();
+ 
+-                REPORT_DURATION_WARNING( { ErrorMessage(_handler->Initialize(this)); }, WarningReporting::TooLongPluginState, WarningReporting::TooLongPluginState::StateChange::ACTIVATION, callSign.c_str());
++		bool activationBlocked = _administrator.IsPluginActivationBlocked();
++                if (!activationBlocked) {
++                    REPORT_DURATION_WARNING( { ErrorMessage(_handler->Initialize(this)); }, WarningReporting::TooLongPluginState, WarningReporting::TooLongPluginState::StateChange::ACTIVATION, callSign.c_str());
++                } else {
++                    TRACE_L1("Plugin activation is blocked");
++                }
+ 
+-                if (HasError() == true) {
++                if (HasError() == true || activationBlocked) {
+                     result = Core::ERROR_GENERAL;
+ 
+-                    SYSLOG(Logging::Startup, (_T("Activation of plugin [%s]:[%s], failed. Error [%s]"), className.c_str(), callSign.c_str(), ErrorMessage().c_str()));
++                    SYSLOG(Logging::Startup, (_T("Activation of plugin [%s]:[%s], failed. Error [%s] activationBlocked=%d"), className.c_str(), callSign.c_str(), ErrorMessage().c_str(), activationBlocked));
+ 
+                     if( _administrator.Configuration().LegacyInitialize() == false ) {
+                         Deactivate(reason::INITIALIZATION_FAILED);
+@@ -1036,6 +1041,7 @@ POP_WARNING()
+ 
+     void Server::Close()
+     {
++        _services.BlockPluginActivation();
+         Plugin::Controller* destructor(_controller->ClassType<Plugin::Controller>());
+         destructor->AddRef();
+         _connections.Close(100);
+diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
+index d92e0880..0a421c21 100644
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -2783,6 +2783,7 @@ POP_WARNING()
+                 , _authenticationHandler(nullptr)
+                 , _configObserver(*this, server._config.PluginConfigPath())
+                 , _compositPlugins()
++		, _pluginActivationBlocked(false)
+             {
+                 if (server._config.PluginConfigPath().empty() == true) {
+                     SYSLOG(Logging::Startup, (_T("Dynamic configs disabled.")));
+@@ -2798,6 +2799,15 @@ POP_WARNING()
+             }
+ 
+         public:
++            bool IsPluginActivationBlocked() {
++                bool result = _pluginActivationBlocked.load();
++                return result;
++            }
++
++            void BlockPluginActivation() {
++                _pluginActivationBlocked = true;
++            }
++
+             inline void Security(const bool enabled)
+             {
+                 _adminLock.Lock();
+@@ -3416,6 +3426,7 @@ POP_WARNING()
+             IAuthenticate* _authenticationHandler;
+             ConfigObserver _configObserver;
+             CompositPlugins _compositPlugins;
++	    std::atomic_bool _pluginActivationBlocked;
+         };
+ 
+         // Connection handler is the listening socket and keeps track of all open
+-- 
+2.25.1
+

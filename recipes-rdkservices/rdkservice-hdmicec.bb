@@ -6,10 +6,6 @@ PLUGINDIR="HdmiCec"
 
 require rdkservices-common/common_plugin.inc
 
-EXTERNALSRC = ""
-SRC_URI += "${DEFAULT_NEXT_SRC_URI}"
-SRCREV_${PN}="${DEFAULT_NEXT_SRC_URI_REVISION}"
-
 SRC_URI += "file://HdmiCecConfig.json"
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"

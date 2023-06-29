@@ -9,10 +9,6 @@ PLUGINDIR="LgiNetwork"
 require rdkservices-common/common_plugin.inc
 OECMAKE_TARGET_COMPILE = "WPEFrameworkNetwork"
 
-EXTERNALSRC = ""
-SRC_URI += "${DEFAULT_NEXT_SRC_URI}"
-SRCREV_${PN}="${DEFAULT_NEXT_SRC_URI_REVISION}"
-
 EXTRA_OECMAKE  += "-DPLUGIN_LGINETWORK=ON "
 
 DEPENDS += "glib-2.0"

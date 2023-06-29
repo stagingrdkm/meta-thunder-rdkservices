@@ -1,0 +1,144 @@
+From 7c949a83103158ad0a63e193723c8d63129e4834 Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Fri, 16 Jun 2023 13:01:24 +0200
+Subject: [PATCH] Activated
+
+---
+ Source/WPEFramework/Controller.h     |  8 ++++++++
+ Source/WPEFramework/PluginServer.cpp |  3 ++-
+ Source/WPEFramework/PluginServer.h   | 30 ++++++++++++++++++++++++++++
+ Source/plugins/IPlugin.h             |  2 ++
+ Source/plugins/Types.h               |  9 +++++++++
+ 5 files changed, 51 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WPEFramework/Controller.h b/Source/WPEFramework/Controller.h
+index a71ce2a3..8f850fd3 100644
+--- a/Source/WPEFramework/Controller.h
++++ b/Source/WPEFramework/Controller.h
+@@ -190,6 +190,14 @@ namespace Plugin {
+                 _parent.StartupResume(callsign, plugin);
+ 
+             }
++            void Activation(const string& callsign, PluginHost::IShell* plugin) override
++            {
++                _parent.NotifyStateChange(callsign, PluginHost::IShell::ACTIVATION, plugin->Reason());
++            }
++            void Deactivation(const string& callsign, PluginHost::IShell* plugin) override
++            {
++                _parent.NotifyStateChange(callsign, PluginHost::IShell::DEACTIVATION, plugin->Reason());
++            }
+             void Deactivated(const string& callsign, PluginHost::IShell* plugin) override
+             {
+                 _parent.NotifyStateChange(callsign, PluginHost::IShell::DEACTIVATED, plugin->Reason());
+diff --git a/Source/WPEFramework/PluginServer.cpp b/Source/WPEFramework/PluginServer.cpp
+index 3c6d2cba..ec451f08 100644
+--- a/Source/WPEFramework/PluginServer.cpp
++++ b/Source/WPEFramework/PluginServer.cpp
+@@ -394,7 +394,7 @@ namespace PluginHost
+                 _administrator.Initialize(callSign, this);
+                 
+                 State(ACTIVATION);
+-
++                _administrator.Activation(callSign, this);
+                 Unlock();
+ 
+                 REPORT_DURATION_WARNING( { ErrorMessage(_handler->Initialize(this)); }, WarningReporting::TooLongPluginState, WarningReporting::TooLongPluginState::StateChange::ACTIVATION, callSign.c_str());
+@@ -524,6 +524,7 @@ namespace PluginHost
+                 ASSERT(_handler != nullptr);
+ 
+                 State(DEACTIVATION);
++                _administrator.Deactivation(callSign, this);
+                 Unlock();
+ 
+                 if (currentState == IShell::ACTIVATED) {
+diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
+index eea3e678..5e6ba9da 100644
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -2854,6 +2854,21 @@ POP_WARNING()
+ 
+                 _notificationLock.Unlock();
+             }
++
++            void Activation(const string& callsign, PluginHost::IShell* entry)
++            {
++                _notificationLock.Lock();
++
++                Notifiers::iterator index(_notifiers.begin());
++
++                while (index != _notifiers.end()) {
++                    (*index)->Activation(callsign, entry);
++                    index++;
++                }
++
++                _notificationLock.Unlock();
++            }
++
+             void Activated(const string& callsign, PluginHost::IShell* entry)
+             {
+                 _notificationLock.Lock();
+@@ -2867,6 +2882,21 @@ POP_WARNING()
+ 
+                 _notificationLock.Unlock();
+             }
++
++            void Deactivation(const string& callsign, PluginHost::IShell* entry)
++            {
++                _notificationLock.Lock();
++
++                Notifiers::iterator index(_notifiers.begin());
++
++                while (index != _notifiers.end()) {
++                    (*index)->Deactivation(callsign, entry);
++                    index++;
++                }
++
++                _notificationLock.Unlock();
++            }
++
+             void Deactivated(const string& callsign, PluginHost::IShell* entry)
+             {
+                 _notificationLock.Lock();
+diff --git a/Source/plugins/IPlugin.h b/Source/plugins/IPlugin.h
+index 8be4cd86..39f55774 100644
+--- a/Source/plugins/IPlugin.h
++++ b/Source/plugins/IPlugin.h
+@@ -53,6 +53,8 @@ namespace PluginHost {
+             //! on this state change.
+             //! @}
+             virtual void Activated(const string& callsign, IShell* plugin) = 0;
++            virtual void Activation(const string& callsign, IShell* plugin) = 0;
++            virtual void Deactivation(const string& callsign, IShell* plugin) = 0;
+             virtual void Deactivated(const string& callsign, IShell* plugin) = 0;
+             virtual void Unavailable(const string& callsign, IShell* plugin) = 0;
+         };
+diff --git a/Source/plugins/Types.h b/Source/plugins/Types.h
+index 009c27dd..5540ccbc 100644
+--- a/Source/plugins/Types.h
++++ b/Source/plugins/Types.h
+@@ -126,6 +126,10 @@ namespace PluginHost {
+             END_INTERFACE_MAP
+ 
+         private:
++            void Activation(const string& name, PluginHost::IShell* plugin) override
++            {
++            }
++
+             void Activated(const string& name, PluginHost::IShell* plugin) override
+             {
+                 if (_callsign == name) {
+@@ -151,6 +155,11 @@ namespace PluginHost {
+                     _adminLock.Unlock();
+                 }
+             }
++
++            void Deactivation(const string& name, PluginHost::IShell* plugin) override
++            {
++            }
++
+             void Deactivated(const string& name, PluginHost::IShell* plugin) override
+             {
+                 if (_callsign == name) {
+-- 
+2.25.1
+

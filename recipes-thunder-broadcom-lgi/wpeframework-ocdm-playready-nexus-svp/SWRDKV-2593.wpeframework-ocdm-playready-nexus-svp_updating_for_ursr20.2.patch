@@ -32,7 +32,7 @@
      // Microsoft says that a batch ID of all zeros indicates some sort of error
 --- old/MediaSession.cpp	2020-10-09 15:24:22.694528387 -0400
 +++ new/MediaSession.cpp	2020-10-12 16:34:41.594217761 -0400
-@@ -300,7 +300,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+@@ -360,7 +360,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
  {
      /*!+!hla fix this, implement for something. */
      DRM_RESULT dr = DRM_SUCCESS;
@@ -41,7 +41,7 @@
  
      BSTD_UNUSED(f_pKID);
      BSTD_UNUSED(f_pLID);
-@@ -311,7 +311,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+@@ -371,7 +371,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
          case DRM_PLAY_OPL_CALLBACK:
              printf("  Got DRM_PLAY_OPL_CALLBACK from Bind:\r\n");
              ChkArg( f_pvPolicyCallbackData != NULL );
@@ -50,7 +50,7 @@
  
              printf("    minOPL:\r\n");
              printf("    wCompressedDigitalVideo   = %d\r\n", oplPlay->minOPL.wCompressedDigitalVideo);
-@@ -393,6 +393,12 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+@@ -453,6 +453,12 @@ DRM_RESULT MediaKeySession::PolicyCallback(
              printf("\r\n\r\n");
          }
              break;

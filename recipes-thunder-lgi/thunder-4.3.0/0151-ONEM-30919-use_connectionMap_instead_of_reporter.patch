@@ -1,0 +1,13 @@
+diff --git a/Source/com/Communicator.h b/Source/com/Communicator.h
+index 0916f121..d3e99e13 100644
+--- a/Source/com/Communicator.h
++++ b/Source/com/Communicator.h
+@@ -836,7 +836,7 @@ namespace RPC {
+                 result = Core::Service<LocalProcess>::Create<RemoteConnection>(config, instance, _connectionMap);
+             } else if (instance.Type() == Object::HostType::CONTAINER) {
+ #ifdef PROCESSCONTAINERS_ENABLED
+-                result = Core::Service<ContainerProcess>::Create<RemoteConnection>(config, instance, _reporter);
++                result = Core::Service<ContainerProcess>::Create<RemoteConnection>(config, instance, _connectionMap);
+ #else
+                 SYSLOG(Logging::Error, (_T("Cannot create Container process for %s, this version was not build with Container support"), instance.ClassName().c_str()));
+ #endif

@@ -1,0 +1,31 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Mon, 17 Jan 2022 09:38:42 +0100
+Subject: [PATCH] [ONEM-22947] Additional EXTERNAL
+
+undefined symbol: _ZNK12WPEFramework4Core12IteratorTypeINSt7__cxx114listIPNS_5Trace13ITraceControlESaIS6_EEES6_St14_List_iteratorIS6_EE5CountEv
+
+After demangle:
+
+WPEFramework::Core::IteratorType<std::__cxx11::list<WPEFramework::Trace::ITraceControl*, std::allocator<WPEFramework::Trace::ITraceControl*> >, WPEFramework::Trace::ITraceControl*, std::_List_iterator<WPEFramework::Trace::ITraceControl*> >::Count() const
+
+Adjusted for R4.3 due to 5fa4dfad849eac58c803b8c72c4c491b2c6aee7c
+---
+ Source/core/IIterator.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/core/IIterator.h b/Source/core/IIterator.h
+index 3d6236d6..b5a7c905 100644
+--- a/Source/core/IIterator.h
++++ b/Source/core/IIterator.h
+@@ -39,7 +39,7 @@ namespace Core {
+     };
+ 
+     template <typename CONTAINER, typename ELEMENT, typename ITERATOR = typename CONTAINER::iterator>
+-    class IteratorType : public IIterator {
++    class EXTERNAL IteratorType : public IIterator {
+     public:
+         IteratorType()
+             : m_Container(nullptr)
+-- 
+2.25.1
+
