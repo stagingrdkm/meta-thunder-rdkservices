@@ -2,10 +2,8 @@ require ../../include/thunder.inc
 LIC_FILES_CHKSUM = "file://LICENSE;md5=847677038847363222ffb66cfa6406c2"
 FILESEXTRAPATHS_prepend = "${THISDIR}/thunder-clientlibraries-${PV}:"
 
-# should be there
-#           file://Library-version-Matched-With-Release-ClientLibs.patch
-
 SRC_URI = "git://github.com/rdkcentral/ThunderClientLibraries.git;protocol=git;branch=R4;name=wpeframework-clientlibraries \
+           file://Library-version-Matched-With-Release-ClientLibs.patch \
           "
 # R4.3
 SRCREV_wpeframework-clientlibraries = "50a850991d6e6208bbad7f0fa189f8c2c04429bf"
