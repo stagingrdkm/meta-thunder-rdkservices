@@ -6,8 +6,8 @@ Subject: [PATCH] 0116-OMWAPPI-1634-Implementation-of-IMediaSystemMetrics
 ---
  MediaSession.cpp | 14 ++++++++++++++
  MediaSession.h   |  6 +++++-
- MediaSystem.cpp  | 18 +++++++++++++++++-
- 3 files changed, 36 insertions(+), 2 deletions(-)
+ MediaSystem.cpp  | 21 ++++++++++++++++++++-
+ 3 files changed, 39 insertions(+), 2 deletions(-)
 
 diff --git a/MediaSession.cpp b/MediaSession.cpp
 index 5973f3f..5c5a7bf 100644
@@ -69,7 +69,7 @@ index 6e45eeb..8b94203 100644
  {
  private:
      WideVine (const WideVine&) = delete;
-@@ -371,6 +371,22 @@ public:
+@@ -358,6 +358,25 @@ public:
          _adminLock.Unlock();
      }
  #endif
@@ -78,6 +78,9 @@ index 6e45eeb..8b94203 100644
 +    // ------------------------------------------------------------------------------------------
 +    CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const override {
 +        std::string metrics;
++        if(_cdm == nullptr) {
++            return CDMi_S_FALSE;
++        }
 +        if(widevine::Cdm::kSuccess == _cdm->getMetrics(&metrics)) {
 +            if(bufferLength < metrics.size()) {
 +                return CDMi_BUFFER_TOO_SMALL;
@@ -94,5 +97,4 @@ index 6e45eeb..8b94203 100644
      widevine::Cdm* _cdm;
 -- 
 2.25.1
-
 
