@@ -6,6 +6,5 @@ PACKAGES = "packagegroup-thunder-firebolt-rdkservices"
 RDEPENDS_${PN} += "rdkservice-displayinfo"
 RDEPENDS_${PN} += "rdkservice-playerinfo"
 RDEPENDS_${PN} += "rdkservice-hdcpprofile"
+RDEPENDS_${PN} += "${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', 'rdkservice-deviceinfo', '', d)}"
 
-# not yet included
-#RDEPENDS_${PN} += "rdkservice-deviceinfo"
