@@ -145,8 +145,10 @@ author: wlodzimierz.lipert@consult.red
 +}
 --- /dev/null
 +++ b/Source/extensions/processcontainers/implementations/AWCImplementation/AWC.h
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,41 @@
 +#pragma once
++
++#define _TRACE_FUNCTION_ __PRETTY_FUNCTION__
 +
 +#include <mutex>
 +
@@ -416,8 +418,10 @@ author: wlodzimierz.lipert@consult.red
 +}
 --- /dev/null
 +++ b/Source/extensions/processcontainers/implementations/AWCImplementation/AWCContainerBase.h
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,26 @@
 +#pragma once
++
++#define _TRACE_FUNCTION_ __PRETTY_FUNCTION__
 +
 +#include "common/BaseRefCount.h"
 +#include "processcontainers/ProcessContainer.h"

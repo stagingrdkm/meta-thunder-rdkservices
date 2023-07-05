@@ -21,10 +21,10 @@ EXTRA_OECMAKE += "-DINPUT_LOCATOR=/run/wpeframework/keyhandler"
 EXTRA_OECMAKE += "-DKEY_OUTPUT_DISABLED=true"
 EXTRA_OECMAKE += "-DWARNING_REPORTING=OFF"
 EXTRA_OECMAKE += "-DEXCEPTION_CATCHING=ON"
-EXTRA_OECMAKE += "-DENABLED_TRACING_LEVEL=3"
+EXTRA_OECMAKE += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-DENABLED_TRACING_LEVEL=3', '-DENABLED_TRACING_LEVEL=1', d)}"
 EXTRA_OECMAKE += "-DHIDE_NON_EXTERNAL_SYMBOLS=ON"
 
-TARGET_CXXFLAGS += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-D_TRACE_LEVEL=2 -D__ENABLE_ASSERT__=ON', '', d)}"
+TARGET_CXXFLAGS += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-D__ENABLE_ASSERT__=ON', '', d)}"
 TARGET_CXXFLAGS += "-D__ERRORRESULT__=errno"
 
 # file://0001-ONEM-22285-do-not-modify-local-files.patch - skipped, does not seem needed anymore
