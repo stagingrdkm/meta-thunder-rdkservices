@@ -18,7 +18,6 @@ SRC_URI += " \
            file://Library_version_matched_with_release_tag.patch \
            file://Remove_versioning_for_executables.patch \
            file://0003-OCDM-increase-RPC-comm-timeout.patch \
-           file://0001-RDK-28534-Security-Agent-Utility-and-Logging.patch \
            file://0004-Enable-BrowserConsoleLog-by-default.patch \
            file://0001-RDKTV-15393-clock_gettime.patch \
            file://LLAMA-2254_fix_netlink_buffer_size_error.patch \
@@ -26,7 +25,6 @@ SRC_URI += " \
            file://to_add_protocols_pkgconfig_sdk.patch \
            file://0001-Thunder_json_quoted_string_parsing_fix.patch \
            file://0001_Reverted_changes_Fix_JSON_Reset_R3.5_for_SystemServicesPlugin.patch \
-           file://trace_log_flag_enabled.patch \
            file://0001-disable_trace_warnings.patch \
            file://0005-Thunder-R4.1-fixes.patch \
            file://activationevent.patch \
