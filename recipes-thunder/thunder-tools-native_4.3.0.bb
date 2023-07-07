@@ -8,6 +8,8 @@ SRC_URI = "git://github.com/rdkcentral/ThunderTools.git;protocol=https;branch=R4
 SRCREV_thundertools="13a2c71dec3cfab814a41b6a86dd8ea09ee17698"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=c3349dc67b2f8c28fc99b300eb39e3cc"
 
+SRC_URI += "file://0001-JsonGenerator-Fix-buffer-passing-when-buffer-is-outp.patch"
+
 PROVIDES += "wpeframework-tools-native"
 
 inherit cmake pkgconfig native python3native

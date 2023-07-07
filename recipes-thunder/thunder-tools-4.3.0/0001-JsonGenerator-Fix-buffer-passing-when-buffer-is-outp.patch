@@ -1,0 +1,29 @@
+From de8f53faf694e07b9cc50b94dc8e63aef85c2501 Mon Sep 17 00:00:00 2001
+From: sebaszm <45654185+sebaszm@users.noreply.github.com>
+Date: Fri, 7 Jul 2023 10:57:11 +0200
+Subject: [PATCH] [JsonGenerator] Fix buffer passing when buffer is output only
+ (#28)
+
+---
+ JsonGenerator/source/rpc_emitter.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/JsonGenerator/source/rpc_emitter.py b/JsonGenerator/source/rpc_emitter.py
+index cc9df5d..c87faeb 100644
+--- a/JsonGenerator/source/rpc_emitter.py
++++ b/JsonGenerator/source/rpc_emitter.py
+@@ -415,9 +415,9 @@ def _EmitRpcCode(root, emit, header_file, source_file, data_emitted):
+                     if isinstance(arg, JsonString) and "length" in arg.flags:
+                         length = arg.flags.get("length")
+ 
+-                        for name, [var, _] in vars.items():
++                        for name, [var, var_type] in vars.items():
+                             if name == length.local_name:
+-                                initializer = (parent + var.cpp_name) if is_readable else ""
++                                initializer = (parent + var.cpp_name) if "r" in var_type else ""
+                                 emit.Line("%s %s{%s};" % (var.cpp_native_type, var.TempName(), initializer))
+                                 break
+ 
+-- 
+2.25.1
+
