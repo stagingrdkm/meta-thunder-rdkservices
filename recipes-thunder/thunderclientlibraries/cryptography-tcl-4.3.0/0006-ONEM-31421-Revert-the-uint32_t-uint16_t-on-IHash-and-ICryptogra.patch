@@ -1,0 +1,114 @@
+change taken from upstream: 
+https://github.com/rdkcentral/ThunderClientLibraries/commit/62fe8d04cae2b94c0c2c9fc21ed4d3edf25b222d
+
+From 4467e1013bee127052b95ab8b99e50650d016dcc Mon Sep 17 00:00:00 2001
+From: HaseenaSainul <41037131+HaseenaSainul@users.noreply.github.com>
+Date: Wed, 5 Jul 2023 20:17:45 +0530
+Subject: [PATCH] Revert the uint32_t -> uint16_t on IHash and ICryptography
+ (#211)
+
+---
+ Source/cryptography/Cryptography.cpp          | 26 +++++++++----------
+ Source/cryptography/ICryptography.h           | 10 +++----
+
+Index: git/Source/cryptography/Cryptography.cpp
+===================================================================
+--- git.orig/Source/cryptography/Cryptography.cpp
++++ git/Source/cryptography/Cryptography.cpp
+@@ -160,16 +160,16 @@ namespace Implementation {
+ 
+     public:
+         int32_t Encrypt(const uint8_t ivLength, const uint8_t iv[],
+-            const uint16_t inputLength, const uint8_t input[],
+-            const uint16_t maxOutputLength, uint8_t output[]) const override
++            const uint32_t inputLength, const uint8_t input[],
++            const uint32_t maxOutputLength, uint8_t output[]) const override
+         {
+             Core::SafeSyncType<Core::CriticalSection> lock(_adminLock);
+             return (_accessor != nullptr) ? _accessor->Encrypt(ivLength, iv, inputLength, input, maxOutputLength, output) : 0;
+         }
+ 
+         int32_t Decrypt(const uint8_t ivLength, const uint8_t iv[],
+-            const uint16_t inputLength, const uint8_t input[],
+-            const uint16_t maxOutputLength, uint8_t output[]) const override
++            const uint32_t inputLength, const uint8_t input[],
++            const uint32_t maxOutputLength, uint8_t output[]) const override
+         {
+             Core::SafeSyncType<Core::CriticalSection> lock(_adminLock);
+             return (_accessor != nullptr) ? _accessor->Decrypt(ivLength, iv, inputLength, input, maxOutputLength, output) : 0;
+@@ -206,7 +206,7 @@ namespace Implementation {
+ 
+     public:
+         /* Ingest data into the hash calculator (multiple calls possible) */
+-        uint32_t Ingest(const uint16_t length, const uint8_t data[] /* @length:length */) override
++        uint32_t Ingest(const uint32_t length, const uint8_t data[] /* @length:length */) override
+         {
+             Core::SafeSyncType<Core::CriticalSection> lock(_adminLock);
+             return (_accessor != nullptr ? _accessor->Ingest(length, data) : 0);
+@@ -504,9 +504,9 @@ namespace Implementation {
+         }
+ 
+     public:
+-        uint32_t Ingest(const uint16_t length, const uint8_t data[]) override
++        uint32_t Ingest(const uint32_t length, const uint8_t data[]) override
+         {
+-            return (hash_ingest(_implementation, static_cast<uint32_t>(length), data));
++            return (hash_ingest(_implementation, length, data));
+         }
+ 
+         uint8_t Calculate(const uint8_t maxLength, uint8_t data[]) override
+@@ -644,17 +644,17 @@ namespace Implementation {
+ 
+         public:
+             int32_t Encrypt(const uint8_t ivLength, const uint8_t iv[],
+-                const uint16_t inputLength, const uint8_t input[],
+-                const uint16_t maxOutputLength, uint8_t output[]) const override
++                const uint32_t inputLength, const uint8_t input[],
++                const uint32_t maxOutputLength, uint8_t output[]) const override
+             {
+-                return (cipher_encrypt(_implementation, ivLength, iv, static_cast<uint32_t>(inputLength), input, static_cast<uint32_t>(maxOutputLength), output));
++                return (cipher_encrypt(_implementation, ivLength, iv, inputLength, input, maxOutputLength, output));
+             }
+ 
+             int32_t Decrypt(const uint8_t ivLength, const uint8_t iv[],
+-                const uint16_t inputLength, const uint8_t input[],
+-                const uint16_t maxOutputLength, uint8_t output[]) const override
++                const uint32_t inputLength, const uint8_t input[],
++                const uint32_t maxOutputLength, uint8_t output[]) const override
+             {
+-                return (cipher_decrypt(_implementation, ivLength, iv, static_cast<uint32_t>(inputLength), input, static_cast<uint32_t>(maxOutputLength), output));
++                return (cipher_decrypt(_implementation, ivLength, iv, inputLength, input, maxOutputLength, output));
+             }
+ 
+         public:
+Index: git/Source/cryptography/ICryptography.h
+===================================================================
+--- git.orig/Source/cryptography/ICryptography.h
++++ git/Source/cryptography/ICryptography.h
+@@ -65,7 +65,7 @@ namespace Cryptography {
+         ~IHash() override = default;
+ 
+         /* Ingest data into the hash calculator (multiple calls possible) */
+-        virtual uint32_t Ingest(const uint16_t length, const uint8_t data[] /* @in @length:length */) = 0;
++        virtual uint32_t Ingest(const uint32_t length, const uint8_t data[] /* @in @length:length */) = 0;
+ 
+         /* Calculate the hash from all ingested data */
+         virtual uint8_t Calculate(const uint8_t maxLength, uint8_t data[] /* @out @maxlength:maxLength */) = 0;
+@@ -83,13 +83,13 @@ namespace Cryptography {
+ 
+         /* Encrypt data */
+         virtual int32_t Encrypt(const uint8_t ivLength, const uint8_t iv[] /* @in @length:ivLength */,
+-                                const uint16_t inputLength, const uint8_t input[] /* @in @length:inputLength */,
+-                                const uint16_t maxOutputLength, uint8_t output[] /* @out @maxlength:maxOutputLength */) const = 0;
++                                const uint32_t inputLength, const uint8_t input[] /* @in @length:inputLength */,
++                                const uint32_t maxOutputLength, uint8_t output[] /* @out @maxlength:maxOutputLength */) const = 0;
+ 
+         /* Decrypt data */
+         virtual int32_t Decrypt(const uint8_t ivLength, const uint8_t iv[] /* @in @length:ivLength */,
+-                                const uint16_t inputLength, const uint8_t input[] /* @in @length:inputLength */,
+-                                const uint16_t maxOutputLength, uint8_t output[] /* @out @maxlength:maxOutputLength */) const = 0;
++                                const uint32_t inputLength, const uint8_t input[] /* @in @length:inputLength */,
++                                const uint32_t maxOutputLength, uint8_t output[] /* @out @maxlength:maxOutputLength */) const = 0;
+     };
+ 
+     struct EXTERNAL IDiffieHellman : virtual public Core::IUnknown {
