@@ -14,7 +14,7 @@ Index: git/Source/cryptography/tests/cryptography_test/CMakeLists.txt
 ===================================================================
 --- git.orig/Source/cryptography/tests/cryptography_test/CMakeLists.txt
 +++ git/Source/cryptography/tests/cryptography_test/CMakeLists.txt
-@@ -134,3 +134,31 @@ target_link_libraries(cobalttests
+@@ -139,3 +139,31 @@ target_link_libraries(cobalttests
      )
  
  install(TARGETS cobalttests DESTINATION bin)
@@ -91,7 +91,7 @@ Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests
 +        printf(">\n");                                                    \
 +    }
 +
-+void DumpBufferEx(const char *desc, const uint8_t buf[], const uint16_t size, size_t pos = 0, bool doprint = true)
++void DumpBufferEx(const char *desc, const uint8_t buf[], const uint32_t size, size_t pos = 0, bool doprint = true)
 +{
 +    printf("%s:", desc);
 +    DumpBuffer(buf + pos, size);
@@ -129,9 +129,9 @@ Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests
 +
 +void testaes(WPEFramework::Cryptography::ICipher *aes, const uint8_t *data)
 +{
-+    const uint16_t dataSize = strlen(reinterpret_cast<const char *>(data));
-+    const uint16_t expectedSize = dataSize + (16 - (dataSize % 16));
-+    const uint16_t bufferSize = expectedSize + 16;
++    const uint32_t dataSize = strlen(reinterpret_cast<const char *>(data));
++    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint32_t bufferSize = expectedSize + 16;
 +
 +    // const uint8_t iv[] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
 +    const uint8_t *iv = reinterpret_cast<const uint8_t *>("oijasdoijasodijasodijaosidjaosidjaoisdjaoisvweertertsdfsdf");
@@ -314,7 +314,7 @@ Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests
 +    EXPECT_EQ(key_id, 0);
 +}
 +
-+void aesSpeedTest(const uint16_t sz)
++void aesSpeedTest(const uint32_t sz)
 +{
 +    WPEFramework::Cryptography::IVault *vault = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
 +    EXPECT_NE(vault, nullptr);
@@ -331,9 +331,9 @@ Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests
 +    WPEFramework::Cryptography::ICipher *aes = vault->AES(WPEFramework::Cryptography::aesmode::CBC, key_id);
 +    EXPECT_NE(aes, nullptr);
 +
-+    const uint16_t dataSize = sz;
-+    const uint16_t expectedSize = dataSize + (16 - (dataSize % 16));
-+    const uint16_t bufferSize = expectedSize + 16;
++    const uint32_t dataSize = sz;
++    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint32_t bufferSize = expectedSize + 16;
 +
 +    const uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
 +
@@ -397,8 +397,8 @@ Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests
 +TEST(Platform, SpeedTest)
 +{
 +    aesSpeedTest(128);
-+    aesSpeedTest(12800);
-+    aesSpeedTest(65535 - 32);
++    aesSpeedTest(1024 * 1024);
++    aesSpeedTest(256 * 1024 * 1024);
 +}
 +
 +TEST(Platform, TwoVaults)
@@ -477,9 +477,9 @@ Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests
 +
 +    const char *data = "Mon aéroglisseur est rempli d'anguilles";
 +
-+    const uint16_t dataSize = strlen(data);
-+    const uint16_t expectedSize = dataSize + (16 - (dataSize % 16));
-+    const uint16_t bufferSize = expectedSize + 16;
++    const uint32_t dataSize = strlen(data);
++    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint32_t bufferSize = expectedSize + 16;
 +
 +    const uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
 +
@@ -544,9 +544,9 @@ Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests
 +    char *data = new char[16 * 3 + 1];
 +    sprintf(data, "0123456789abcdef0123456789abcdef0123456789abcdef");
 +
-+    const uint16_t dataSize = strlen(data);
-+    const uint16_t expectedSize = dataSize + (16 - (dataSize % 16));
-+    const uint16_t bufferSize = expectedSize + 16;
++    const uint32_t dataSize = strlen(data);
++    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint32_t bufferSize = expectedSize + 16;
 +
 +    const uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
 +                          0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
@@ -579,7 +579,7 @@ Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests
 +        CALL(Platform, TwoVaults);
 +        CALL(Platform, SeveralKeys);
 +        CALL(Platform, TestAESCBC);
-+	cg->Release();
++        cg->Release();
 +    }
 +    else
 +    {

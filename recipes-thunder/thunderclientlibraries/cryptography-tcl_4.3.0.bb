@@ -6,6 +6,7 @@ require include/thunder_clientlibraries_${PV}.inc
 
 SRC_URI += "file://0004-Cipher-CipherNetflix-methods-return-type-changes.patch \
             file://R4.1_Trace_enabled_error_wpeframework_clientlibraries.patch \
+            file://0006-ONEM-31421-Revert-the-uint32_t-uint16_t-on-IHash-and-ICryptogra.patch \
            "
 #Cryptography library 
 DEPENDS += "${@bb.utils.contains('DISTRO_FEATURES', 'enable_icrypto_openssl','openssl', 'virtual/secapi', d)}"
