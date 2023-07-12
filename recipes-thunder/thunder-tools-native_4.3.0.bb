@@ -1,3 +1,5 @@
+# wonder if that is enough to have it rebuilt ...
+
 SUMMARY = "Host/Native tooling for the Web Platform for Embedded Framework"
 require include/thunder.inc
 require include/thunder_${PV}.inc
@@ -16,6 +18,7 @@ inherit cmake pkgconfig native python3native
 
 RDEPENDS_${PN} = "python3"
 
+
 DEPENDS = "\
     python3-native \
     python3-jsonref-native \
@@ -28,5 +31,6 @@ FILES_${PN} += "${datadir}/*/Modules/*.cmake"
 FILES_${PN} += "${prefix}/include/WPEFramework/Modules/*.cmake"
 
 do_generate_toolchain_file_append_daisy() {
+  echo "xaxa some fake modification"
   sed -i 's/CMAKE_FIND_ROOT_PATH_MODE_PROGRAM ONLY/CMAKE_FIND_ROOT_PATH_MODE_PROGRAM BOTH/g' ${WORKDIR}/toolchain.cmake
 }
