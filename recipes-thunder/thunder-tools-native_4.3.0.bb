@@ -7,7 +7,7 @@ require include/thunder_${PV}.inc
 SRC_URI_remove = "git://github.com/rdkcentral/Thunder.git;protocol=https;branch=R4;name=thunder"
 
 SRC_URI = "git://github.com/rdkcentral/ThunderTools.git;protocol=https;branch=R4;name=thundertools"
-SRCREV_thundertools="13a2c71dec3cfab814a41b6a86dd8ea09ee17698"
+SRCREV_thundertools="790c7f0e80fbbe877c86c52c0f1784fffca16dfc"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=c3349dc67b2f8c28fc99b300eb39e3cc"
 
 SRC_URI += "file://0001-JsonGenerator-Fix-buffer-passing-when-buffer-is-outp.patch"
