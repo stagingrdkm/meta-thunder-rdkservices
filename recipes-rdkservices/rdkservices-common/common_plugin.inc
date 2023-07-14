@@ -16,7 +16,7 @@ SRC_URI += "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=$
 SRCREV_${PN}="${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', 'ee7142c84b5062acf61c86443e8cb1faef40b692', '143c11fa5bc65dfae846f91589f601f68ac40a00', d)}"
 
 TOOLCHAIN = "gcc"
-EXTRA_OECMAKE += "-DCMAKE_SYSROOT=${STAGING_DIR_HOST}"
+EXTRA_OECMAKE += "-DCMAKE_SYSROOT=${STAGING_DIR_NATIVE}"
 
 EXTRA_OECMAKE += " \
     -DBUILD_REFERENCE=${SRCREV} \
