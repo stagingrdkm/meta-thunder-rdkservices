@@ -1,0 +1,65 @@
+From bbe9748f17378da69407381ebbf4af7d4468eeb6 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Thu, 6 Jul 2023 12:44:33 +0000
+Subject: [PATCH] pass keyHistoryFileName to playready initialization
+
+---
+ MediaSystem.cpp | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 3594a0e..4753f09 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -196,6 +196,7 @@ public:
+         delete [] drmdir_;
+         delete [] m_oemSettings.binFileName;
+         delete [] m_oemSettings.defaultRWDirName;
++        delete [] m_oemSettings.keyHistoryFileName;
+         ASSERT(m_poAppContext.get() == nullptr);
+         NxClient_Free(&m_nxAllocResults);
+         NxClient_Uninit();
+@@ -267,8 +268,10 @@ public:
+ 
+         delete [] m_oemSettings.binFileName;
+         delete [] m_oemSettings.defaultRWDirName;
++        delete [] m_oemSettings.keyHistoryFileName;
+         m_oemSettings.binFileName = nullptr;
+         m_oemSettings.defaultRWDirName = nullptr;
++        m_oemSettings.keyHistoryFileName = nullptr;
+ 
+         WPEFramework::Core::Directory(m_readDir.c_str()).CreatePath();
+         
+@@ -292,10 +295,16 @@ public:
+ 
+         string playreadyPath;
+         Core::SystemInfo::GetEnvironment(_T("PLAYREADYKEY_PATH"), playreadyPath);
++        string playreadyKeyHistoryPath;
++        Core::SystemInfo::GetEnvironment(_T("PLAYREADY_KEY_HISTORY_PATH"), playreadyKeyHistoryPath);
+ 
+         m_oemSettings.heap = heapSettings.heap;
+         m_oemSettings.binFileName = createDrmWchar(playreadyPath);
+         m_oemSettings.defaultRWDirName = createDrmWchar(m_readDir);
++        if (!playreadyKeyHistoryPath.empty())
++        {
++            m_oemSettings.keyHistoryFileName = createDrmWchar(playreadyKeyHistoryPath);
++        }
+ 
+         dr = Drm_Platform_Initialize((void *)&m_oemSettings);
+         if (DRM_FAILED(dr)) goto ErrorExit;
+@@ -367,9 +376,12 @@ public:
+         if (drmdir_ != nullptr) delete [] drmdir_;
+         if (m_oemSettings.binFileName != nullptr) delete [] m_oemSettings.binFileName;
+         if (m_oemSettings.defaultRWDirName != nullptr ) delete [] m_oemSettings.defaultRWDirName;
++        if (m_oemSettings.keyHistoryFileName != nullptr ) delete [] m_oemSettings.keyHistoryFileName;
++
+         drmdir_ = nullptr;
+         m_oemSettings.binFileName = nullptr;
+         m_oemSettings.defaultRWDirName = nullptr;
++        m_oemSettings.keyHistoryFileName = nullptr;
+         if (m_pbOpaqueBuffer != NULL) SAFE_OEM_FREE(m_pbOpaqueBuffer);
+         m_pbOpaqueBuffer = NULL;
+         if (m_pbRevocationBuffer != NULL) SAFE_OEM_FREE(m_pbRevocationBuffer);
+-- 
+2.30.0
+

@@ -28,3 +28,4 @@ SRC_URI += "${@oe.utils.version_less_or_equal('URSR_VERSION', '20', '', \
 
 SRC_URI += "file://0116-OMWAPPI-1634-Implementation-of-IMediaSystemMetrics.patch"
 SRC_URI += "file://0117-ONEM-29883-fix-asserts.patch"
+SRC_URI += "file://0119-ARRISAPP-410-pass-keyHistoryFileName-to-playready-initialization.patch"
