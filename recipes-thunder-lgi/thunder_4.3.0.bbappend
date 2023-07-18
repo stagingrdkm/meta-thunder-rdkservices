@@ -81,6 +81,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0150-ONEM-30919-linking_com_with_processcontainers.patch \
             file://0150-ONEM-31207-thunder-only-direct-output-for-tracing.patch \
             file://0151-ONEM-30919-use_connectionMap_instead_of_reporter.patch \
+            file://0152-ONEM-31546-do-not-invoke-Terminate-on-notice-of-clos.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
 "
