@@ -1,0 +1,49 @@
+From 175f7edcffe794eaa20eb0ce0d3a31e498c2fa15 Mon Sep 17 00:00:00 2001
+From: Piotr Marcinkowski <piotr.marcinkowski@redembedded.com>
+Date: Fri, 21 Apr 2023 15:47:07 +0000
+Subject: [PATCH] ARRISAPP-270 [NTS] ERROR-REPORTING-TC1 failed due to invalid
+ error code
+
+Netflix's NTS test suite in the test ERROR-REPORTING-TC1 checks for
+returned error code which in this case hasn't been propagated to
+top layers.
+
+Note that the error code gets passed as third param in OnError
+functions of IMediaKeySessionCallback. That's because a first
+param of that function that is dedicated to pass error code
+has not big enough type. Error codes are 32-bit integers and
+OnError accepts only 16bit values causing some of them to be
+trimmed.
+
+The signature of the function is:
+
+void OnError(int16_t f_nError, CDMi_RESULT f_crSysError,
+		const char* errorMessage)
+
+Change-Id: I0ed30d9953109901126357f781925bff191a8f5b
+---
+ MediaSession.cpp | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 3eb0137..ff494c6 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -901,6 +901,14 @@ ErrorExit:
+             pOpaqueData = nullptr;
+         }
+         LOGGER(LERROR_, "Decryption failed (error: 0x%08X)", static_cast<uint32_t>(dr));
++        if (m_piCallback) {
++            // Error code should normally be passed in first param but its type is too small (int16_t)
++            // Some of the errors require 32bit type.
++            // Therefore the last param is used to pass error code as string.
++            char errorCode[11];
++            snprintf(errorCode, 11, "0x%08X", dr);
++            m_piCallback->OnError(0, CDMi_S_FALSE, errorCode);
++        }
+     }
+ 
+     return cr;
+-- 
+2.40.0
+
