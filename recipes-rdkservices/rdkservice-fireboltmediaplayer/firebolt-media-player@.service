@@ -18,3 +18,4 @@ ExecStartPost=/usr/bin/cpid -m appstart -p $MAINPID -n "/usr/bin/WPEProcess" -i 
 ExecStopPost=/usr/bin/cpid -m appstop -i %i
 KillMode=none
 Delegate=yes
+Slice=lxc.slice
