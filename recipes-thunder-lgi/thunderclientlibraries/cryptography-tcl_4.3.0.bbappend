@@ -12,6 +12,7 @@ SRC_URI += "file://0103-OMWAPPI-1119-cobalt-vault-tests.patch"
 SRC_URI += "file://0105-iCrypto-nexus-platform-vault.patch"
 SRC_URI += "file://0105-iCrypto-nexus-platform-vault-tests.patch"
 SRC_URI += "file://extra_linking.patch"
+SRC_URI += "file://0106-ONEM-31419-when-linking-in-debug-configuration-get-l.patch;patchdir=Source/cryptography/implementation/Icrypto-nexus"
 
 # other options OpenSSL, SecApi, Thunder
 CRYPTOGRAPHY_IMPLEMENTATION="Icrypto-nexus"

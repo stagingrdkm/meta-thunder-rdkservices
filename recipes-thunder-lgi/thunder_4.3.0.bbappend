@@ -23,7 +23,7 @@ EXTRA_OECMAKE += "-DWARNING_REPORTING=OFF"
 EXTRA_OECMAKE += "-DEXCEPTION_CATCHING=ON"
 EXTRA_OECMAKE += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-DENABLED_TRACING_LEVEL=3', '-DENABLED_TRACING_LEVEL=1', d)}"
 EXTRA_OECMAKE += "-DHIDE_NON_EXTERNAL_SYMBOLS=ON"
-
+EXTRA_OECMAKE += "-DVOLATILE_PATH=/tmp"
 TARGET_CXXFLAGS += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-D__ENABLE_ASSERT__=ON', '', d)}"
 TARGET_CXXFLAGS += "-D__ERRORRESULT__=errno"
 TARGET_CXXFLAGS += "-D_TRACE_FUNCTION_=__PRETTY_FUNCTION__"
@@ -85,6 +85,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0153-OMWAPPI-1798-Fix-for-taken-deallocated-lock.patch \
             file://0154-OMWAPPI-1798-MessageUnit-_opened-flag-introduced.patch \
             file://0155-OMWAPPI-1798-Don-t-flush-libraries-in-Idle.patch \
+            file://0156-ONEM-31419-MessageUnit-adaptation.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
 "
@@ -125,11 +126,8 @@ WPEFRAMEWORK_PERSISTENT_PATH = "/mnt/wpeframework"
 
 # ONEM-22947: revert back to original configuration.
 # debug configuration should be rather considered as devel configuration since it inflates plugins 4x in size and changes timeouts to infinite in many places
-# to use it, uncomment 4 lines below:
-PACKAGECONFIG_remove = "release"
-PACKAGECONFIG += "\
-       ${@bb.utils.contains('MACHINE_FEATURES', 'debug', 'debug', 'release', d)} \
-"
+# to use it, change the debug case below
+PACKAGECONFIG_append = " ${@bb.utils.contains('MACHINE_FEATURES', 'debug', 'release', 'release', d)}"
 
 PACKAGECONFIG += "\
         ${@bb.utils.contains('DISTRO_FEATURES', 'playready_nexus_svp', 'opencdmi_prnx_svp', '', d)} \

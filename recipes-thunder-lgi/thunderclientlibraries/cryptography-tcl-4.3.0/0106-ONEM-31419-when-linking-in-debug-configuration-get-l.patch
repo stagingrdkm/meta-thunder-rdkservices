@@ -1,0 +1,31 @@
+From 8704192092e550cacaa6aa59375eeb3e0070b83c Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Mon, 31 Jul 2023 22:56:46 +0200
+Subject: [PATCH] ONEM-31419: when linking in debug configuration get linking
+ errors (fixed)
+
+| /usr/src/debug/lib32-cryptography-tcl/4.3.0-r0/git/Source/cryptography/implementation/Icrypto-nexus/SageNetflix/Vault.cpp:164: error: undefined reference to 'Implementation::Platform::Netflix::TEE::MAX_CLEAR_KEY_SIZE'
+| /usr/src/debug/lib32-cryptography-tcl/4.3.0-r0/git/Source/cryptography/implementation/Icrypto-nexus/SageNetflix/Vault.cpp:201: error: undefined reference to 'Implementation::Platform::Netflix::TEE::MAX_DATA_SIZE'
+| collect2: error: ld returned 1 exit status
+---
+ SageNetflix/TEE.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/SageNetflix/TEE.cpp b/SageNetflix/TEE.cpp
+index 4ef3eb0..f2e63e8 100644
+--- a/SageNetflix/TEE.cpp
++++ b/SageNetflix/TEE.cpp
+@@ -62,7 +62,9 @@ namespace Platform {
+ namespace Netflix {
+ 
+     const uint32_t CLEAR_KEY = 0x80;
+-
++    const uint16_t TEE::MAX_DATA_SIZE;      // initialization in TEE.h
++    const uint16_t TEE::MAX_CLEAR_KEY_SIZE; // initialization in TEE.h
++    const uint32_t TEE::USER_KEY;           // initialization in TEE.h
+     TEE::TEE()
+         : Platform::TEE()
+     {
+-- 
+2.25.1
+

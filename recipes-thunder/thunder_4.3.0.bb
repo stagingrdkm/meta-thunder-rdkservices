@@ -41,7 +41,6 @@ WPEFRAMEWORK_THREADPOOL_COUNT ?= "8"
 WPEFRAMEWORK_EXIT_REASONS ?= "WatchdogExpired"
 
 PACKAGECONFIG ?= " \
-    release \
     virtualinput \
     websocket \
     "
@@ -50,11 +49,11 @@ PACKAGECONFIG_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'DOBBY_CONTAINE
 
 # Buildtype
 # Maybe we need to couple this to a Yocto feature
-PACKAGECONFIG[debug]          = "-DBUILD_TYPE=Debug,,"
-PACKAGECONFIG[debugoptimized] = "-DBUILD_TYPE=DebugOptimized,,"
-PACKAGECONFIG[releasesymbols] = "-DBUILD_TYPE=ReleaseSymbols,,"
-PACKAGECONFIG[release]        = "-DBUILD_TYPE=Release,,"
-PACKAGECONFIG[production]     = "-DBUILD_TYPE=Production,,"
+PACKAGECONFIG[debug]          = "-DCMAKE_BUILD_TYPE=Debug,,"
+PACKAGECONFIG[debugoptimized] = "-DCMAKE_BUILD_TYPE=DebugOptimized,,"
+PACKAGECONFIG[releasesymbols] = "-DCMAKE_BUILD_TYPE=ReleaseSymbols,,"
+PACKAGECONFIG[release]        = "-DCMAKE_BUILD_TYPE=Release,,"
+PACKAGECONFIG[production]     = "-DCMAKE_BUILD_TYPE=MinSizeRel,,"
 
 PACKAGECONFIG[cyclicinspector]  = "-DTEST_CYCLICINSPECTOR=ON,-DTEST_CYCLICINSPECTOR=OFF,"
 PACKAGECONFIG[provisionproxy]   = "-DPROVISIONPROXY=ON,-DPROVISIONPROXY=OFF,libprovision"
