@@ -7,8 +7,8 @@ RPROVIDES_${PN} += "wpeframework-ui"
 
 SRC_URI = "git://github.com/rdkcentral/ThunderUI.git;protocol=https"
 
-#Version on July 22, 2021
-SRCREV = "ae6d061a6a08d97ad3ad8821c422b4f45aeeced1"
+# R4.3 of ThunderUI project
+SRCREV = "aa8c9287cc34753d66eb9a2fd4c114d7dda78a19"
 
 S = "${WORKDIR}/git"
 
