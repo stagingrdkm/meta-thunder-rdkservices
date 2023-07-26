@@ -1,0 +1,38 @@
+From d1c0fdace8b075c51e4cd171e44aad09231eede3 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 25 Jul 2023 22:01:34 +0200
+Subject: [PATCH] ARRISAPP-594: NEXUS_MemoryBlock_DestroyToken on decryption
+ error
+
+/* The created token can be used to clone the MemoryBlock one time.
+NEXUS_MemoryBlockTokenHandle is created as "shareable", which means any other Nexus process
+can use it. The application must communicate NEXUS_MemoryBlockTokenHandle to other processes
+using its own IPC.
+
+The token remains valid until either NEXUS_MemoryBlock_Clone or NEXUS_MemoryBlock_DestroyToken
+is called.
+
+If the NEXUS_MemoryBlockHandle is destroyed before the token is cloned or destroyed, the
+underlying device memory remains allocated.
+*/
+---
+ MediaSession.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 4251bdd..1bddeae 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -1002,6 +1002,9 @@ CDMi_RESULT MediaKeySession::Decrypt(
+ ErrorExit:
+     if (DRM_FAILED(dr))
+     {
++        if (m_TokenHandle) {
++            NEXUS_MemoryBlock_DestroyToken(m_TokenHandle);
++        }
+         if (pOpaqueData) {
+             if (pNexusMemoryBlock) {
+                 NEXUS_MemoryBlock_Unlock(pNexusMemoryBlock);
+-- 
+2.25.1
+
