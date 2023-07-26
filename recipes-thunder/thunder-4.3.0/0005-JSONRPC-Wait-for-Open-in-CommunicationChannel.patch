@@ -1,0 +1,25 @@
+From be42eba33b1620a875fddacc1ea01ab21ad7321e Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <67750421+dawid-trendota-red@users.noreply.github.com>
+Date: Mon, 24 Jul 2023 15:05:46 +0200
+Subject: [PATCH] [JSONRPC] Wait for Open in CommunicationChannel (#1369)
+
+---
+ Source/websocket/JSONRPCLink.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/websocket/JSONRPCLink.h b/Source/websocket/JSONRPCLink.h
+index 7af6f2b5..a4f984c2 100644
+--- a/Source/websocket/JSONRPCLink.h
++++ b/Source/websocket/JSONRPCLink.h
+@@ -251,7 +251,7 @@ namespace WPEFramework {
+ 				}
+ 				uint32_t Initialize()
+ 				{
+-					return (Open(0));
++					return (Open(1000));
+ 				}
+ 				void Deinitialize()
+ 				{
+-- 
+2.34.1
+

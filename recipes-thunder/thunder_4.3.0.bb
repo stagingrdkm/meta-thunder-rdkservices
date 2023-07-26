@@ -26,6 +26,7 @@ SRC_URI += " \
            file://0001_Reverted_changes_Fix_JSON_Reset_R3.5_for_SystemServicesPlugin.patch \
            file://0001-disable_trace_warnings.patch \
            file://activationevent.patch \
+           file://0005-JSONRPC-Wait-for-Open-in-CommunicationChannel.patch \
 "
 
 inherit systemd update-rc.d python3native
