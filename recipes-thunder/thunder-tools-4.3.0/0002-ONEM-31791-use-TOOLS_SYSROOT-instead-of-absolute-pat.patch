@@ -1,0 +1,53 @@
+From eff16031dcdfa0441ad9e7a405798ef376b051e3 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Thu, 27 Jul 2023 21:46:41 +0200
+Subject: [PATCH] ONEM-31791: use TOOLS_SYSROOT instead of absolute path
+
+---
+ cmake/FindConfigGenerator.cmake.in    | 2 +-
+ cmake/FindJsonGenerator.cmake.in      | 2 +-
+ cmake/FindProxyStubGenerator.cmake.in | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/cmake/FindConfigGenerator.cmake.in b/cmake/FindConfigGenerator.cmake.in
+index 646c1d6..1ef632e 100644
+--- a/cmake/FindConfigGenerator.cmake.in
++++ b/cmake/FindConfigGenerator.cmake.in
+@@ -54,7 +54,7 @@ function(write_config)
+     set(oneValueArgs CLASSNAME LOCATOR COMPONENT INSTALL_PATH INSTALL_NAME CUSTOM_PARAMS_WHITELIST)
+     set(multiValueArgs PLUGINS)
+ 
+-    set(CONFIG_GENERATOR_PATH "@GENERATOR_INSTALL_PATH@/ConfigGenerator")
++    set(CONFIG_GENERATOR_PATH "${TOOLS_SYSROOT}/usr/sbin/ConfigGenerator")
+     set(CONFIG_GENERATOR "${CONFIG_GENERATOR_PATH}/config_generator.py")
+     set(CONFIG_COMPARE "${CONFIG_GENERATOR_PATH}/config_compare.py")
+ 
+diff --git a/cmake/FindJsonGenerator.cmake.in b/cmake/FindJsonGenerator.cmake.in
+index 926d8c2..cea9d03 100644
+--- a/cmake/FindJsonGenerator.cmake.in
++++ b/cmake/FindJsonGenerator.cmake.in
+@@ -19,7 +19,7 @@ if(NOT PYTHON_EXECUTABLE)
+     find_package(PythonInterp 3.5 REQUIRED QUIET)
+ endif()
+ 
+-set(JSON_GENERATOR "@GENERATOR_INSTALL_PATH@/JsonGenerator/JsonGenerator.py")
++set(JSON_GENERATOR "${TOOLS_SYSROOT}/usr/sbin/JsonGenerator/JsonGenerator.py")
+ 
+ function(JsonGenerator)
+     if (NOT JSON_GENERATOR)
+diff --git a/cmake/FindProxyStubGenerator.cmake.in b/cmake/FindProxyStubGenerator.cmake.in
+index 4e4abae..e5a85b0 100644
+--- a/cmake/FindProxyStubGenerator.cmake.in
++++ b/cmake/FindProxyStubGenerator.cmake.in
+@@ -19,7 +19,7 @@ if(NOT PYTHON_EXECUTABLE)
+     find_package(PythonInterp 3.5 REQUIRED QUIET)
+ endif()
+ 
+-set(PROXYSTUB_GENERATOR "@GENERATOR_INSTALL_PATH@/ProxyStubGenerator/StubGenerator.py")
++set(PROXYSTUB_GENERATOR "${TOOLS_SYSROOT}/usr/sbin/ProxyStubGenerator/StubGenerator.py")
+ 
+ function(ProxyStubGenerator)
+     if (NOT PROXYSTUB_GENERATOR)
+-- 
+2.25.1
+

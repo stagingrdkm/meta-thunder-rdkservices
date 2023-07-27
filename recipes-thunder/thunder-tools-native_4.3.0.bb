@@ -9,6 +9,7 @@ SRCREV_thundertools="13a2c71dec3cfab814a41b6a86dd8ea09ee17698"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=c3349dc67b2f8c28fc99b300eb39e3cc"
 
 SRC_URI += "file://0001-JsonGenerator-Fix-buffer-passing-when-buffer-is-outp.patch"
+SRC_URI += "file://0002-ONEM-31791-use-TOOLS_SYSROOT-instead-of-absolute-pat.patch"
 
 PROVIDES += "wpeframework-tools-native"
 
