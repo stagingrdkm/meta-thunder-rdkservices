@@ -82,9 +82,35 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0150-ONEM-31207-thunder-only-direct-output-for-tracing.patch \
             file://0151-ONEM-30919-use_connectionMap_instead_of_reporter.patch \
             file://0152-ONEM-31546-do-not-invoke-Terminate-on-notice-of-clos.patch \
+            file://0153-OMWAPPI-1798-Fix-for-taken-deallocated-lock.patch \
+            file://0154-OMWAPPI-1798-MessageUnit-_opened-flag-introduced.patch \
+            file://0155-OMWAPPI-1798-Don-t-flush-libraries-in-Idle.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
 "
+
+# OMWAPPI-1798 NOTES for two introduced patches:
+#
+# => 0153-OMWAPPI-1798-Fix-for-taken-deallocated-lock.patch
+# => 0154-OMWAPPI-1798-MessageUnit-_opened-flag-introduced.patch
+#
+# Problematic code is:
+#
+#    void Deinitialize()
+#    {
+#        Messaging::MessageUnit::Instance().Close();
+#
+# ... in WebKitBrowser/Extension/main.cpp
+#
+# that was and still is invoked by our implementation like here:
+# https://github.com/WebPlatformForEmbedded/ThunderNanoServicesRDK/commit/3f6b35550d564700bf59f8f64cd2ab1d98b2a637
+#
+# and was lately removed here:
+# https://github.com/WebPlatformForEmbedded/ThunderNanoServicesRDK/commit/0c156f0fb195ee2ee7b4e16b9e157370bca92c91#diff-4edc0605b130c068eb2de68aedcb2256a6680f2f5de208f0fae5d872e71024f3L127
+#
+# I haven't got clear confirmation how it finally should be, but patches correctly protect against the case when the code would stay there
+#
+# OMWAPPI-1798 NOTES end
 
 # 0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch taken from R4 (is on R4.1.1)
 # there was a problem: static assert while compilation of wpeframework-interfaces code generated for metrics API
