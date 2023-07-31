@@ -27,6 +27,7 @@ SRC_URI += " \
            file://0001-disable_trace_warnings.patch \
            file://activationevent.patch \
            file://0005-JSONRPC-Wait-for-Open-in-CommunicationChannel.patch \
+           file://0006-ONEM-31782-wait-for-Websocket-in-Open.patch \
 "
 
 inherit systemd update-rc.d python3native
