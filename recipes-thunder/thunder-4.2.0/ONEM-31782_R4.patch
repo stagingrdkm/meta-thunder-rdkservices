@@ -1,0 +1,128 @@
+diff --git a/Source/core/Portability.h b/Source/core/Portability.h
+index 870be0b1..bb3d7bc3 100644
+--- a/Source/core/Portability.h
++++ b/Source/core/Portability.h
+@@ -575,6 +575,8 @@ uint64_t ntohll(const uint64_t& value);
+ #endif
+ }
+
++#define SLEEPSLOT_POLLING_TIME 100
++
+ // ---- Helper types and constants ----
+ #define _TXT(THETEXT) \
+     _T(THETEXT)       \
+diff --git a/Source/core/SerialPort.cpp b/Source/core/SerialPort.cpp
+index 7603fd77..ea8b5ae3 100644
+--- a/Source/core/SerialPort.cpp
++++ b/Source/core/SerialPort.cpp
+@@ -52,8 +52,6 @@
+ namespace WPEFramework {
+ namespace Core {
+
+-    static constexpr uint32_t SLEEPSLOT_TIME = 100;
+-
+ //////////////////////////////////////////////////////////////////////
+ // SerialPort::SerialMonitor
+ //////////////////////////////////////////////////////////////////////
+@@ -646,11 +644,11 @@ namespace Core {
+                 // Make sure we aren't in the monitor thread waiting for close completion.
+                 ASSERT(Core::Thread::ThreadId() != ResourceMonitor::Instance().Id());
+
+-                uint32_t sleepSlot = (waiting > SLEEPSLOT_TIME ? SLEEPSLOT_TIME : waiting);
++                uint32_t sleepSlot = (waiting > SLEEPSLOT_POLLING_TIME ? SLEEPSLOT_POLLING_TIME : waiting);
+
+                 _adminLock.Unlock();
+
+-                // Right, lets sleep in slices of <= SLEEPSLOT_TIME ms
++                // Right, lets sleep in slices of <= SLEEPSLOT_POLLING_TIME ms
+                 SleepMs(sleepSlot);
+
+                 _adminLock.Lock();
+diff --git a/Source/core/SocketPort.cpp b/Source/core/SocketPort.cpp
+index 3ef900db..e37ff449 100644
+--- a/Source/core/SocketPort.cpp
++++ b/Source/core/SocketPort.cpp
+index 3ef900db..e37ff449 100644
+--- a/Source/core/SocketPort.cpp
++++ b/Source/core/SocketPort.cpp
+@@ -262,7 +262,6 @@ namespace WPEFramework {
+         //////////////////////////////////////////////////////////////////////
+
+         static constexpr uint32_t MAX_LISTEN_QUEUE = 64;
+-        static constexpr uint32_t SLEEPSLOT_TIME = 100;
+
+         inline void DestroySocket(SOCKET& socket)
+         {
+@@ -881,7 +880,7 @@ namespace WPEFramework {
+                 // Make sure we aren't in the monitor thread waiting for close completion.
+                 ASSERT(Core::Thread::ThreadId() != ResourceMonitor::Instance().Id());
+
+-                uint32_t sleepSlot = (waiting > SLEEPSLOT_TIME ? SLEEPSLOT_TIME : waiting);
++                uint32_t sleepSlot = (waiting > SLEEPSLOT_POLLING_TIME ? SLEEPSLOT_POLLING_TIME : waiting);
+
+                 m_syncAdmin.Unlock();
+
+@@ -916,7 +915,7 @@ namespace WPEFramework {
+                 // Make sure we aren't in the monitor thread waiting for close completion.
+                 ASSERT(Core::Thread::ThreadId() != ResourceMonitor::Instance().Id());
+
+-                uint32_t sleepSlot = (waiting > SLEEPSLOT_TIME ? SLEEPSLOT_TIME : waiting);
++                uint32_t sleepSlot = (waiting > SLEEPSLOT_POLLING_TIME ? SLEEPSLOT_POLLING_TIME : waiting);
+
+                 // Right, lets sleep in slices of 100 ms
+                 SleepMs(sleepSlot);
+@@ -945,11 +944,11 @@ namespace WPEFramework {
+                 // Make sure we aren't in the monitor thread waiting for close completion.
+                 ASSERT(Core::Thread::ThreadId() != ResourceMonitor::Instance().Id());
+
+-                uint32_t sleepSlot = (waiting > SLEEPSLOT_TIME ? SLEEPSLOT_TIME : waiting);
++                uint32_t sleepSlot = (waiting > SLEEPSLOT_POLLING_TIME ? SLEEPSLOT_POLLING_TIME : waiting);
+
+                 m_syncAdmin.Unlock();
+
+-                // Right, lets sleep in slices of <= SLEEPSLOT_TIME ms
++                // Right, lets sleep in slices of <= SLEEPSLOT_POLLING_TIME ms
+                 SleepMs(sleepSlot);
+
+                 m_syncAdmin.Lock();
+diff --git a/Source/websocket/WebSocketLink.h b/Source/websocket/WebSocketLink.h
+index 581e822c..a6bd5bdf 100644
+--- a/Source/websocket/WebSocketLink.h
++++ b/Source/websocket/WebSocketLink.h
+@@ -1022,9 +1022,34 @@ POP_WARNING()
+         {
+             return (_channel.AbortUpgrade(status, reason));
+         }
++        uint32_t WaitForLink(const uint32_t time) const
++        {
++            // Make sure the state does not change in the mean time.
++            Lock();
++
++            uint32_t waiting = (time == Core::infinite ? Core::infinite : time); // Expect time in MS.
++
++            // Right, a wait till connection is closed is requested..
++            while ((waiting > 0) && (IsWebSocket() == false)) {
++                uint32_t sleepSlot = (waiting > SLEEPSLOT_POLLING_TIME ? SLEEPSLOT_POLLING_TIME : waiting);
++
++                Unlock();
++                // Right, lets sleep in slices of 100 ms
++                SleepMs(sleepSlot);
++                Lock();
++
++                waiting -= (waiting == Core::infinite ? 0 : sleepSlot);
++            }
++
++            uint32_t result = (((time == 0) || (IsWebSocket() == true)) ? Core::ERROR_NONE : Core::ERROR_TIMEDOUT);
++            Unlock();
++            return (result);
++        }
+         uint32_t Open(const uint32_t waitTime)
+         {
+-            return (_channel.Open(waitTime));
++            _channel.Open(0);
++
++            return WaitForLink(waitTime);
+         }
+         uint32_t Close(const uint32_t waitTime)
+         {
+

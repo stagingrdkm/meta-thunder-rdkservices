@@ -1,0 +1,13 @@
+Index: git/Source/websocket/JSONRPCLink.h
+===================================================================
+--- git.orig/Source/websocket/JSONRPCLink.h
++++ git/Source/websocket/JSONRPCLink.h
+@@ -251,7 +251,7 @@ namespace WPEFramework {
+ 				}
+ 				uint32_t Initialize()
+ 				{
+-					return (Open(0));
++					return (Open(2000));
+ 				}
+ 				void Deinitialize()
+ 				{

@@ -1,0 +1,30 @@
+From ba509517a7e381554a29e1d71febc9960bc5362b Mon Sep 17 00:00:00 2001
+From: Pierre Wielders <pierre@wielders.net>
+Date: Thu, 2 Feb 2023 12:44:43 +0100
+Subject: [PATCH] Next to closing the deadlock on the open of a library, also
+ protect the close.
+
+---
+ Source/WPEFramework/PluginServer.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
+index 6ee98f3f..0fd229d9 100644
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -999,7 +999,11 @@ namespace PluginHost {
+             void LoadMetadata() {
+                 const string locator(PluginHost::Service::Configuration().Locator.Value());
+                 if (locator.empty() == false) {
+-                    LoadLibrary(locator);
++                    Core::Library loadedLib = LoadLibrary(locator);
++                    if (loadedLib.IsLoaded() == true) {
++                        auto lib = std::move(loadedLib);
++                        Core::ServiceAdministrator::Instance().ReleaseLibrary(lib);
++                    }
+                 }
+             }
+ 
+-- 
+2.39.1
+

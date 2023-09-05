@@ -1,0 +1,25 @@
+diff --git a/Source/WPEFramework/CMakeLists.txt b/Source/WPEFramework/CMakeLists.txt
+index 42b61082..fd07cd58 100644
+--- a/Source/WPEFramework/CMakeLists.txt
++++ b/Source/WPEFramework/CMakeLists.txt
+@@ -75,7 +75,6 @@ set_target_properties(${TARGET} PROPERTIES
+         CXX_STANDARD 11
+         CXX_STANDARD_REQUIRED YES
+         FRAMEWORK FALSE
+-        VERSION ${VERSION}
+         )
+
+ install(
+diff --git a/Source/WPEProcess/CMakeLists.txt b/Source/WPEProcess/CMakeLists.txt
+index 1faf34e1..b10f7a6d 100644
+--- a/Source/WPEProcess/CMakeLists.txt
++++ b/Source/WPEProcess/CMakeLists.txt
+@@ -64,8 +64,6 @@ set_target_properties(${TARGET} PROPERTIES
+         CXX_STANDARD 11
+         CXX_STANDARD_REQUIRED YES
+         FRAMEWORK FALSE
+-        VERSION ${VERSION}
+-        SOVERSION ${VERSION_MAJOR}
+         )
+
+ install(

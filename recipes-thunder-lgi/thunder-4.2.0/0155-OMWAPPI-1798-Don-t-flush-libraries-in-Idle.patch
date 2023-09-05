@@ -1,0 +1,31 @@
+From f20c0563f67c74d6d0c3de723a87f2836b225ec0 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Mon, 31 Jul 2023 12:42:09 +0200
+Subject: [PATCH] OMWAPPI-1798: Don't flush libraries in Idle
+
+When flush of libWPEFrameworkWebKitBrowserImpl.so library happens in
+Idle() there are cases where the other thread is still using it
+which leads to core dump of WPEProcess.
+
+It is in terms of functionality and problem the same patch we had in the following name:
+0144-ARRISEOS-42363-Don-t-flush-libraries-in-Dispatch.patch, but done in a bit different place
+---
+ Source/WPEProcess/Process.cpp | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/Source/WPEProcess/Process.cpp b/Source/WPEProcess/Process.cpp
+index efab0e8..b515f0b 100644
+--- a/Source/WPEProcess/Process.cpp
++++ b/Source/WPEProcess/Process.cpp
+@@ -148,8 +148,6 @@ POP_WARNING()
+             Core::WorkerPool::Stop();
+         }
+         void Idle() {
+-            // If we handled all pending requests, it is safe to "unload"
+-            Core::ServiceAdministrator::Instance().FlushLibraries();
+         }
+ 
+     protected:
+-- 
+2.25.1
+

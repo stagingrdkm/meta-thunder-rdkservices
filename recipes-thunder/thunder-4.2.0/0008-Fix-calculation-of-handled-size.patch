@@ -1,0 +1,26 @@
+From 16912ea56bf0ffe6909882a9e5f97f278f55b0b5 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sat, 22 Apr 2023 01:28:07 +0000
+Subject: [PATCH 2/2] Fix calculation of "handled" size
+
+---
+ Source/core/IPCConnector.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Source/core/IPCConnector.h b/Source/core/IPCConnector.h
+index a00d7e88..0ecd347b 100644
+--- a/Source/core/IPCConnector.h
++++ b/Source/core/IPCConnector.h
+@@ -205,7 +205,8 @@ namespace Core {
+                     if ((_offset - 8) < _length) {
+ 
+                         // There could be multiple packages in this frame, do not read/handle more than what fits in the frame.
+-                        uint16_t handled((maxLength - result) > static_cast<uint16_t>(_length - (_offset - 8)) ? static_cast<uint16_t>(_length - (_offset - 8)) : (maxLength - result));
++                        uint32_t tmp = _length - (_offset - 8);
++                        uint16_t handled(static_cast<uint32_t>(maxLength - result) > tmp ? static_cast<uint16_t>(tmp) : (maxLength - result));
+ 
+                         if (_current != nullptr) {
+                             handled = _current->Deserialize(&stream[result], handled, _offset - 8);
+-- 
+2.25.1
+

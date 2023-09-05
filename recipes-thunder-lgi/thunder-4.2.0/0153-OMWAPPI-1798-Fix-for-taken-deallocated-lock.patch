@@ -1,0 +1,57 @@
+From 70cd74ed7b3c4c61eedef2950dda2a5d383487fc Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Fri, 28 Jul 2023 20:30:43 +0200
+Subject: [PATCH] OMWAPPI-1798: Fix for lock/unlock of deallocated pthread_mutex
+
+visible while terminating WebKitBrowser plugin: examples:
+
+=> wpe.sh[4170]: [Sync.h:61](Lock)<PID:14><TID:14><1>: Probably creating a deadlock situation or lock on already destroyed mutex. <22>
+=> wpe.sh[4170]: [Sync.h:78](Unlock)<PID:14><TID:14><1>: Probably does the calling thread not own this CriticalSection or unlock on already destroyed mutex. <22>
+---
+ Source/core/Singleton.h | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/Source/core/Singleton.h b/Source/core/Singleton.h
+index 78cdf97..e0ca68c 100644
+--- a/Source/core/Singleton.h
++++ b/Source/core/Singleton.h
+@@ -114,8 +114,6 @@ namespace Core {
+         template <typename... Args>
+         DEPRECATED inline static SINGLETON& Instance(Args&&... args)
+         {
+-            static CriticalSection g_AdminLock;
+-
+             // Hmm Double Lock syndrom :-)
+             if (g_TypedSingleton == nullptr) {
+                 g_AdminLock.Lock();
+@@ -167,13 +165,13 @@ namespace Core {
+             if (g_TypedSingleton != nullptr) {
+ 
+                 delete g_TypedSingleton;
++                g_TypedSingleton = nullptr;
+             }
+         }
+ 
+     private:
+         static SINGLETON& GetObject(const TemplateIntToType<true>& /* For compile time diffrentiation */)
+         {
+-            static CriticalSection g_AdminLock;
+ 
+             // Hmm Double Lock syndrom :-)
+             if (g_TypedSingleton == nullptr) {
+@@ -202,8 +200,12 @@ namespace Core {
+ 
+       private:
+         static SINGLETON* g_TypedSingleton;
++        static CriticalSection g_AdminLock;
+     };
+ 
++    template <typename SINGLETONTYPE>
++    CriticalSection SingletonType<SINGLETONTYPE>::g_AdminLock;
++
+     template <typename SINGLETONTYPE>
+     EXTERNAL_HIDDEN SINGLETONTYPE*  SingletonType<SINGLETONTYPE>::g_TypedSingleton = nullptr;
+ 
+-- 
+2.25.1
+

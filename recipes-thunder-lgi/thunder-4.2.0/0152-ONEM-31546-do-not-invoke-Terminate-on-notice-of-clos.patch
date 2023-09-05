@@ -1,0 +1,26 @@
+From 72dc130044b6946a95569daada4353057b0b7fa3 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 18 Jul 2023 09:14:05 +0200
+Subject: [PATCH] ONEM-31546: do not invoke Terminate on notice of closed
+ connection
+
+---
+ Source/com/Communicator.h | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/Source/com/Communicator.h b/Source/com/Communicator.h
+index 5674c8a..fdd63e6 100644
+--- a/Source/com/Communicator.h
++++ b/Source/com/Communicator.h
+@@ -1049,8 +1049,6 @@ namespace RPC {
+                         observer++;
+                     }
+ 
+-                    // Don't forget to close on our side as well, if it is not already closed....
+-                    index->second->Terminate();
+ 
+                     // Release this entry, do not wait till it get's overwritten.
+                     index->second->Release();
+-- 
+2.25.1
+

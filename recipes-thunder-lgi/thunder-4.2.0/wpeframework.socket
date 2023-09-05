@@ -1,0 +1,12 @@
+[Unit]
+Description=WPEFramework sockets
+
+[Socket]
+SocketMode=0660
+SocketUser=wpeframework
+SocketGroup=wpeframeworkaccess
+Accept=no
+Service=wpeframework.service
+
+ListenStream=/run/wpeframework/communicator
+ListenStream=/run/wpeframework/securityagent

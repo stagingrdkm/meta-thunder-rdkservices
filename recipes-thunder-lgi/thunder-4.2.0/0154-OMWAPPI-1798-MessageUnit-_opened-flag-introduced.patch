@@ -1,0 +1,116 @@
+From 7d13f481a5ffc1c50ebd340bc84d8134fa2d35eb Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Mon, 31 Jul 2023 09:12:45 +0200
+Subject: [PATCH] OMWAPPI-1798: MessageUnit _opened flag introduced
+
+To allow multiple Close operations or Close whithout Opened invoked
+and avoid the following assert:
+
+[14]: ASSERT [/usr/src/debug/lib32-thunder/4.3.0-r0/git/Source/core/MessageStore.cpp:196] ((_storage == nullptr) ^ (storage == nullptr))
+
+This is equivalent to:
+
+https://github.com/rdkcentral/Thunder/blob/e1a50a333de21ad1efe1ec5b1173bb756ff256c1/Source/messaging/MessageUnit.cpp#L224
+
+In our case dispatcher object can be null even after open (case with TRACING_ONLY_DIRECT_OUTPUT).
+---
+ Source/messaging/MessageUnit.cpp | 30 +++++++++++++++++++++++++++++-
+ Source/messaging/MessageUnit.h   | 10 +++++++++-
+ 2 files changed, 38 insertions(+), 2 deletions(-)
+
+diff --git a/Source/messaging/MessageUnit.cpp b/Source/messaging/MessageUnit.cpp
+index c310f81..e81fbd0 100644
+--- a/Source/messaging/MessageUnit.cpp
++++ b/Source/messaging/MessageUnit.cpp
+@@ -135,6 +135,7 @@ namespace WPEFramework {
+             // according to received config,
+             // let all announced controls know, whether they should push messages
+             Update();
++            _opened = true;
+             return Core::ERROR_NONE;
+         }
+ 
+@@ -147,9 +148,35 @@ namespace WPEFramework {
+             // according to received config,
+             // let all announced controls know, whether they should push messages
+             Update();
++            _opened = true;
+             return Core::ERROR_NONE;
+         }
+ 
++        void MessageUnit::Close()
++        {
++            class Handler : public Core::Messaging::IControl::IHandler {
++            public:
++                Handler() = default;
++                Handler(const Handler&) = delete;
++                Handler& operator= (const Handler&) = delete;
++                ~Handler() override = default;
++
++            public:
++                void Handle (Core::Messaging::IControl* control) override {
++                    control->Destroy();
++                }
++            } handler;
++            if (_opened) {
++                Core::Messaging::IStore::Set(nullptr);
++                Core::Messaging::IControl::Iterate(handler);
++
++                _adminLock.Lock();
++                _dispatcher.reset(nullptr);
++                _adminLock.Unlock();
++            } else {
++                TRACE_L1("MessageUnit not opened or already closed");
++            }
++        }
+ #else // TRACING_ONLY_DIRECT_OUTPUT
+         /**
+         * @brief Open MessageUnit. This method is used on the WPEFramework side.
+@@ -232,7 +259,6 @@ namespace WPEFramework {
+ 
+             return (result);
+         }
+-#endif // TRACING_ONLY_DIRECT_OUTPUT
+ 
+         void MessageUnit::Close()
+         {
+@@ -257,6 +283,8 @@ namespace WPEFramework {
+             _adminLock.Unlock();
+         }
+ 
++#endif // TRACING_ONLY_DIRECT_OUTPUT
++
+         /* virtual */ bool MessageUnit::Default(const Core::Messaging::Metadata& control) const
+         {
+             return (_settings.IsEnabled(control));
+diff --git a/Source/messaging/MessageUnit.h b/Source/messaging/MessageUnit.h
+index 138d39c..5784770 100644
+--- a/Source/messaging/MessageUnit.h
++++ b/Source/messaging/MessageUnit.h
+@@ -731,7 +731,12 @@ namespace WPEFramework {
+                 : _adminLock()
+                 , _dispatcher()
+                 , _settings()
+-                , _direct() {
++                , _direct()
++#ifdef TRACING_ONLY_DIRECT_OUTPUT
++                , _opened(false) {
++#else
++                                 {
++#endif
+             }
+ 
+         public:
+@@ -772,6 +777,9 @@ namespace WPEFramework {
+             std::unique_ptr<MessageDispatcher> _dispatcher;
+             Settings _settings;
+             DirectOutput _direct;
++#ifdef TRACING_ONLY_DIRECT_OUTPUT
++            bool _opened;
++#endif
+         };
+     } // namespace Messaging
+ }
+-- 
+2.25.1
+

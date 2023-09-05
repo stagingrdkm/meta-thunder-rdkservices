@@ -1,0 +1,81 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 11 Jan 2022 20:59:00 +0100
+Subject: [PATCH] [ONEM-24034] Setup group and permissions for created unix
+ socket
+
+---
+ Source/core/SocketPort.cpp | 33 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/Source/core/SocketPort.cpp b/Source/core/SocketPort.cpp
+index cf1ac85d..a45b1d74 100644
+--- a/Source/core/SocketPort.cpp
++++ b/Source/core/SocketPort.cpp
+@@ -30,6 +30,7 @@
+ #include <arpa/inet.h>
+ #include <fcntl.h>
+ #include <net/if.h>
++#include <grp.h>
+ #define __ERRORRESULT__ errno
+ #define __ERROR_AGAIN__ EAGAIN
+ #define __ERROR_WOULDBLOCK__ EWOULDBLOCK
+@@ -720,6 +721,29 @@ namespace WPEFramework {
+             }
+         }
+ 
++#ifndef __WINDOWS__
++        static void SetGroupAndReadWriteUserAndGroupAccess(const char *fileName, const char * groupName)
++        {
++            TRACE_L1("Setup group: %s and permissions for socket: %s", groupName, fileName);
++            struct group group, *grpptr;
++            size_t size = sysconf(_SC_GETGR_R_SIZE_MAX);
++            char buf[size];
++            int result = getgrnam_r(groupName, &group, buf, size, &grpptr);
++            if (result == 0 && grpptr != NULL) {
++                TRACE_L1("Group id: %d for group: %s", group.gr_gid, groupName);
++                if (chown(fileName, (uid_t)-1, group.gr_gid) != 0) {
++                    TRACE_L1("chown failed: %d", errno);
++                }
++                if (chmod(fileName, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) != 0) {
++                    TRACE_L1("chmod failed: %d", errno);
++                }
++            }
++            else {
++                TRACE_L1("Failed to get group id: %s result: %d errno: %d", groupName, result, errno);
++            }
++        }
++#endif
++
+         SOCKET SocketPort::ConstructSocket(NodeId& localNode, const string& specificInterface)
+         {
+             ASSERT(localNode.IsValid() == true);
+@@ -851,7 +875,7 @@ namespace WPEFramework {
+                     if (::bind(l_Result, static_cast<const NodeId&>(localNode), localNode.Size()) != SOCKET_ERROR) {
+ 
+ #ifndef __WINDOWS__
+-                        if (localNode.Type() == NodeId::TYPE_DOMAIN) {
++                        if (localNode.Type() == NodeId::TYPE_DOMAIN && (localNode.Rights() != static_cast<uint16_t>(~0))) {
+                             if (AccessControl::Apply(localNode) == Core::ERROR_NONE) {
+                                 BufferAlignment(l_Result);
+                                 return (l_Result);
+@@ -864,6 +888,12 @@ namespace WPEFramework {
+ #endif
+                         {
+                             BufferAlignment(l_Result);
++#ifndef __WINDOWS__
++                            string socketGroupEnv;
++                            if ((localNode.Type() == NodeId::TYPE_DOMAIN) && Core::SystemInfo::GetEnvironment("THUNDER_DEFAULT_SOCKET_GROUP", socketGroupEnv)) {
++                                SetGroupAndReadWriteUserAndGroupAccess(localNode.HostName().c_str(), socketGroupEnv.c_str());
++                            }
++#endif
+                             return (l_Result);
+                         }
+                     }
+@@ -1461,3 +1491,4 @@ namespace WPEFramework {
+ 
+         }
+     } // namespace Solution::Core
++
+-- 
+2.25.1
+

@@ -1,0 +1,46 @@
+From f818b39e6a99bee3de3593ddefb31b9c9d78f434 Mon Sep 17 00:00:00 2001
+From: Eugene Mutavchi <Ievgen_Mutavchi@comcast.com>
+Date: Sat, 22 Apr 2023 01:26:32 +0000
+Subject: [PATCH 1/2] Make size type of Core::Frame::Text configurable
+
+---
+ Source/core/Frame.h | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/Source/core/Frame.h b/Source/core/Frame.h
+index 087986c6..2be10bf8 100644
+--- a/Source/core/Frame.h
++++ b/Source/core/Frame.h
+@@ -202,13 +202,14 @@ namespace Core {
+ 
+                 return (result);
+             }
++            template <typename TYPENAME = uint16_t>
+             string Text() const
+             {
+                 string result;
+ 
+                 ASSERT(_container != nullptr);
+ 
+-                _offset += _container->GetText(_offset, result);
++                _offset += _container->GetText<TYPENAME>(_offset, result);
+ 
+                 return (result);
+             }
+@@ -297,11 +298,12 @@ namespace Core {
+ 
+                 _offset += _container->SetBoolean(_offset, value);
+             }
++            template <typename TYPENAME = uint16_t>
+             void Text(const string& text)
+             {
+                 ASSERT(_container != nullptr);
+ 
+-                _offset += _container->SetText(_offset, text);
++                _offset += _container->SetText<TYPENAME>(_offset, text);
+             }
+             void NullTerminatedText(const string& text)
+             {
+-- 
+2.25.1
+

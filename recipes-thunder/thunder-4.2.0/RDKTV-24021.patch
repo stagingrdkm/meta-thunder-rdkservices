@@ -1,0 +1,138 @@
+diff --git a/Source/core/CyclicBuffer.h b/Source/core/CyclicBuffer.h
+index 746ef6a8..bd0a9ae4 100644
+--- a/Source/core/CyclicBuffer.h
++++ b/Source/core/CyclicBuffer.h
+@@ -140,6 +140,11 @@ namespace Core {
+         }
+ 
+     public:
++        inline void Destroy()
++        {
++            _administration = nullptr;
++            _buffer.Destroy();
++        }
+         inline void Flush()
+         {
+             std::atomic_store_explicit(&(_administration->_tail), (std::atomic_load(&(_administration->_head))), std::memory_order_relaxed);
+diff --git a/Source/core/DataElementFile.cpp b/Source/core/DataElementFile.cpp
+index f40332eb..93fe74e6 100644
+--- a/Source/core/DataElementFile.cpp
++++ b/Source/core/DataElementFile.cpp
+@@ -122,12 +122,12 @@ namespace Core {
+         }
+     }
+ 
+-    /* virtual */ DataElementFile::~DataElementFile()
++    void DataElementFile:Close()
+     {
+         if ((IsValid()) && (m_MemoryMappedFile != INVALID_HANDLE_VALUE)) {
+             DWORD flags = ((m_Flags & File::USER_READ) != 0 ? FILE_MAP_READ : 0) | ((m_Flags & File::USER_WRITE) != 0 ? FILE_MAP_WRITE : 0);
+             // Set the last size...
+-            ::MapViewOfFile(m_MemoryMappedFile, flags, 0, 0, static_cast<SIZE_T>(AllocatedSize()));
++            ::UnmapViewOfFile(Buffer());
+             ::CloseHandle(m_MemoryMappedFile);
+ 
+             m_MemoryMappedFile = INVALID_HANDLE_VALUE;
+@@ -220,7 +220,7 @@ namespace Core {
+         OpenMemoryMappedFile(m_File.Size());
+     }
+ 
+-    /* virtual */ DataElementFile::~DataElementFile()
++    void DataElementFile::Close()
+     {
+         if ((IsValid()) && (m_MemoryMappedFile != INVALID_HANDLE_VALUE)) {
+ 
+diff --git a/Source/core/DataElementFile.h b/Source/core/DataElementFile.h
+index 279ed5aa..003f256b 100644
+--- a/Source/core/DataElementFile.h
++++ b/Source/core/DataElementFile.h
+@@ -48,7 +48,9 @@ namespace Core {
+         DataElementFile(File& fileName, const uint32_t type);
+         DataElementFile(const string& fileName, const uint32_t mode, const uint32_t requiredSize = 0);
+         DataElementFile(const DataElementFile&);
+-        ~DataElementFile() override;
++        ~DataElementFile() override {
++            Close();
++        }
+ 
+     public:
+         inline const string& Name() const
+@@ -83,10 +85,21 @@ namespace Core {
+         {
+             return (m_File.Permission(mode));
+         }
++        bool Destroy()
++        {
++            bool closed = IsValid();
++
++            if (closed == true) {
++                Close();
++                closed = m_File.Destroy();
++            }
++            return (closed);
++        }
+         bool Load();
+         void Sync();
+ 
+     protected:
++        void Close();
+         virtual void Reallocation(const uint64_t size);
+ 
+         void ReopenMemoryMappedFile();
+diff --git a/Source/messaging/MessageDispatcher.h b/Source/messaging/MessageDispatcher.h
+index 19ff0523..5969a0e0 100644
+--- a/Source/messaging/MessageDispatcher.h
++++ b/Source/messaging/MessageDispatcher.h
+@@ -144,6 +144,9 @@ namespace Messaging {
+         }
+         ~MessageDataBufferType() {
+             _dataBuffer.Relinquish();
++            _dataLock.Lock();
++            _dataBuffer.Destroy();
++            _dataLock.Unlock();
+         }
+ 
+         /**
+@@ -165,17 +168,19 @@ namespace Messaging {
+ 
+             _dataLock.Lock();
+ 
+-            const uint16_t reservedLength = _dataBuffer.Reserve(fullLength);
++            if (_dataBuffer.IsValid() == true) {
++                const uint16_t reservedLength = _dataBuffer.Reserve(fullLength);
+ 
+-            if (reservedLength >= fullLength) {
+-                //no need to serialize because we can write to CyclicBuffer step by step
+-                _dataBuffer.Write(reinterpret_cast<const uint8_t*>(&fullLength), sizeof(fullLength)); //fullLength
+-                _dataBuffer.Write(value, length); //value
+-                _dataBuffer.Ring();
+-                result = Core::ERROR_NONE;
+-            } else {
+-                TRACE_L1("Buffer to small to fit message!");
+-            }
++                if (reservedLength >= fullLength) {
++                    //no need to serialize because we can write to CyclicBuffer step by step
++                    _dataBuffer.Write(reinterpret_cast<const uint8_t*>(&fullLength), sizeof(fullLength)); //fullLength
++                    _dataBuffer.Write(value, length); //value
++                    _dataBuffer.Ring();
++                    result = Core::ERROR_NONE;
++                } else {
++                    TRACE_L1("Buffer to small to fit message!");
++                }
++             }
+ 
+             _dataLock.Unlock();
+ 
+@@ -230,7 +235,11 @@ namespace Messaging {
+         }
+         void FlushDataBuffer()
+         {
+-            _dataBuffer.Flush();
++            _dataLock.Lock();
++            if (_dataBuffer.IsValid() == true) {
++                _dataBuffer.Flush();
++            }
++            _dataLock.Unlock();
+         }
+         bool IsValid() const
+         {

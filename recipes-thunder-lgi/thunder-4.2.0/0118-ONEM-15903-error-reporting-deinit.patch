@@ -1,0 +1,58 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 9 Nov 2021 11:12:04 +0100
+Subject: [PATCH] [ONEM-15903] Error reporting - deinitialize error reporting
+ for WPEProcess
+
+---
+ Source/WPEProcess/CMakeLists.txt | 8 ++++++++
+ Source/WPEProcess/Process.cpp    | 8 +++++++-
+ 2 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WPEProcess/CMakeLists.txt b/Source/WPEProcess/CMakeLists.txt
+index b10f7a6d..9b3d396d 100644
+--- a/Source/WPEProcess/CMakeLists.txt
++++ b/Source/WPEProcess/CMakeLists.txt
+@@ -60,6 +60,14 @@ if(BREAKPAD_FOUND)
+     target_include_directories(${TARGET} PUBLIC ${BREAKPAD_INCLUDE_DIRS})
+ endif(BREAKPAD_FOUND)
+ 
++find_path(LIBODHERR_INCLUDE_DIR "rdk/libodherr/odherr.h")
++if (LIBODHERR_INCLUDE_DIR)
++  message(STATUS "ODH Error reporting support enabled (path: ${LIBODHERR_INCLUDE_DIR})")
++  target_compile_definitions(${TARGET} PRIVATE -DHAVE_LIBODHERR_ODHERR_H -DODH_SOURCE_NAME="WPEProcess")
++  target_include_directories(${TARGET} PRIVATE ${LIBODHERR_INCLUDE_DIR})
++  target_link_libraries(${TARGET} PRIVATE odherr jansson)
++endif(LIBODHERR_INCLUDE_DIR)
++
+ set_target_properties(${TARGET} PROPERTIES
+         CXX_STANDARD 11
+         CXX_STANDARD_REQUIRED YES
+diff --git a/Source/WPEProcess/Process.cpp b/Source/WPEProcess/Process.cpp
+index b08455ed..e76beb0b 100644
+--- a/Source/WPEProcess/Process.cpp
++++ b/Source/WPEProcess/Process.cpp
+@@ -7,6 +7,12 @@
+ #include <client/linux/handler/exception_handler.h>
+ #endif
+ 
++#ifdef HAVE_LIBODHERR_ODHERR_H
++#include <rdk/libodherr/odherr.hpp>
++#else
++#define ODH_ERROR_REPORT_DEINIT()
++#endif
++
+ MODULE_NAME_DECLARATION(BUILD_REFERENCE)
+ 
+ namespace WPEFramework {
+@@ -682,7 +688,7 @@ int main(int argc, char** argv)
+         Messaging::MessageUnit::Instance().Close();
+ #endif
+     }
+-
++    ODH_ERROR_REPORT_DEINIT();
+     TRACE_L1("End of Process!!!!");
+     return 0;
+ }
+-- 
+2.25.1
+
