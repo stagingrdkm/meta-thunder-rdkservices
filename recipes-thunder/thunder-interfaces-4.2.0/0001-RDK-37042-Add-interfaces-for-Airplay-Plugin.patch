@@ -1,0 +1,225 @@
+From 097646eafea201beecd5dea2f51e34b1664aab00 Mon Sep 17 00:00:00 2001
+From: Tanmay Shah <Tanmay_ManojkumarShah@comcast.com>
+Date: Mon, 26 Sep 2022 19:08:55 +0000
+Subject: [PATCH] RDK-37042: Add interfaces for Airplay Plugin
+
+Reason for change: Add wpeframework interfaces for airplay plugin RPC
+Test Procedure: build success and JsonData_AirplayJSONRPC.h is created
+Risks: None
+
+Signed-off-by: Tanmay Shah <Tanmay_ManojkumarShah@comcast.com>
+---
+ interfaces/IAirplay.h |  35 +++++++++++
+ interfaces/Ids.h      |   3 +
+ jsonrpc/Airplay.json  | 140 ++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 178 insertions(+)
+ create mode 100644 interfaces/IAirplay.h
+ create mode 100644 jsonrpc/Airplay.json
+
+diff --git a/interfaces/IAirplay.h b/interfaces/IAirplay.h
+new file mode 100644
+index 0000000..6f29b42
+--- /dev/null
++++ b/interfaces/IAirplay.h
+@@ -0,0 +1,35 @@
++#pragma once
++
++#include "Module.h"
++
++namespace WPEFramework {
++    namespace Exchange {
++
++        struct EXTERNAL IAirplay : virtual public Core::IUnknown {
++            enum { ID = ID_AIRPLAY};
++
++            virtual ~IAirplay() { }
++
++            enum state : uint16_t {
++                PLAYING = 0x0001,
++                STOPPED = 0x0002,
++                SUSPENDING = 0x0004
++            };
++
++            struct EXTERNAL INotification : virtual public Core::IUnknown {
++                  enum { ID = ID_AIRPLAY_NOTIFICATION };
++                  virtual void StateChange(const IAirplay::state state) = 0;
++                  virtual void Exit(const uint32_t exitCode) = 0;
++                  virtual void Event(const string& eventName) = 0;
++            };
++
++            virtual void Register(IAirplay::INotification* airplay) = 0;
++            virtual void Unregister(IAirplay::INotification* airplay) = 0;
++            virtual void FactoryReset() = 0;
++            virtual void SetVisible(bool visibility) = 0;
++            virtual uint32_t SystemCommand(const string& command) = 0;
++            virtual uint32_t StartApp(const string& parametersJson) = 0;
++            virtual uint32_t StopApp(const string& parametersJson) = 0;
++        };
++    }
++}
+diff --git a/interfaces/Ids.h b/interfaces/Ids.h
+index 0b55f05..6e1dcfc 100644
+--- a/interfaces/Ids.h
++++ b/interfaces/Ids.h
+@@ -341,7 +341,10 @@ namespace Exchange {
+         ID_NETWORKCONTROL_NETWORK_INFO_ITERATOR      = ID_NETWORKCONTROL + 2,
+ 
+         ID_TEXT_TO_SPEECH                            = 0x000004E0,
+-        ID_TEXT_TO_SPEECH_NOTIFICATION               = ID_TEXT_TO_SPEECH +1
++        ID_TEXT_TO_SPEECH_NOTIFICATION               = ID_TEXT_TO_SPEECH +1,
++
++        ID_AIRPLAY                                   = 0x000004F0,
++        ID_AIRPLAY_NOTIFICATION                      = ID_AIRPLAY +1
+     };
+ }
+ }
+diff --git a/jsonrpc/Airplay.json b/jsonrpc/Airplay.json
+new file mode 100644
+index 0000000..d3a583b
+--- /dev/null
++++ b/jsonrpc/Airplay.json
+@@ -0,0 +1,141 @@
++{
++  "$schema": "interface.schema.json",
++  "jsonrpc": "2.0",
++  "info": {
++    "title": "Airplay API",
++    "class": "AirplayJSONRPC",
++    "format": "uncompliant-extended",
++    "description": "Airplay JSON-RPC interface"
++  },
++  "common": {
++    "$ref": "common.json"
++  },
++  "include": {
++    "statecontrol": {
++      "$ref": "StateControl.json#"
++    }
++  },
++  "properties": {
++    "visibility": {
++      "summary": "Current Airplay visibility",
++      "writeonly":true,
++      "events": [
++        "visibilitychange"
++      ],
++      "params": {
++        "type": "string",
++        "enum": [
++          "visible",
++          "hidden"
++        ]
++      }
++    }
++  },
++  "methods": {
++    "startapp": {
++      "summary": "Start airplay application",
++      "params": {
++        "type": "object",
++        "properties": {
++          "command": {
++            "description": "Command to send to Airplay",
++            "type": "string",
++            "example": "config"
++          }
++        }
++      },
++      "result": {
++        "type": "number"
++      },
++      "errors": [
++        {
++          "description": "Airplay is unavailable",
++          "$ref": "#/common/errors/unavailable"
++        },
++        {
++          "description": "Command is not set",
++          "$ref": "#/common/errors/unknownkey"
++        }
++      ]
++    },
++    "stopapp": {
++      "summary": "Stop airplay application",
++      "params": {
++        "type": "object",
++        "properties": {
++          "command": {
++            "description": "Command to send to Airplay",
++            "type": "string",
++            "example": "config"
++          }
++        }
++      },
++      "result": {
++        "type": "number"
++      },
++      "errors": [
++        {
++          "description": "Airplay is unavailable",
++          "$ref": "#/common/errors/unavailable"
++        },
++        {
++          "description": "Command is not set",
++          "$ref": "#/common/errors/unknownkey"
++        }
++      ]
++    },
++    "factoryreset": {
++      "summary": "Does Airplay factory reset",
++      "result": {
++        "$ref": "#/common/results/void"
++      },
++      "errors": [
++        {
++          "description": "Airplay is unavailable",
++          "$ref": "#/common/errors/unavailable"
++        }
++      ]
++    },
++    "systemcommand": {
++      "summary": "Does Airplay app specific system command",
++      "params": {
++        "type": "object",
++        "properties": {
++          "command": {
++            "description": "Command to send to airplay",
++            "type": "string",
++            "example": "config"
++          }
++        }
++      },
++      "result": {
++        "type": "number"
++      },
++      "errors": [
++        {
++          "description": "Airplay is unavailable",
++          "$ref": "#/common/errors/unavailable"
++        },
++        {
++          "description": "Command is not set",
++          "$ref": "#/common/errors/unknownkey"
++        }
++      ]
++    }
++  },
++  "events": {
++    "visibilitychange": {
++      "summary": "Signals a visibility change of the Airplay",
++      "params": {
++        "type": "object",
++        "properties": {
++          "hidden": {
++            "description": "Determines if the Airplay has been hidden (true) or made visible (false)",
++            "type": "boolean",
++            "example": false
++          }
++        }
++      }
++    }
++  }
++}
+-- 
+2.17.1
+

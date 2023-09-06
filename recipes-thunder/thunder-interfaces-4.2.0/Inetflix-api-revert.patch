@@ -1,0 +1,86 @@
+diff --git a/interfaces/INetflix.h b/interfaces/INetflix.h
+index 6821c40..512b574 100644
+--- a/interfaces/INetflix.h
++++ b/interfaces/INetflix.h
+@@ -46,6 +46,11 @@ namespace Exchange {
+
+         virtual void SystemCommand(const string& command) = 0;
+         virtual void VoiceCommand(const string& command) = 0;
++
++        virtual string GetESN() const = 0;
++        virtual void FactoryReset() = 0;
++        virtual void Language(const string& language) = 0;
++        virtual void SetVisible(bool visibility) = 0;
+     };
+ }
+ }
+
+diff --git a/jsonrpc/Netflix.json b/jsonrpc/Netflix.json
+index de02ae5..55f4bc7 100644
+--- a/jsonrpc/Netflix.json
++++ b/jsonrpc/Netflix.json
+@@ -18,7 +18,6 @@
+   "properties": {
+     "esn": {
+       "summary": "ESN value",
+-      "deprecated": true,
+       "readonly": true,
+       "params": {
+         "type": "string",
+@@ -33,7 +32,6 @@
+     },
+     "visibility": {
+       "summary": "Current Netflix visibility",
+-      "deprecated": true,
+       "writeonly":true,
+       "events": [
+         "visibilitychange"
+@@ -72,14 +70,14 @@
+       ]
+     },
+     "systemcommand": {
+-      "summary": "Sends a system command to Netflix",
++      "summary": "Does Netflix system command",
+       "params": {
+         "type": "object",
+         "properties": {
+           "command": {
+             "description": "Command to send to Netflix",
+             "type": "string",
+-            "example": "exit"
++            "example": "config"
+           }
+         }
+       },
+@@ -92,15 +90,28 @@
+           "$ref": "#/common/errors/unavailable"
+         },
+         {
+-          "description": "Unknown command",
++          "description": "Command is not set",
+           "$ref": "#/common/errors/unknownkey"
+         }
+       ]
+     }
+   },
+   "events": {
++    "visibilitychange": {
++      "summary": "Signals a visibility change of the Netflix",
++      "params": {
++        "type": "object",
++        "properties": {
++          "hidden": {
++            "description": "Determines if the Netflix has been hidden (true) or made visible (false)",
++            "type": "boolean",
++            "example": false
++          }
++        }
++      }
++    },
+     "playbackchange": {
+-      "summary": "Signals playback status change",
++      "summary": "Signals a playback change of the Netflix",
+       "params": {
+         "type": "object",
+         "properties": {
+

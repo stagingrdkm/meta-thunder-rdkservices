@@ -11,9 +11,9 @@ EXTERNALSRC = ""
 DEPENDS += "wpeframework-tools-native wpeframework wpeframework-interfaces"
 
 # rdkservices location, Thunder R4
-RDKSERVICES_BRANCH="${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', 'lgi-thunder4.3-20230628', 'lgi-thunder4-20230518', d)}"
+RDKSERVICES_BRANCH="${@bb.utils.contains_any('DISTRO_FEATURES', 'thunder-4.3 thunder-4.2', 'lgi-thunder4.3-20230628', 'lgi-thunder4-20230518', d)}"
 SRC_URI += "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=${RDKSERVICES_BRANCH};name=${PN};destsuffix=git"
-SRCREV_${PN}="${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', '38525185c3eb358488350ecbdb92d3fc4ddd6a25', '143c11fa5bc65dfae846f91589f601f68ac40a00', d)}"
+SRCREV_${PN}="${@bb.utils.contains_any('DISTRO_FEATURES', 'thunder-4.3 thunder-4.2', '38525185c3eb358488350ecbdb92d3fc4ddd6a25', '143c11fa5bc65dfae846f91589f601f68ac40a00', d)}"
 
 TOOLCHAIN = "gcc"
 EXTRA_OECMAKE += "-DCMAKE_SYSROOT=${STAGING_DIR_HOST}"

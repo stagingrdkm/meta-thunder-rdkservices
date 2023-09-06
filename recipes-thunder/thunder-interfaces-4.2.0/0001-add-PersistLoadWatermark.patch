@@ -1,0 +1,63 @@
+From 92d81a02f9e193cf633d2d318f6334c01979127c Mon Sep 17 00:00:00 2001
+From: Mark Towers <mark.towers@sky.uk>
+Date: Tue, 13 Jun 2023 19:48:17 +0000
+Subject: [PATCH] add PersistLoadWatermark
+
+---
+ interfaces/IWatermark.h |  1 +
+ jsonrpc/Watermark.json  | 23 +++++++++++++++++++++++
+ 2 files changed, 24 insertions(+)
+
+diff --git a/interfaces/IWatermark.h b/interfaces/IWatermark.h
+index b674c5e..74103d6 100644
+--- a/interfaces/IWatermark.h
++++ b/interfaces/IWatermark.h
+@@ -36,6 +36,7 @@ namespace Exchange {
+         virtual bool ShowWatermark(const bool show) = 0;
+         virtual bool CreateWatermark(uint32_t id, uint32_t zorder) = 0;
+         virtual bool UpdateWatermark(uint32_t id, uint32_t key, uint32_t size) = 0;
++        virtual bool PersistLoadWatermark(uint32_t id) = 0;
+         virtual bool AdjustWatermark(uint32_t id, uint32_t zorder) = 0;
+         virtual bool DeleteWatermark(uint32_t id) = 0;
+         virtual PalettedImageData GetPalettedWatermark(uint32_t id) = 0;
+diff --git a/jsonrpc/Watermark.json b/jsonrpc/Watermark.json
+index 864bb2e..950756d 100644
+--- a/jsonrpc/Watermark.json
++++ b/jsonrpc/Watermark.json
+@@ -98,6 +98,17 @@
+         "size"
+       ]
+     },
++    "PersistLoadrequest":{
++      "type": "object",
++      "properties": {
++          "id": {
++            "$ref": "#/definitions/id"
++          }
++    },
++    "required": [
++      "id"
++    ]
++  },
+     "setpalettedwatermarkrequest":{
+         "type": "object",
+         "properties": {
+@@ -199,6 +210,18 @@
+      "errors": [
+      ]
+     },
++    "PersistLoadWatermark": {
++      "summary": "update the watermark from persistent storage",
++      "description": "update the created watermark entry with image data from persistent storage",
++      "params": {
++        "$ref": "#/definitions/PersistLoadrequest"
++      },
++      "result": {
++        "type": "boolean"
++      },
++      "errors": [
++      ]
++     },
+     "adjustwatermark": {
+      "summary": "adjust the watermark",
+      "description": "adjust the created watermark zorder",

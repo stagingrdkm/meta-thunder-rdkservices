@@ -1,0 +1,399 @@
+From a18159fea2a27c58e42ad6015f799c438efea881 Mon Sep 17 00:00:00 2001
+From: akhan388 <adnan_khan@comcast.com>
+Date: Tue, 16 May 2023 06:45:19 +0000
+Subject: [PATCH] RDK-40478 : Run AirplayDaemon as thunder plugin
+
+Reason for change: Adding new events.
+Test Procedure: Change pairing state by HomeKit.
+Risks: New events added
+
+Signed-off-by: akhan388 <adnan_khan@comcast.com>
+---
+ interfaces/IAirplayDaemon.h |  46 ++++++
+ interfaces/Ids.h            |   3 +
+ jsonrpc/AirplayDaemon.json  | 286 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 335 insertions(+)
+ create mode 100644 interfaces/IAirplayDaemon.h
+ create mode 100644 jsonrpc/AirplayDaemon.json
+
+diff --git a/interfaces/IAirplayDaemon.h b/interfaces/IAirplayDaemon.h
+new file mode 100644
+index 0000000..7a933bd
+--- /dev/null
++++ b/interfaces/IAirplayDaemon.h
+@@ -0,0 +1,46 @@
++#pragma once
++
++#include "Module.h"
++
++namespace WPEFramework {
++    namespace Exchange {
++
++        struct EXTERNAL IAirplayDaemon : virtual public Core::IUnknown {
++            enum { ID = ID_AIRPLAYDAEMON};
++
++            virtual ~IAirplayDaemon() { }
++
++            enum foregroundreason : uint16_t {
++                AIRPLAY_FROM_HOME_BUTTON = 1,
++                AIRPLAY_INPUT_SOURCE = 2
++            };
++            enum state : uint16_t {
++                STARTED = 1,
++                STOPPED = 2
++            };
++
++            struct EXTERNAL INotification : virtual public Core::IUnknown {
++                enum { ID = ID_AIRPLAYDAEMON_NOTIFICATION };
++                virtual void StateChange(const IAirplayDaemon::state state) = 0;
++                virtual void Exit(const uint32_t exitCode) = 0;
++                virtual void dispatchAppStateChangeReqEvent(const string& params) = 0;
++                virtual void dispatchAirplayStatusChangeEvent(const string& params) = 0;
++                virtual void dispatchAirplayInputSourceChangeEvent(const string& params) = 0;
++                virtual void dispatchAirplayErrorEvent(const string& params) = 0;
++		virtual void dispatchAirplayMetricsEvent(const string& params) = 0;
++            };
++
++            virtual void Register(IAirplayDaemon::INotification* airplayDaemon) = 0;
++            virtual void Unregister(IAirplayDaemon::INotification* airplayDaemon) = 0;
++            virtual void FactoryReset() = 0;
++            virtual uint32_t bringairplayapptoforeground(const string& reason, string& result /* @out */) = 0;
++	    virtual uint32_t setcurrentidentifier(const string& inputsource) = 0;
++            virtual uint32_t airplayallowtorunappinbackground(const string& appRunInBackground) = 0;
++            virtual uint32_t setairplayfriendlyname(const string& friendlyName) = 0;
++            virtual string getairplayfriendlyname() = 0;
++	        virtual bool getairplaystatus() = 0;
++            //virtual uint32_t Configure(PluginHost::IShell* service) = 0;
++            //virtual bool getAirplayAllowToRunInBackground() = 0;
++        };
++    }
++}
+diff --git a/interfaces/Ids.h b/interfaces/Ids.h
+index 0a5250b..5015c79 100644
+--- a/interfaces/Ids.h
++++ b/interfaces/Ids.h
+@@ -344,7 +344,9 @@ namespace Exchange {
+         ID_TEXT_TO_SPEECH_NOTIFICATION               = ID_TEXT_TO_SPEECH +1,
+ 
+         ID_AIRPLAY                                   = 0x000004F0,
+-        ID_AIRPLAY_NOTIFICATION                      = ID_AIRPLAY +1
++        ID_AIRPLAY_NOTIFICATION                      = ID_AIRPLAY +1,
++        ID_AIRPLAYDAEMON                             = ID_AIRPLAY +2,
++        ID_AIRPLAYDAEMON_NOTIFICATION                = ID_AIRPLAY +3
+     };
+ }
+ }
+diff --git a/jsonrpc/AirplayDaemon.json b/jsonrpc/AirplayDaemon.json
+new file mode 100644
+index 0000000..fe8e6bb
+--- /dev/null
++++ b/jsonrpc/AirplayDaemon.json
+@@ -0,0 +1,308 @@
++{
++    "$schema": "interface.schema.json",
++    "jsonrpc": "2.0",
++    "info": {
++      "title": "AirplayDaemon API",
++      "class": "AirplayDaemonJSONRPC",
++      "description": "AirplayDaemon service JSON-RPC interface"
++    },
++    "common": {
++      "$ref": "common.json"
++    },
++    "include": {
++      "statecontrol": {
++        "$ref": "StateControl.json#"
++      }
++    },
++    "definitions": {
++        "foregroundreason": {
++            "summary": "Airplay command to bring App to foreground",
++            "type": "string",
++            "enum": [
++                "HomeScreenButton",
++                "InputSourceSelected"
++            ]
++        },
++        "allowappruninbackground": {
++            "summary": "App Allowed or not to run in background",
++            "type": "boolean",
++            "example": false
++        },
++        "state" : {
++            "summary": "Daemon plugin state",
++            "type" : "string",
++            "enum" : [
++                "started",
++                "stopped"
++            ]
++        }
++    },
++    "properties": {
++      "allowappruninbackground": {
++        "summary": "App Allowed or not to run in background",
++        "events": [
++          "appRunInBackgroundChange"
++        ],
++        "params": {
++          "type": "object",
++          "properties": {
++            "runInBackground": {
++              "type": "boolean",
++              "example": true
++            }
++          },
++          "required": [
++            "runInBackground"
++          ]
++        },
++        "errors": [
++          {
++            "description": "General error",
++            "$ref": "#/common/errors/general"
++          }
++        ]
++      },
++      "friendlyname": {
++        "summary": "Friendly device model name",
++        "params": {
++          "type": "object",
++          "properties": {
++            "model": {
++              "type": "string",
++              "example": "Platco Xi5"
++            }
++          },
++          "required": [
++            "model"
++          ]
++        },
++        "errors": [
++          {
++            "description": "General error",
++            "$ref": "#/common/errors/general"
++          }
++        ]
++      },
++      "airplaystatus": {
++        "summary": "Airplay On/Off",
++        "readonly": true,
++        "params": {
++          "type": "object",
++          "properties": {
++            "airplayenabled": {
++              "type": "boolean",
++              "example": true
++            }
++          },
++          "required": [
++            "airplayenabled"
++          ]
++        },
++        "errors": [
++          {
++            "description": "General error",
++            "$ref": "#/common/errors/general"
++          }
++        ]
++      }
++    },
++    "methods": {
++      "bringairplayapptoforeground": {
++        "summary": "Requests AirplayDaemon to bring the specific Airplay App UI to foreground",
++        "params": {
++          "type": "object",
++          "properties": {
++            "reason": {
++              "description": "Reason to request Airplay app UI, e.g., to display Airplay curtain page or Airlay & HomeKit settings",
++              "type": "string",
++              "example": "HomeScreenButton"
++            }
++          },
++          "required":[
++            "reason"
++          ]
++        },
++        "result": {
++            "type": "object",
++            "properties": {
++              "success":{
++                "type": "boolean",
++                "example": true
++              }
++            },
++            "required": [
++                "success"
++            ]
++          },
++        "errors": [
++          {
++            "description": "Airplay is unavailable",
++            "$ref": "#/common/errors/unavailable"
++          },
++          {
++            "description": "Command is not set",
++            "$ref": "#/common/errors/unknownkey"
++          }
++        ]
++      },
++      "setcurrentidentifier": {
++      "summary": "Request Airplay-Daemon to set the current Input-Source",
++      "params": {
++        "type": "object",
++        "properties": {
++          "command": {
++            "description": "Selected Input-Source using IR Remote.",
++            "type": "string",
++            "example": "HDMI1,HDMI2,AIRPLAY"
++          }
++        }
++      },
++      "result": {
++        "type": "number"
++      },
++      "errors": [
++        {
++          "description": "Airplay is unavailable",
++          "$ref": "#/common/errors/unavailable"
++        },
++        {
++          "description": "Command is not set",
++          "$ref": "#/common/errors/unknownkey"
++        }
++      ]
++    },      
++      "factoryreset": {
++        "summary": "Does Airplay factory reset",
++        "result": {
++          "$ref": "#/common/results/void"
++        },
++        "errors": [
++          {
++            "description": "Airplay is unavailable",
++            "$ref": "#/common/errors/unavailable"
++          }
++        ]
++      }
++    },
++    "events": {
++      "updateairplayappstatereq": {
++        "summary": "Event raised to request state change of the Airplay Application to launch, suspend, resume, and stop",
++        "params": {
++          "type": "object",
++          "properties": {
++            "airplay_app_state_request": {
++              "description": "Determines the state of Airplay application requested",
++              "type": "string",
++              "example": "AppStart, AppSuspend, AppResume, AppStop"
++            },
++            "state_parameters": {
++                "type": "object",
++                "description": "params to launch, suspend, resume Daemon plugin",
++                "properties": {
++                  "callsign": {
++                    "type": "string",
++                    "description": "Determines the state of Airplay application requested"
++                  },
++                  "type": {
++                    "type": "string",
++                    "description": "params to launch, suspend, resume Daemon plugin"
++                  },
++                  "suspend": {
++                    "type": "string",
++                    "description": "params to launch, suspend, resume Daemon plugin"
++                  },
++                  "visible": {
++                    "type": "string",
++                    "description": "params to launch, suspend, resume Daemon plugin"
++                  },
++                  "focused": {
++                    "type": "string",
++                    "description": "params to launch, suspend, resume Daemon plugin"
++                  }
++                }
++            }
++          },
++          "required": [
++            "airplay_app_state_request",
++            "state_parameters"
++          ]
++        }
++      },
++     "airplaystatuschanged": {
++      "summary": "Event raised to send Airplay status changed to On or Off",
++      "params": {
++      "type": "object",
++      "properties": {
++        "airplaystatus": {
++        "description": "Airplay setting status changed between On or Off",
++        "type": "string",
++        "example": "On, Off"
++          }
++        },
++        "required": [
++            "airplaystatus"
++        ]
++      }
++    },
++    "inputsourcechanged": {
++      "summary": "Event raised to send selected Inputsource details",
++      "params": {
++      "type": "object",
++      "properties": {
++	      "typeofinput": {
++        "description": "Type of inputsource hdmi, composite, Airplay",
++        "type": "string",
++        "example": "HDMI, COMPOSITE, AIRPLAY"
++	       },
++        "portid": {
++          "description": "Airplay setting status changed between On or Off",
++          "type": "number",
++          "example": 1
++          }
++        },
++        "required": [
++            "typeofinput",
++            "portid"
++        ]
++      }
++    },
++    "onairplayerror": {
++      "summary": "Event raised to send failure events",
++      "params": {
++      "type": "object",
++      "properties": {
++	      "errordata": {
++        "description": "Details of the failure",
++        "type": "string",
++        "example": "Network lost"
++	       },
++        "errorid": {
++          "description": "Failure code",
++          "type": "number",
++          "example": 10
++          }
++        },
++        "required": [
++            "errordata",
++            "errorid"
++        ]
++      }
++    },
++    "airplayMetrics": {
++      "summary": "Event raised to set metrics if isDeviced pair or not",
++      "params": {
++        "type": "object",
++        "properties": {
++          "isDevicePaired": {
++            "description": "Determines the state of Homekit pairing ",
++            "type": "boolean",
++            "example": "true, false"
++          }
++        },
++        "required": [
++          "isDevicePaired"
++        ]
++      }
++    }    
++  }
++}

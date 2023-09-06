@@ -1,0 +1,26 @@
+diff --git a/definitions/CMakeLists.txt b/definitions/CMakeLists.txt
+index dc9cd64..3616274 100644
+--- a/definitions/CMakeLists.txt
++++ b/definitions/CMakeLists.txt
+@@ -21,7 +21,7 @@ project(Definitions)
+ 
+ find_package(WPEFramework)
+ 
+-project_version(1.0.0)
++project_version(4.2.0)
+ 
+ find_package(CompileSettingsDebug REQUIRED)
+ find_package(JsonGenerator REQUIRED)
+diff --git a/interfaces/CMakeLists.txt b/interfaces/CMakeLists.txt
+index 3125775..31de9e2 100644
+--- a/interfaces/CMakeLists.txt
++++ b/interfaces/CMakeLists.txt
+@@ -21,7 +21,7 @@ project(Marshalling)
+ 
+ find_package(WPEFramework)
+ 
+-project_version(1.0.0)
++project_version(4.2.0)
+ 
+ find_package(CompileSettingsDebug REQUIRED)
+ find_package(ProxyStubGenerator REQUIRED)
