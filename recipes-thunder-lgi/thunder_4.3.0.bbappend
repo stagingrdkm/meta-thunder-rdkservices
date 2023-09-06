@@ -22,7 +22,6 @@ EXTRA_OECMAKE += "-DKEY_OUTPUT_DISABLED=true"
 EXTRA_OECMAKE += "-DWARNING_REPORTING=OFF"
 EXTRA_OECMAKE += "-DEXCEPTION_CATCHING=ON"
 EXTRA_OECMAKE += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-DENABLED_TRACING_LEVEL=3', '-DENABLED_TRACING_LEVEL=1', d)}"
-EXTRA_OECMAKE += "-DHIDE_NON_EXTERNAL_SYMBOLS=ON"
 EXTRA_OECMAKE += "-DVOLATILE_PATH=/tmp"
 TARGET_CXXFLAGS += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-D__ENABLE_ASSERT__=ON', '', d)}"
 TARGET_CXXFLAGS += "-D__ERRORRESULT__=errno"
@@ -41,11 +40,11 @@ TARGET_CXXFLAGS += "-D_TRACE_FUNCTION_=__PRETTY_FUNCTION__"
 # file://0134-HUMAXEOSR-995-WPEProcess-crash-on-termination-with-_.patch - skipped, seems to be changed, hopefully fixed with 062dd47ec8b26df7d56161db59d972e8570fd1e6 (introduced on R4)
 # file://0146-ONEM-22659-Synchronization-in-Release-changed.patch - skipping, https://github.com/rdkcentral/Thunder/pull/759 : 'I can confirm this was a bug that has been resolved in R3. So this pull request should not be applied to R3'
 
-# Source/tracing issue patches
-#            file://0107-ONEM-18296-tracing-use-direct-output.patch - not applicable, 5fa4dfad849eac58c803b8c72c4c491b2c6aee7c removes tracing
+# Patches:
+#            file://0107-ONEM-18296-tracing-use-direct-output.patch - not applicable for messaging
 #            file://0121-ONEM-23238-Unified-handling-of-logging-configuration.patch - not applicable, 5fa4dfad849eac58c803b8c72c4c491b2c6aee7c removes tracing
 #            file://0143-ARRISAPOL-2718-Add-JSONRPC-helper-prints.patch - it is not useful anymore
-#            file://0144-ARRISEOS-42363-Don-t-flush-libraries-in-Dispatch.patch - fixed with b31ef9d48e434573e0c31d427be5bd03e53b10c2
+#            file://0144-ARRISEOS-42363-Don-t-flush-libraries-in-Dispatch.patch - replaced by: 0155-OMWAPPI-1798-Don-t-flush-libraries-in-Idle.patch
 #            file://0147-ARRISAPP-140-Fix-assert-on-call-to-opencdm_dispose.patch - already there
 #            file://0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch - already there
 #            file://0128-ONEM-24449-Load-fallback-logging-configuration.patch - seems useless since 5fa4dfad849eac58c803b8c72c4c491b2c6aee7c removes tracing
@@ -115,7 +114,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
 
 # 0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch taken from R4 (is on R4.1.1)
 # there was a problem: static assert while compilation of wpeframework-interfaces code generated for metrics API
-# local.patch
+# fix-compilation-with-warning-reporting-disabled.patch
 # WARNING_REPORTING feature is problematic for WPEProcesses in contaners (runtime)
 # after disable WARNING_REPORTING compilation issues: undefined reference to 'WPEFramework::Core::CallsignTLS::Callsign(char const*)
 
@@ -129,9 +128,6 @@ WPEFRAMEWORK_PERSISTENT_PATH = "/mnt/wpeframework"
 # to use it, change the debug case below
 PACKAGECONFIG_append = " ${@bb.utils.contains('MACHINE_FEATURES', 'debug', 'release', 'release', d)}"
 
-PACKAGECONFIG += "\
-        ${@bb.utils.contains('DISTRO_FEATURES', 'playready_nexus_svp', 'opencdmi_prnx_svp', '', d)} \
-"
 PACKAGECONFIG[processcontainers_awc]      = "-DPROCESSCONTAINERS_AWC=ON,,slauncher"
 PACKAGECONFIG_append = " processcontainers processcontainers_awc"
 PACKAGECONFIG_remove = " virtualinput"

@@ -40,11 +40,12 @@ TARGET_CXXFLAGS += "-D_TRACE_FUNCTION_=__PRETTY_FUNCTION__"
 # file://0134-HUMAXEOSR-995-WPEProcess-crash-on-termination-with-_.patch - skipped, seems to be changed, hopefully fixed with 062dd47ec8b26df7d56161db59d972e8570fd1e6 (introduced on R4)
 # file://0146-ONEM-22659-Synchronization-in-Release-changed.patch - skipping, https://github.com/rdkcentral/Thunder/pull/759 : 'I can confirm this was a bug that has been resolved in R3. So this pull request should not be applied to R3'
 
-#            file://0147-ARRISAPP-140-Fix-assert-on-call-to-opencdm_dispose.patch  - is already there (R4.2)
-#            file://0155-OMWAPPI-1798-Don-t-flush-libraries-in-Idle.patch - is equivalent of 0144-ARRISEOS-42363-Don-t-flush-libraries-in-Dispatch.patch
-#            file://0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch - is already there (R4.2)
-#            file://0128-ONEM-24449-Load-fallback-logging-configuration.patch (not applicable for messaging)
-#            file://0107-ONEM-18296-tracing-use-direct-output.patch (not applicable for messaging)
+# Patches:
+#            file://0107-ONEM-18296-tracing-use-direct-output.patch - not applicable for messaging
+#            file://0144-ARRISEOS-42363-Don-t-flush-libraries-in-Dispatch.patch - replaced by: 0155-OMWAPPI-1798-Don-t-flush-libraries-in-Idle.patch
+#            file://0147-ARRISAPP-140-Fix-assert-on-call-to-opencdm_dispose.patch - already there
+#            file://0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch - already there
+#            file://0128-ONEM-24449-Load-fallback-logging-configuration.patch - seems useless since 5fa4dfad849eac58c803b8c72c4c491b2c6aee7c removes tracing
 
 SRC_URI += "file://wpeframework.service.xdial.in \
             file://wpeframework.service.no-container.in \
@@ -85,6 +86,35 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
 "
+
+# OMWAPPI-1798 NOTES for two introduced patches:
+#
+# => 0153-OMWAPPI-1798-Fix-for-taken-deallocated-lock.patch
+# => 0154-OMWAPPI-1798-MessageUnit-_opened-flag-introduced.patch
+#
+# Problematic code is:
+#
+#    void Deinitialize()
+#    {
+#        Messaging::MessageUnit::Instance().Close();
+#
+# ... in WebKitBrowser/Extension/main.cpp
+#
+# that was and still is invoked by our implementation like here:
+# https://github.com/WebPlatformForEmbedded/ThunderNanoServicesRDK/commit/3f6b35550d564700bf59f8f64cd2ab1d98b2a637
+#
+# and was lately removed here:
+# https://github.com/WebPlatformForEmbedded/ThunderNanoServicesRDK/commit/0c156f0fb195ee2ee7b4e16b9e157370bca92c91#diff-4edc0605b130c068eb2de68aedcb2256a6680f2f5de208f0fae5d872e71024f3L127
+#
+# I haven't got clear confirmation how it finally should be, but patches correctly protect against the case when the code would stay there
+#
+# OMWAPPI-1798 NOTES end
+
+# 0001-COMRPC-Enlarge-the-buffer-in-which-we-hold-the-COMRP.patch taken from R4 (is on R4.1.1)
+# there was a problem: static assert while compilation of wpeframework-interfaces code generated for metrics API
+# fix-compilation-with-warning-reporting-disabled.patch
+# WARNING_REPORTING feature is problematic for WPEProcesses in contaners (runtime)
+# after disable WARNING_REPORTING compilation issues: undefined reference to 'WPEFramework::Core::CallsignTLS::Callsign(char const*)
 
 SRC_URI += "${@bb.utils.contains('PREFERRED_PROVIDER_dialserver', 'xdialserver', ' file://rtrpc.conf ', '', d)}"
 SRC_URI += "${@bb.utils.contains('PREFERRED_PROVIDER_dialserver', 'xdialserver', ' file://wpeframework_rtremote.socket ', '', d)}"
