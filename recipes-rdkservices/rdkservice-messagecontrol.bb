@@ -10,8 +10,8 @@ S = "${WORKDIR}/git"
 # git@github.com:WebPlatformForEmbedded/ThunderNanoServicesRDK.git R4 branch R4.3 tag revision: a1ceaa9df45735630f555a97afa71d771f979b22
 # ... or git@github.com:WebPlatformForEmbedded/ThunderNanoServicesRDK.git R4 branch R4.2 tag revision: 68cb55f538046245ca9046e8b8c7bf31e07fc0ce
 
-SRC_URI += "git://github.com/WebPlatformForEmbedded/ThunderNanoServicesRDK.git;protocol=git;branch=R4;name=${PN};destsuffix=git"
-SRCREV_${PN}="${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', 'a1ceaa9df45735630f555a97afa71d771f979b22', '68cb55f538046245ca9046e8b8c7bf31e07fc0ce', d)}"
+SRC_URI += "git://github.com/WebPlatformForEmbedded/ThunderNanoServicesRDK.git;protocol=git;branch=R4;name=${BPN};destsuffix=git"
+SRCREV_${BPN}="${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', 'a1ceaa9df45735630f555a97afa71d771f979b22', '68cb55f538046245ca9046e8b8c7bf31e07fc0ce', d)}"
 
 inherit cmake
 

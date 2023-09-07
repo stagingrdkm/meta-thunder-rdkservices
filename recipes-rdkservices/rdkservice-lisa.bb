@@ -21,12 +21,12 @@ DEPENDS += "boost curl libarchive"
 # and slightly alter its behavior. When LISA becomes an official plugin
 # and will be moved to regular plugins repository the following definitions
 # can be removed
-SRC_URI_remove = "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=${RDKSERVICES_BRANCH};name=${PN};destsuffix=git"
+SRC_URI_remove = "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=${RDKSERVICES_BRANCH};name=${BPN};destsuffix=git"
 SRC_URI_append = " git://github.com/stagingrdkm/LISA.git;branch=main;protocol=https"
 
 # Overwrite SRCREV to fixed stagingrdkm/LISA revision.
 SRCREV = "cd5391de3d6381e0bea671a35df9081a2b64be55"
-SRCREV_${PN} = "cd5391de3d6381e0bea671a35df9081a2b64be55"
+SRCREV_${BPN} = "cd5391de3d6381e0bea671a35df9081a2b64be55"
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 
