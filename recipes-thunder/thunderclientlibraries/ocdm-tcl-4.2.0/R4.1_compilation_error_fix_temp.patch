@@ -1,0 +1,26 @@
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index 03a1d02..be74f48 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -811,6 +811,13 @@ protected:
+             _callback->keys_updated_callback(this, _userData);
+         }
+     }
++#ifdef USE_SVP
++public:
++    void* GetSVPContext() const
++    {
++        return _svpContext;
++    }
++#endif
+
+ private:
+     std::string _sessionId;
+@@ -827,5 +834,8 @@ private:
+     uint32_t _errorCode;
+     Exchange::OCDM_RESULT _sysError;
+     OpenCDMSystem* _system;
++#ifdef USE_SVP
++    void* _svpContext;
++#endif
+ };

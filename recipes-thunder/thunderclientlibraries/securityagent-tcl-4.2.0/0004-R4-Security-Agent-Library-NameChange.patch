@@ -1,0 +1,18 @@
+Index: git/Source/securityagent/CMakeLists.txt
+===================================================================
+--- git.orig/Source/securityagent/CMakeLists.txt
++++ git/Source/securityagent/CMakeLists.txt
+@@ -19,11 +19,11 @@ cmake_minimum_required(VERSION 3.3)
+ 
+ find_package(WPEFramework)
+ 
+-project(SecurityAgent)
++project(securityagent)
+ 
+ project_version(4.2.0)
+ 
+-set(TARGET ${NAMESPACE}${PROJECT_NAME})
++set(TARGET ${PROJECT_NAME})
+ 
+ message("Setup ${TARGET} v${PROJECT_VERSION}")
+ 

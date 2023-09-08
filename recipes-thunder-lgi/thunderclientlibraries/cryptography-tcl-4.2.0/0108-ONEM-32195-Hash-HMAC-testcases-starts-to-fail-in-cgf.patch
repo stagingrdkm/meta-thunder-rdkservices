@@ -1,0 +1,30 @@
+From fa0bd46ac91d414bef3ebec5e1397b7addc359f6 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Fri, 15 Sep 2023 11:13:18 +0200
+Subject: [PATCH] ONEM-32195: Hash::HMAC testcases starts to fail in
+ cgfacetests
+
+confusing sizeof 15/16 for "_Test_Password_"
+
+echo -n "Etaoin Shrldu" | openssl dgst -sha256 -hmac "_Test_Password_" -hex
+(stdin)= 5affd7a7701d737bcc69bfdcc342c9ce472f07e8ea302199b7acc94f7cda1523
+---
+ Source/cryptography/tests/cryptography_test/InterfaceTests.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/cryptography/tests/cryptography_test/InterfaceTests.cpp b/Source/cryptography/tests/cryptography_test/InterfaceTests.cpp
+index 0db7348..f07baa4 100644
+--- a/Source/cryptography/tests/cryptography_test/InterfaceTests.cpp
++++ b/Source/cryptography/tests/cryptography_test/InterfaceTests.cpp
+@@ -170,7 +170,7 @@ TEST(Hash, HMAC)
+ 	                                        0xC3, 0x42, 0xC9, 0xCE, 0x47, 0x2F, 0x07, 0xE8, 0xEA, 0x30, 0x21, 0x99,
+ 	                                        0xB7, 0xAC, 0xC9, 0x4F, 0x7C, 0xDA, 0x15, 0x23 };
+ 
+-    uint32_t keyId = vault->Import(sizeof(password), password);
++    uint32_t keyId = vault->Import(sizeof(password) - 1, password);
+     EXPECT_NE(keyId, 0);
+     if (keyId != 0) {
+         WPEFramework::Cryptography::IHash* hashImpl = vault->HMAC(WPEFramework::Cryptography::hashtype::SHA256, keyId);
+-- 
+2.25.1
+

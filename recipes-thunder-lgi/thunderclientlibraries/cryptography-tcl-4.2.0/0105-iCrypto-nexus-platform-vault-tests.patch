@@ -1,0 +1,590 @@
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Mon, 8 May 2023 15:53:48 +0200
+
+Platform vault implementation tests; see design here:
+https://wikiprojects.upc.biz/display/CTOM/iCrypto+for+AVPKv5
+
+---
+ .../tests/cryptography_test/CMakeLists.txt    |  28 +
+ .../LgiPlatformInterfaceTests.cpp             | 530 ++++++++++++++++++
+ 2 files changed, 558 insertions(+)
+ create mode 100644 Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp
+
+Index: git/Source/cryptography/tests/cryptography_test/CMakeLists.txt
+===================================================================
+--- git.orig/Source/cryptography/tests/cryptography_test/CMakeLists.txt
++++ git/Source/cryptography/tests/cryptography_test/CMakeLists.txt
+@@ -139,3 +139,31 @@ target_link_libraries(cobalttests
+     )
+ 
+ install(TARGETS cobalttests DESTINATION bin)
++
++#################
++
++add_executable(lgiplatformtest
++        LgiPlatformInterfaceTests.cpp
++        Helpers.cpp
++        Test.c
++    )
++
++set_target_properties(lgiplatformtest PROPERTIES
++        CXX_STANDARD 11
++        CXX_STANDARD_REQUIRED YES
++    )
++
++target_compile_options(lgiplatformtest PUBLIC -DVALIDATE_VALUES -DTEST_PLATFORM_APOLLOV1PLUS)
++target_link_libraries(lgiplatformtest
++        PRIVATE
++        ${NAMESPACE}Cryptography
++        ssl
++        crypto
++        utility
++        NXCLIENT::NXCLIENT
++        -Wl,--no-undefined
++    )
++
++install(TARGETS lgiplatformtest DESTINATION bin)
++
++# LgiPlatformInterfaceTests.cpp
+Index: git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp
+===================================================================
+--- /dev/null
++++ git/Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp
+@@ -0,0 +1,537 @@
++/*
++ * If not stated otherwise in this file or this component's LICENSE file the
++ * following copyright and licenses apply:
++ *
++ * Copyright 2020 Metrological
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include "Helpers.h"
++#include "Test.h"
++
++#include <cryptography.h>
++#include <core/core.h>
++
++#include <fstream>
++#include <bitset>
++#include <iostream>
++
++static WPEFramework::Cryptography::ICryptography *cg = nullptr;
++
++const char *AESDATA;
++
++#define LOG_TEST(...)                                                     \
++    {                                                                     \
++        printf("==================== [%s:%d] <", __FUNCTION__, __LINE__); \
++        printf(__VA_ARGS__);                                              \
++        printf(">\n");                                                    \
++    }
++
++void DumpBufferEx(const char *desc, const uint8_t buf[], const uint32_t size, size_t pos = 0, bool doprint = true)
++{
++    printf("%s:", desc);
++    DumpBuffer(buf + pos, size);
++    if (doprint)
++    {
++        printf("'");
++        for (int i = 0; i < size; ++i)
++            printf("%c ", char(buf[i + pos]));
++        printf("'\n");
++    }
++}
++
++uint64_t bitdifference(const uint8_t *a, const uint8_t *b, size_t sz)
++{
++    uint64_t ret = 0;
++    for (size_t i = 0; i < sz; ++i)
++    {
++        std::bitset<8> bs = a[i];
++        bs ^= b[i];
++        ret += bs.count();
++    }
++    return ret;
++}
++
++void checkbitdiff(const uint8_t *a, const uint8_t *b, size_t sz)
++{
++    // proper AES should flip the bits around 50% of the time; check that the bit difference is between 1/4 & 3/4 of message bit length
++    const uint64_t bitdiff = bitdifference(a, b, sz);
++    const uint64_t lower = (uint64_t(sz) * 8 / 3);
++    const uint64_t higher = (uint64_t(sz) * 8 * 3 / 4);
++    std::cout << "lower: " << lower << " actual: " << bitdiff << " higher: " << higher << std::endl;
++    EXPECT_GT(bitdiff, lower);
++    EXPECT_LT(bitdiff, higher);
++}
++
++void testaes(WPEFramework::Cryptography::ICipher *aes, const uint8_t *data)
++{
++    const uint32_t dataSize = strlen(reinterpret_cast<const char *>(data));
++    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint32_t bufferSize = expectedSize + 16;
++
++    // const uint8_t iv[] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
++    const uint8_t *iv = reinterpret_cast<const uint8_t *>("oijasdoijasodijasodijaosidjaosidjaoisdjaoisvweertertsdfsdf");
++    iv += (rand() % 16);
++
++    uint8_t *output = new uint8_t[bufferSize];
++    ::memset(output, 0, bufferSize);
++    uint8_t *input = new uint8_t[bufferSize];
++    ::memset(input, 0, bufferSize);
++
++    DumpBufferEx("input", data, dataSize);
++
++    EXPECT_EQ(aes->Encrypt(16, iv, dataSize, data, bufferSize, output), expectedSize);
++    DumpBuffer(output, expectedSize);
++
++    checkbitdiff(data, output, expectedSize);
++
++    EXPECT_EQ(aes->Decrypt(16, iv, expectedSize, output, bufferSize, input), dataSize);
++    DumpBufferEx("input, again", input, dataSize);
++    EXPECT_EQ(::memcmp(input, data, dataSize), 0);
++
++    delete[] output;
++    delete[] input;
++}
++
++TEST(Platform, FullTestVault)
++{
++    WPEFramework::Cryptography::IVault *vault = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
++    EXPECT_NE(vault, nullptr);
++
++    WPEFramework::Cryptography::IPersistent *persistent = vault->QueryInterface<WPEFramework::Cryptography::IPersistent>();
++    EXPECT_NE(persistent, nullptr);
++
++    std::string locator{"/tmp/example_locator"};
++    remove(locator.c_str());
++
++    bool exists = true;
++    uint32_t rc = persistent->Exists(locator, exists);
++    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++    EXPECT_EQ(exists, false);
++
++    uint32_t key_id;
++    EXPECT_EQ(persistent->Create(locator, WPEFramework::Cryptography::IPersistent::keytype::AES256, key_id), WPEFramework::Core::ERROR_NONE);
++
++    rc = persistent->Exists(locator, exists);
++    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++    EXPECT_EQ(exists, true);
++
++    uint32_t loaded_key_id;
++    EXPECT_EQ(persistent->Load(locator, loaded_key_id), WPEFramework::Core::ERROR_NONE);
++
++    rc = persistent->Exists(locator, exists);
++    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++    EXPECT_EQ(exists, true);
++
++    WPEFramework::Cryptography::ICipher *aes = vault->AES(WPEFramework::Cryptography::aesmode::CBC, loaded_key_id);
++    EXPECT_NE(aes, nullptr);
++
++    testaes(aes, reinterpret_cast<const uint8_t *>(AESDATA));
++}
++
++TEST(Platform, VaultLoadFlush)
++{
++    WPEFramework::Cryptography::IVault *vault = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
++    EXPECT_NE(vault, nullptr);
++    WPEFramework::Cryptography::IPersistent *persistent = vault->QueryInterface<WPEFramework::Cryptography::IPersistent>();
++    EXPECT_NE(persistent, nullptr);
++
++    const std::string locator = "/tmp/example_locator";
++    remove(locator.c_str());
++
++    auto createDummyFile = [&]()
++    {
++        std::ofstream ofs(locator, std::ios::binary);
++        size_t sz = rand() % 64;
++
++        if (sz > 10 && sz % 5 == 1)
++        {
++            ofs.put(2);
++            ofs.put(0);
++            ofs.put(0);
++            ofs.put(5);
++        }
++        for (size_t i = 0; i < sz; ++i)
++            ofs.put(char(rand() % 255));
++        ofs.close();
++    };
++
++    createDummyFile();
++
++    LOG_TEST("create should fail now")
++    uint32_t key_id = 100;
++    EXPECT_NE(persistent->Create(locator, WPEFramework::Cryptography::IPersistent::keytype::AES256, key_id), WPEFramework::Core::ERROR_NONE);
++    EXPECT_EQ(key_id, 0);
++
++    // now remove the file
++    EXPECT_EQ(remove(locator.c_str()), 0);
++
++    // now create should work
++    LOG_TEST("create should work now")
++    EXPECT_EQ(persistent->Create(locator, WPEFramework::Cryptography::IPersistent::keytype::AES256, key_id), WPEFramework::Core::ERROR_NONE);
++    EXPECT_NE(key_id, 0);
++
++    // and load should work
++    LOG_TEST("load should work")
++    key_id = 0;
++    uint32_t rc = persistent->Load(locator, key_id);
++    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++    EXPECT_NE(key_id, 0);
++
++    LOG_TEST("load the key again; should get other key_id")
++    uint32_t key_id_2 = 0;
++    rc = persistent->Load(locator, key_id_2);
++    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++    EXPECT_NE(key_id_2, 0);
++    EXPECT_NE(key_id, key_id_2);
++
++    // now remove the file
++    EXPECT_EQ(remove(locator.c_str()), 0);
++
++    for (int i = 0; i < 10; ++i)
++    {
++        createDummyFile();
++        LOG_TEST("load should fail on dummy file contents")
++        key_id = 1;
++        uint32_t rc = persistent->Load(locator, key_id);
++        EXPECT_NE(rc, WPEFramework::Core::ERROR_NONE);
++        EXPECT_EQ(key_id, 0);
++    }
++
++    LOG_TEST("should be able to create & use the key")
++    EXPECT_EQ(remove(locator.c_str()), 0);
++    EXPECT_EQ(persistent->Create(locator, WPEFramework::Cryptography::IPersistent::keytype::AES256, key_id), WPEFramework::Core::ERROR_NONE);
++    EXPECT_NE(key_id, 0);
++    WPEFramework::Cryptography::ICipher *aes = vault->AES(WPEFramework::Cryptography::aesmode::CBC, key_id);
++    EXPECT_NE(aes, nullptr);
++
++    LOG_TEST("first flush")
++    rc = persistent->Flush();
++    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++
++    LOG_TEST("should no longer be able to use the key by id")
++    aes = nullptr;
++    try
++    {
++        aes = vault->AES(WPEFramework::Cryptography::aesmode::CBC, key_id);
++    }
++    catch (std::runtime_error &err)
++    {
++    }
++    EXPECT_EQ(aes, nullptr);
++
++    LOG_TEST("second flush")
++    // second Flush should not fail
++    rc = persistent->Flush();
++    EXPECT_EQ(rc, WPEFramework::Core::ERROR_NONE);
++}
++
++TEST(Platform, VaultLoadFailed)
++{
++    WPEFramework::Cryptography::IVault *vault = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
++    EXPECT_NE(vault, nullptr);
++    WPEFramework::Cryptography::IPersistent *persistent = vault->QueryInterface<WPEFramework::Cryptography::IPersistent>();
++    EXPECT_NE(persistent, nullptr);
++
++    // Load should fail with not existing file
++    std::string key_name = "not_existing_file";
++    uint32_t key_id = 0;
++    uint32_t rc = persistent->Load(key_name, key_id);
++    EXPECT_EQ(rc, WPEFramework::Core::ERROR_GENERAL);
++    EXPECT_EQ(key_id, 0);
++
++    // Load should fail with too long file name
++    char test_path[257];
++    memset(test_path, 'a', 256);
++    key_name = test_path;
++    key_id = 0;
++    rc = persistent->Load(key_name, key_id);
++    EXPECT_EQ(rc, WPEFramework::Core::ERROR_GENERAL);
++    EXPECT_EQ(key_id, 0);
++}
++
++void aesSpeedTest(const uint32_t sz)
++{
++    WPEFramework::Cryptography::IVault *vault = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
++    EXPECT_NE(vault, nullptr);
++
++    WPEFramework::Cryptography::IPersistent *persistent = vault->QueryInterface<WPEFramework::Cryptography::IPersistent>();
++    EXPECT_NE(persistent, nullptr);
++
++    std::string locator{"/tmp/example_locator"};
++    remove(locator.c_str());
++
++    uint32_t key_id;
++    EXPECT_EQ(persistent->Create(locator, WPEFramework::Cryptography::IPersistent::keytype::AES256, key_id), WPEFramework::Core::ERROR_NONE);
++
++    WPEFramework::Cryptography::ICipher *aes = vault->AES(WPEFramework::Cryptography::aesmode::CBC, key_id);
++    EXPECT_NE(aes, nullptr);
++
++    const uint32_t dataSize = sz;
++    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint32_t bufferSize = expectedSize + 16;
++
++    const uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
++
++    uint8_t *output = new uint8_t[bufferSize];
++    ::memset(output, 0, bufferSize);
++    uint8_t *input = new uint8_t[bufferSize];
++    ::memset(input, 0, bufferSize);
++
++    std::ifstream randinput("/dev/urandom", std::ios::binary);
++    uint8_t *data = new uint8_t[bufferSize];
++
++    if (randinput && randinput.read((char *)data, dataSize))
++    {
++        std::cout << "========= testing with data size: " << sz << std::endl;
++
++        if (sz > 1024 + 32)
++            DumpBufferEx("rand data 32 bytes @ 1024:", data, 32, 1024, false);
++        if (sz > 2048)
++            DumpBufferEx("rand data 32 bytes @ SZ-2048:", data, 32, sz - 2048, false);
++
++        memcpy(input, data, dataSize);
++
++        using clock = std::chrono::high_resolution_clock;
++
++        auto start = clock::now();
++
++#pragma GCC diagnostic push
++#pragma GCC diagnostic error "-Wconversion"
++        EXPECT_EQ(aes->Encrypt(16, iv, dataSize, data, bufferSize, output), expectedSize);
++#pragma GCC diagnostic pop
++
++        auto dt = std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count();
++        std::cout << "-- encryption took: " << dt << " [ns]"
++                  << " so " << (1e9 * sz / dt) / (1024.0 * 1024.0 ) << " mb/sec" << std::endl;
++
++        start = clock::now();
++        checkbitdiff(data, output, expectedSize);
++        dt = std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count();
++        std::cout << "-- checking diff took: " << dt << "[ns]" << std::endl;
++
++        start = clock::now();
++        EXPECT_EQ(aes->Decrypt(16, iv, expectedSize, output, bufferSize, input), dataSize);
++        dt = std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count();
++        std::cout << "-- decryption took: " << dt << " [ns]"
++                  << " so " << (1e9 * sz / dt) / (1024.0 * 1024.0 )  << " mb/sec" << std::endl;
++        start = clock::now();
++        EXPECT_EQ(::memcmp(input, data, dataSize), 0);
++        dt = std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count();
++        std::cout << "-- memcmp took " << dt << "[ns]" << std::endl;
++    }
++    else
++    {
++        EXPECT_EQ(false, true);
++    }
++
++    delete[] output;
++    delete[] input;
++    delete[] data;
++}
++
++TEST(Platform, SpeedTest)
++{
++    aesSpeedTest(128);
++    aesSpeedTest(1024 * 1024);
++    aesSpeedTest(256 * 1024 * 1024);
++}
++
++TEST(Platform, TwoVaults)
++{
++    std::string locator{"/tmp/example_locator"};
++    remove(locator.c_str());
++
++    WPEFramework::Cryptography::IVault *vault1 = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
++    EXPECT_NE(vault1, nullptr);
++    printf("vault1: %p\n", vault1);
++
++    WPEFramework::Cryptography::IPersistent *persistent1 = vault1->QueryInterface<WPEFramework::Cryptography::IPersistent>();
++    EXPECT_NE(persistent1, nullptr);
++
++    uint32_t id1;
++    EXPECT_EQ(persistent1->Create(locator, WPEFramework::Cryptography::IPersistent::keytype::AES256, id1), WPEFramework::Core::ERROR_NONE);
++
++    WPEFramework::Cryptography::IVault *vault2 = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
++    EXPECT_NE(vault2, nullptr);
++    printf("vault2: %p\n", vault2);
++
++    WPEFramework::Cryptography::IPersistent *persistent2 = vault2->QueryInterface<WPEFramework::Cryptography::IPersistent>();
++    EXPECT_NE(persistent2, nullptr);
++
++    // load the key in vault2, make sure the ids are different
++    uint32_t id2;
++    EXPECT_EQ(persistent2->Load(locator, id2), WPEFramework::Core::ERROR_NONE);
++    EXPECT_NE(id1, id2);
++
++    std::cout << "id1: " << id1 << " id2: " << id2 << std::endl;
++
++    // now we expect that the key with id1 is present in vault1:
++    WPEFramework::Cryptography::ICipher *aes = vault1->AES(WPEFramework::Cryptography::aesmode::CBC, id1);
++    EXPECT_NE(aes, nullptr);
++    // and key with id2 is present in vault2
++    aes = nullptr;
++    aes = vault2->AES(WPEFramework::Cryptography::aesmode::CBC, id2);
++    EXPECT_NE(aes, nullptr);
++
++    // since the implementation is shared, the vault instances share the KeyCache
++    aes = nullptr;
++    try
++    {
++        aes = vault1->AES(WPEFramework::Cryptography::aesmode::CBC, id2);
++    }
++    catch (std::runtime_error &err)
++    {
++    }
++    EXPECT_NE(aes, nullptr);
++}
++
++TEST(Platform, SeveralKeys)
++{
++    std::string locators[]{"/tmp/example_locator1", "/tmp/example_locator2", "/tmp/example_locator3"};
++    for (auto &l : locators)
++        remove(l.c_str());
++
++    WPEFramework::Cryptography::IVault *vault = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
++    EXPECT_NE(vault, nullptr);
++
++    WPEFramework::Cryptography::IPersistent *persistent = vault->QueryInterface<WPEFramework::Cryptography::IPersistent>();
++    EXPECT_NE(persistent, nullptr);
++
++    uint32_t ids[3];
++    for (int i = 0; i < 3; ++i)
++    {
++        EXPECT_EQ(persistent->Create(locators[i], WPEFramework::Cryptography::IPersistent::keytype::AES256, ids[i]), WPEFramework::Core::ERROR_NONE);
++    }
++
++    std::vector<WPEFramework::Cryptography::ICipher *> aesses;
++    for (auto id : ids)
++    {
++        aesses.push_back(vault->AES(WPEFramework::Cryptography::aesmode::CBC, id));
++        EXPECT_NE(aesses.back(), nullptr);
++    }
++
++    const char *data = "Mon aéroglisseur est rempli d'anguilles";
++
++    const uint32_t dataSize = strlen(data);
++    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint32_t bufferSize = expectedSize + 16;
++
++    const uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
++
++    uint8_t *outputs[3];
++    for (int i = 0; i < 3; ++i)
++    {
++        outputs[i] = new uint8_t[bufferSize];
++        ::memset(outputs[i], 0, bufferSize);
++    }
++
++    for (int i = 0; i < 3; ++i)
++    {
++        EXPECT_EQ(aesses[i]->Encrypt(16, iv, dataSize, (const uint8_t *)data, bufferSize, outputs[i]), expectedSize);
++    }
++
++    // we expect all 3 outputs to be different
++    for (int i = 0; i < 3; ++i)
++        for (int j = 0; j < 3; ++j)
++        {
++            if (i == j)
++                continue;
++            EXPECT_NE(memcmp(outputs[i], outputs[j], expectedSize), 0);
++        }
++
++    uint8_t *inputs[3];
++    for (int i = 0; i < 3; ++i)
++    {
++        inputs[i] = new uint8_t[bufferSize];
++    }
++
++    for (int i = 0; i < 3; ++i)
++    {
++        // NOTE: we expect to: pass 'expectedSize' bytes as input (>= data size) & get 'dataSize' bytes from decryption (which is <= than expectedSize)
++        EXPECT_EQ(aesses[i]->Decrypt(16, iv, expectedSize, outputs[i], bufferSize, inputs[i]), dataSize);
++    }
++
++    // we expect all 3 decrypted inputs to be identical
++    for (int i = 0; i < 3; ++i)
++        for (int j = 0; j < 3; ++j)
++        {
++            if (i == j)
++                continue;
++            EXPECT_EQ(memcmp(inputs[i], inputs[j], dataSize), 0);
++        }
++}
++
++TEST(Platform, TestAESCBC)
++{
++    // a new test case
++    // 1. create a vault
++    auto vault = cg->Vault(cryptographyvault::CRYPTOGRAPHY_VAULT_PLATFORM);
++    // 2. create a key
++    auto persistent = vault->QueryInterface<WPEFramework::Cryptography::IPersistent>();
++    uint32_t id;
++    // remove the key if it already exists
++    remove("/tmp/example_locator");
++    EXPECT_EQ(persistent->Create("/tmp/example_locator", WPEFramework::Cryptography::IPersistent::keytype::AES256, id), WPEFramework::Core::ERROR_NONE);
++    // 3. create an AES instance
++    auto aes = vault->AES(WPEFramework::Cryptography::aesmode::CBC, id);
++
++    // 4. create test data - repeating 16-byte blocks
++    char *data = new char[16 * 3 + 1];
++    sprintf(data, "0123456789abcdef0123456789abcdef0123456789abcdef");
++
++    const uint32_t dataSize = strlen(data);
++    const uint32_t expectedSize = dataSize + (16 - (dataSize % 16));
++    const uint32_t bufferSize = expectedSize + 16;
++
++    const uint8_t iv[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
++                          0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
++                          0x0c, 0x0d, 0x0e, 0x0f};
++
++    uint8_t output[bufferSize];
++
++    EXPECT_EQ(aes->Encrypt(16, iv, dataSize, (const uint8_t *)data, bufferSize, output), expectedSize);
++
++    // now, check that every 16-byte block is different in output - so we are using CBC, not ECB
++    for (size_t i = 0; i < dataSize; i += 16)
++        for (size_t j = i; j < dataSize; j += 16)
++        {
++            if (i == j)
++                continue;
++            EXPECT_NE(memcmp(output + i, output + j, 16), 0);
++        }
++}
++
++int main(int argc, char **argv)
++{
++    AESDATA = argc > 1 ? argv[1] : "look a 5 headed monkey, whatever";
++    cg = WPEFramework::Cryptography::ICryptography::Instance("");
++    if (cg != nullptr)
++    {
++        CALL(Platform, VaultLoadFlush);
++        CALL(Platform, FullTestVault);
++        CALL(Platform, VaultLoadFailed);
++        CALL(Platform, SpeedTest);
++        CALL(Platform, TwoVaults);
++        CALL(Platform, SeveralKeys);
++        CALL(Platform, TestAESCBC);
++        cg->Release();
++    }
++    else
++    {
++        printf("FATAL: Failed to acquire ICryptographic, no tests can be performed\n");
++    }
++    printf("TOTAL: %i tests; %i PASSED, %i FAILED\n", TotalTests, TotalTestsPassed, (TotalTests - TotalTestsPassed));
++    return (TotalTests - TotalTestsPassed);
++}

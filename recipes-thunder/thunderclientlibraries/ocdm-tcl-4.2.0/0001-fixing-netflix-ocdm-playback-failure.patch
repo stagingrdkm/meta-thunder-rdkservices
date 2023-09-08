@@ -1,0 +1,62 @@
+From 9a8d65952b0df2105f48410435db50d274cc3030 Mon Sep 17 00:00:00 2001
+From: kkanag314 <krishnapriya_kanagaraj@comcast.com>
+Date: Fri, 28 Jul 2023 14:06:07 +0000
+Subject: [PATCH] fixing netflix ocdm playback failure
+
+---
+ Source/ocdm/adapter/rdk/open_cdm_adapter.cpp | 24 ++++++++++++++++++--
+ 1 file changed, 22 insertions(+), 2 deletions(-)
+
+diff --git a/Source/ocdm/adapter/rdk/open_cdm_adapter.cpp b/Source/ocdm/adapter/rdk/open_cdm_adapter.cpp
+index c975830..3b2d2b9 100644
+--- a/Source/ocdm/adapter/rdk/open_cdm_adapter.cpp
++++ b/Source/ocdm/adapter/rdk/open_cdm_adapter.cpp
+@@ -60,6 +60,18 @@ EXTERNAL OpenCDMError opencdm_gstreamer_transform_caps(GstCaps** caps)
+     return (result);
+ }
+ 
++bool swapIVBytes(uint8_t *mappedIV,uint32_t mappedIVSize)
++{
++    uint8_t buf;
++    for (uint32_t i = 0; i < mappedIVSize / 2; i++) {
++        uint8_t buf = mappedIV[i];
++        mappedIV[i] = mappedIV[mappedIVSize - i - 1];
++        mappedIV[mappedIVSize - i - 1] = buf;      
++    }
++
++    return true;
++}
++
+ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
+                                                 GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15)
+ {
+@@ -274,9 +286,9 @@ OpenCDMError opencdm_gstreamer_session_decrypt_ex(struct OpenCDMSession* session
+ 
+        GstProtectionMeta* protectionMeta = reinterpret_cast<GstProtectionMeta*>(gst_buffer_get_protection_meta(buffer));
+        if (protectionMeta != nullptr) {
+-           gst_structure_set (protectionMeta->info, "subsample_count", G_TYPE_UINT, subSampleCount, "subsamples", GST_TYPE_BUFFER, subSampleBuffer, "iv", GST_TYPE_BUFFER, IV, "kid", GST_TYPE_BUFFER, keyID, NULL);
++           gst_structure_set (protectionMeta->info, "subsample_count", G_TYPE_UINT, subSampleCount, "subsamples", GST_TYPE_BUFFER, subSampleBuffer, "iv", GST_TYPE_BUFFER, IV, "kid", GST_TYPE_BUFFER, keyID, "initWithLast15", G_TYPE_UINT, initWithLast15, NULL);
+        } else {
+-           GstStructure *crypto_info = gst_structure_new ("protection_meta_info","subsample_count", G_TYPE_UINT, subSampleCount, "subsamples", GST_TYPE_BUFFER, subSampleBuffer, "iv", GST_TYPE_BUFFER, IV, "kid", GST_TYPE_BUFFER, keyID, NULL);
++           GstStructure *crypto_info = gst_structure_new ("protection_meta_info","subsample_count", G_TYPE_UINT, subSampleCount, "subsamples", GST_TYPE_BUFFER, subSampleBuffer, "iv", GST_TYPE_BUFFER, IV, "kid", GST_TYPE_BUFFER, keyID, "initWithLast15", G_TYPE_UINT, initWithLast15, NULL);
+            gst_buffer_add_protection_meta (buffer, crypto_info);
+        }
+  
+@@ -360,6 +372,14 @@ OpenCDMError opencdm_gstreamer_session_decrypt_buffer(struct OpenCDMSession* ses
+             uint8_t *mappedIV = reinterpret_cast<uint8_t* >(ivMap.data);
+             uint32_t mappedIVSize = static_cast<uint32_t >(ivMap.size);
+ 
++            unsigned InitWithLast15 = 0;
++            if (!gst_structure_get_uint(protectionMeta->info, "initWithLast15", &InitWithLast15)) {
++                printf("No InitWithLast15 value.\n");
++            }
++            if (InitWithLast15 == 1) {
++                swapIVBytes(mappedIV,mappedIVSize);
++            }
++
+             //Get Key ID
+             value = gst_structure_get_value(protectionMeta->info, "kid");
+             if (!value) {
+-- 
+2.17.1
+
