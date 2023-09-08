@@ -13,6 +13,7 @@ SRC_URI += "file://0108-ARRISEOS-41993-Use-string-arguments-in-IBrowser-inte.pat
 #SRC_URI += "file://0111-ONEM-29742-setParameter-for-ISession.patch"
 
 SRC_URI += "file://0007-ONEM-24354-Clear-content-of-buffers-on-deinit.patch"
+SRC_URI  += "file://0112-ONEM-30922-Webkitbrowser-plugin-fail-to-compile.patch"
 SRC_URI += "file://0113-OMWAPPI-1794-JDolbyOutput.diffcode"
 SRC_URI += "file://0111-ARRISAPP-394-add_STEREO_SURROUND_MAT_FOLLOW-th4.patch"
 
