@@ -83,6 +83,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0154-OMWAPPI-1798-MessageUnit-_opened-flag-introduced.patch \
             file://0155-OMWAPPI-1798-Don-t-flush-libraries-in-Idle.patch \
             file://0156-ONEM-31419-MessageUnit-adaptation.patch \
+            file://0157-ONEM-32192-switch-libWPEFrameworkProcessContainers-t.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
 "
