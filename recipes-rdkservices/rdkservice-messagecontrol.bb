@@ -8,10 +8,10 @@ S = "${WORKDIR}/git"
 
 # source code directly taken from Metrological version:
 # git@github.com:WebPlatformForEmbedded/ThunderNanoServicesRDK.git R4 branch R4.3 tag revision: a1ceaa9df45735630f555a97afa71d771f979b22
-# ... or git@github.com:WebPlatformForEmbedded/ThunderNanoServicesRDK.git R4 branch R4.2 tag revision: 68cb55f538046245ca9046e8b8c7bf31e07fc0ce
+# for Thunder 4.2, github.com:WebPlatformForEmbedded/ThunderNanoServicesRDK.git branch R4, tag R4.2.1, version 7fb0b598ab6bd87b49235b99770a3162bb3691e1 - that fixes deinitialization core dump
 
 SRC_URI += "git://github.com/WebPlatformForEmbedded/ThunderNanoServicesRDK.git;protocol=git;branch=R4;name=${BPN};destsuffix=git"
-SRCREV_${BPN}="${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', 'a1ceaa9df45735630f555a97afa71d771f979b22', '68cb55f538046245ca9046e8b8c7bf31e07fc0ce', d)}"
+SRCREV_${BPN}="${@bb.utils.contains('DISTRO_FEATURES', 'thunder-4.3', 'a1ceaa9df45735630f555a97afa71d771f979b22', '7fb0b598ab6bd87b49235b99770a3162bb3691e1', d)}"
 
 inherit cmake
 
