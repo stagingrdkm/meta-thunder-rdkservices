@@ -1,0 +1,59 @@
+From dbb2e6e812277f5ec665500249a04a0a80abea60 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Wed, 13 Sep 2023 14:59:13 +0200
+Subject: [PATCH] [ONEM-32195] Failed to start cryptography testcases
+
+/usr/bin/lgiplatformtest: symbol lookup error: /usr/lib/libWPEFrameworkProcessContainers.so.4: undefined symbol: _ZN12WPEFramework9Messaging11MessageUnit8InstanceEv
+
+linking libWPEFrameworkProcessContainers with libWPEFrameworkMessaging
+---
+ Source/CMakeLists.txt                   | 7 ++++---
+ Source/processcontainers/CMakeLists.txt | 7 +++++++
+ 2 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/Source/CMakeLists.txt b/Source/CMakeLists.txt
+index 64de50e..2f5bd77 100644
+--- a/Source/CMakeLists.txt
++++ b/Source/CMakeLists.txt
+@@ -100,6 +100,10 @@ if(CRYPTALGO)
+     add_subdirectory(cryptalgo)
+ endif()
+ 
++if(MESSAGING)
++    add_subdirectory(messaging)
++endif()
++
+ if(PROCESSCONTAINERS)
+     add_subdirectory(processcontainers)
+ endif()
+@@ -112,9 +116,6 @@ if(TRACING)
+     add_subdirectory(tracing)
+ endif()
+ 
+-if(MESSAGING)
+-    add_subdirectory(messaging)
+-endif()
+ 
+ if(WARNING_REPORTING)
+     add_subdirectory(warningreporting)
+diff --git a/Source/processcontainers/CMakeLists.txt b/Source/processcontainers/CMakeLists.txt
+index 8ed03ec..93a9376 100644
+--- a/Source/processcontainers/CMakeLists.txt
++++ b/Source/processcontainers/CMakeLists.txt
+@@ -71,6 +71,13 @@ target_link_libraries(${TARGET}
+         ${NAMESPACE}Core::${NAMESPACE}Core
+         )
+ 
++if(MESSAGING)
++target_link_libraries(${TARGET}
++        PUBLIC
++        ${NAMESPACE}Messaging::${NAMESPACE}Messaging
++        )
++endif()
++
+ set_target_properties(${TARGET} PROPERTIES
+         CXX_STANDARD 11
+         CXX_STANDARD_REQUIRED YES
+-- 
+2.25.1
+
