@@ -1,4 +1,4 @@
-FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
+FILESEXTRAPATHS_prepend := "${THISDIR}/thunder-ui:"
 
 SRC_URI += "file://0001-ONEM-23840-bundle-js-provided-in-gz-file.patch"
 
