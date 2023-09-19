@@ -55,6 +55,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://wpeprocess-start.sh \
             file://container_rdk_service_stop.sh \
             file://collect_identification_data.sh \
+            file://0001-disable_trace_warnings.patch \
             file://0110-ONEM-21606-remove-incorrect-ASSERT.patch \
             file://0111-ONEM-15869-awc-proxy-container.patch \
             file://0113-ONEM-21500-added-notifyserviceready-to-awclistener.patch \
