@@ -88,6 +88,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0158-ONEM-32195-Failed-to-start-cryptography-testcases.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
+            file://0159-ONEM-32583-increase-RPC-comm-timeout.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:
