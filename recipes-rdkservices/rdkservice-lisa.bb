@@ -30,7 +30,18 @@ SRCREV_${BPN} = "cd5391de3d6381e0bea671a35df9081a2b64be55"
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 
+TOOLCHAIN = "gcc"
+EXTRA_OECMAKE += "-DCMAKE_SYSROOT=${STAGING_DIR_HOST}"
+EXTRA_OECMAKE += "-DBUILD_REFERENCE=${SRCREV}"
+EXTRA_OECMAKE_brcm += "-DBUILD_BROADCOM=ON"
+EXTRA_OECMAKE_rpi += "-DBUILD_RASPBERRYPI=ON"
+EXTRA_OECMAKE_amlrefapp += "-DBUILD_AMLOGIC=ON"
+
+
 SRC_URI += "file://lisa@.service"
+
+SRC_URI += "file://amlogic.cmake;subdir=git"
+SRC_URI += "file://raspberrypi.cmake;subdir=git"
 
 EXTRA_OECMAKE += "-DPLUGIN_LISA_APPS_GID=251 -DPLUGIN_LISA_DATA_GID=145"
 
