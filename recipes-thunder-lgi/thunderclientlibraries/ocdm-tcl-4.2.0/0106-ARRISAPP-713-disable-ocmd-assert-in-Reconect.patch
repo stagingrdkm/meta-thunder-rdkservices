@@ -1,0 +1,27 @@
+From 7f189b54f3b8d9d15f2502775b64000510f4315c Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Thu, 14 Sep 2023 15:33:36 +0200
+Subject: [PATCH] ARRISAPP-713 disable ocmd assert in Reconect
+
+This assert often causes coredumps of ocdm clients during shutdown
+and this is not necessary - warning message is enough here.
+---
+ Source/ocdm/open_cdm_impl.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index 3d19f81..2ddd5dd 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -87,7 +87,7 @@ protected:
+             }
+             _remote = _client->Open<Exchange::IAccessorOCDM>(_T("OpenCDMImplementation"));
+ 
+-            ASSERT(_remote != nullptr);
++            TRACE_L1("_client->Open returned null - try to release the client & continue");
+ 
+             if (_remote == nullptr) {
+                 if (_client.IsValid()) {
+-- 
+2.25.1
+

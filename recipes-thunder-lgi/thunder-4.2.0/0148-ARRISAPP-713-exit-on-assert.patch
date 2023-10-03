@@ -1,0 +1,29 @@
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Mon, 18 Sep 2023 07:15:35 +0000
+Subject: [PATCH] ARRISAPP-713 _exit(1) on ASSERT
+
+This is to prevent dumping core on ASSERT in wpeframework. ASSERT backtrace is
+still visible in the log (in debug, in release the ASSERTs are compiled-out anyway)
+
+diff --git a/Source/core/Trace.h b/Source/core/Trace.h
+index 6a5980d9..5bbf1091 100644
+--- a/Source/core/Trace.h
++++ b/Source/core/Trace.h
+@@ -153,7 +153,7 @@ namespace WPEFramework {
+                 fprintf(stderr, "[%s]:[%s]:[%d]\n", entry.module.c_str(), entry.function.c_str(), entry.line);  \
+             }                                                                                                   \
+             fflush(stderr);                                                                                     \
+-            abort();                                                                                            \
++            _exit(1);                                                                                            \
+         }                                                                                                       \
+     } while(0)
+ 
+@@ -167,7 +167,7 @@ namespace WPEFramework {
+                 fprintf(stderr, "[%s]:[%s]:[%d]\n", entry.module.c_str(), entry.function.c_str(), entry.line);                                       \
+             }                                                                                                                                        \
+             fflush(stderr);                                                                                                                          \
+-            abort();                                                                                                                                 \
++            _exit(1);                                                                                                                                 \
+         }                                                                                                                                            \
+     } while(0)
+ 

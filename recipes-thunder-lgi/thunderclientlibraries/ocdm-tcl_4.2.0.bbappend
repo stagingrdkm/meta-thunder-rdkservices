@@ -10,6 +10,8 @@ SRC_URI += "file://0009-OMWAPPI-912-CBCS-Support-passing-Encryption-Scheme-and-P
 SRC_URI += "file://0010-OMWAPPI-912-Switch-to-opencdm_session_decrypt_v2.patch"
 SRC_URI += "file://0001-OMWAPPI-912-Fix-artifacts-when-playing-CBCS-content-v2.patch"
 
+SRC_URI += "file://0106-ARRISAPP-713-disable-ocmd-assert-in-Reconect.patch"
+
 EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
 
 TARGET_CXXFLAGS += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-D_TRACE_LEVEL=2 -D__ENABLE_ASSERT__=ON -DSETUP_TEST_KEY', '', d)}"

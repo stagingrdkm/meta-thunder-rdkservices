@@ -77,6 +77,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0145-ARRISEOS-42502-Fix-random-crashes-under-stress.patch \
             file://0146-ARRISEOS-43856-add-join-and-return-value-for-termination-thread.patch \
             file://0148-FindSlauncher-lost-letter.patch \
+            file://0148-ARRISAPP-713-exit-on-assert.patch \
             file://0149-ONEM-30824-fix-find-lxc-cmake-includes-path.patch \
             file://0150-ONEM-31207-thunder-only-direct-output-for-tracing.patch \
             file://0152-ONEM-31546-do-not-invoke-Terminate-on-notice-of-clos.patch \
