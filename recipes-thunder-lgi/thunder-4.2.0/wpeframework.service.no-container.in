@@ -10,6 +10,7 @@ Environment="LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/media/apps/netflix/usr/lib:/tmp/n
 Environment="XDG_DATA_HOME=/opt/QT/home"
 Environment="LD_PRELOAD=/usr/lib/libwayland-client.so.0:/usr/lib/libwayland-egl.so.0"
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+ExecStartPre=-/usr/bin/thunder_config_reparser -i /etc/WPEFramework/logCfg.json -o /run/wpeframework/messaging.json -t /etc/WPEFramework/messagingTemplate.json
 ExecStart=-/usr/bin/WPEFramework -b
 ExecStop=/bin/kill $MAINPID
 Restart=always

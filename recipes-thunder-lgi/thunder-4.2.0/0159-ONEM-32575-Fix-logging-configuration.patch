@@ -1,0 +1,153 @@
+From 3820fe852868488d1a55c69733f49b84e8f64922 Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Wed, 11 Oct 2023 12:51:37 +0200
+Subject: [PATCH] [ONEM-32575] Fix logging configuration
+
+---
+ Source/WPEFramework/GenericConfig.cmake | 15 +--------
+ Source/WPEFramework/PluginHost.cpp      |  6 +++-
+ Source/messaging/DirectOutput.cpp       |  1 +
+ Source/messaging/MessageUnit.cpp        |  1 +
+ Source/messaging/MessageUnit.h          | 42 +++++++++++++++++++++++--
+ 5 files changed, 48 insertions(+), 17 deletions(-)
+
+diff --git a/Source/WPEFramework/GenericConfig.cmake b/Source/WPEFramework/GenericConfig.cmake
+index 21046bf6..beef6773 100644
+--- a/Source/WPEFramework/GenericConfig.cmake
++++ b/Source/WPEFramework/GenericConfig.cmake
+@@ -191,12 +191,6 @@ else(VIRTUALINPUT)
+     map_append(${CONFIG} input ${PLUGIN_INPUT_DEVICE})
+ endif(NOT VIRTUALINPUT)
+ 
+-map()
+-    key(logging)
+-    key(tracing)
+-end()
+-ans(MESSAGING_SETTINGS)
+-
+ map()
+     key(settings)
+ end()
+@@ -221,14 +215,7 @@ if(MESSAGING)
+     end()
+     ans(PLUGIN_FATAL_TRACING)
+ 
+-    map_append(${CONFIG} messaging ${MESSAGING_SETTINGS})
+-    map_append(${MESSAGING_SETTINGS} tracing ${MESSAGING_TRACING_SETTINGS})
+-    map_append(${MESSAGING_TRACING_SETTINGS} settings ___array___)
+-    map_append(${MESSAGING_TRACING_SETTINGS} settings ${PLUGIN_FATAL_TRACING})
+-
+-    map_append(${MESSAGING_SETTINGS} logging ${MESSAGING_LOGGING_SETTINGS})
+-    map_append(${MESSAGING_LOGGING_SETTINGS} settings ___array___)
+-    map_append(${MESSAGING_LOGGING_SETTINGS} settings ${PLUGIN_NOTIFICATION_LOGGING})
++    map_append(${CONFIG} messaging "/run/wpeframework/messaging.json")
+ endif()
+ 
+ map_append(${PLUGIN_CONTROLLER} configuration ${PLUGIN_CONTROLLER_CONFIGURATION})
+diff --git a/Source/WPEFramework/PluginHost.cpp b/Source/WPEFramework/PluginHost.cpp
+index 314a41e6..7284cfd6 100644
+--- a/Source/WPEFramework/PluginHost.cpp
++++ b/Source/WPEFramework/PluginHost.cpp
+@@ -553,7 +553,11 @@ POP_WARNING()
+ 
+             if (_config->MessagingCategoriesFile()) {
+ 
+-                messagingSettings = Core::Directory::Normalize(Core::File::PathName(options.configFile)) + _config->MessagingCategories();
++                messagingSettings = _config->MessagingCategories();
++                if(!messagingSettings.empty() && messagingSettings[0] != '/') {
++                    messagingSettings = Core::Directory::Normalize(Core::File::PathName(options.configFile)) + messagingSettings;
++                }
++
+ 
+ #if defined(__CORE_MESSAGING__)
+                 std::ifstream inputFile (messagingSettings, std::ifstream::in);
+diff --git a/Source/messaging/DirectOutput.cpp b/Source/messaging/DirectOutput.cpp
+index daf3f6f3..40a806ed 100644
+--- a/Source/messaging/DirectOutput.cpp
++++ b/Source/messaging/DirectOutput.cpp
+@@ -56,6 +56,7 @@ namespace WPEFramework {
+ #endif
+             {
+                 std::cout << result << std::endl;
++                fflush(stdout);
+             }
+         }
+     }
+diff --git a/Source/messaging/MessageUnit.cpp b/Source/messaging/MessageUnit.cpp
+index da250920..d0a1a2af 100644
+--- a/Source/messaging/MessageUnit.cpp
++++ b/Source/messaging/MessageUnit.cpp
+@@ -179,6 +179,7 @@ namespace WPEFramework {
+             _direct.Mode(_settings.IsBackground(), _settings.IsAbbreviated());
+ 
+             Core::Messaging::IStore::Set(this);
++            _settings.Load();
+ 
+             // according to received config,
+             // let all announced controls know, whether they should push messages
+diff --git a/Source/messaging/MessageUnit.h b/Source/messaging/MessageUnit.h
+index 4032e4f4..389fe8b0 100644
+--- a/Source/messaging/MessageUnit.h
++++ b/Source/messaging/MessageUnit.h
+@@ -23,6 +23,12 @@
+ #include "MessageDispatcher.h"
+ #include "TraceFactory.h"
+ #include "DirectOutput.h"
++#include <grp.h>
++
++namespace {
++    const char *settingsFilename = "/run/wpeframework/settings.json";
++    const char *wpeframeworkAccessGroupName = "wpeframeworkaccess";
++}
+ 
+ namespace WPEFramework {
+ 
+@@ -428,11 +434,43 @@ namespace WPEFramework {
+                                     DELIMITER + (entry.Enabled() ? '1' : '0');
+                     }
+ 
++                    TRACE_L1("Store config in %s", settingsFilename);
++
++                    Core::File file(settingsFilename);
++                    file.Create();
++                    auto written = file.Write(reinterpret_cast<const uint8_t*>(settings.data()), settings.size());
++
++                    auto *group_info = getgrnam(wpeframeworkAccessGroupName);
++                    if (fchown(file, -1, group_info->gr_gid) == -1) {
++                        TRACE_L1("Cannot set %s rights (errno: %d - %s)", settingsFilename, errno, strerror(errno));
++                    }
++
+                     Core::SystemInfo::SetEnvironment(MESSAGE_DISPATCHER_CONFIG_ENV, settings, true);
+                 }
+                 void Load() {
+-                    string settings;
+-                    Core::SystemInfo::GetEnvironment(MESSAGE_DISPATCHER_CONFIG_ENV, settings);
++                    TRACE_L1("Load config from config from %s", settingsFilename);
++
++                    Core::File file(settingsFilename);
++                    bool isOpened = file.Open();
++
++                    if(!isOpened) {
++                        TRACE_L1("Cannot open %s (errno: %d - %s)", settingsFilename, errno, strerror(errno));
++                        return;
++                    }
++
++                    uint32_t size = file.Size();
++                    std::vector<uint8_t> val;
++                    val.resize(size);
++                    uint32_t readBytes = file.Read(val.data(), size);
++
++                    if(readBytes != size) {
++                        TRACE_L1("Cannot read file content. File size: %ul. Read bytes: %ul. (errno: %d - %s)", size, readBytes, errno, strerror(errno));
++                        return;
++                    }
++
++                    string settings(val.begin(), val.end());
++                    TRACE_L1("Read messaging settings: %s", settings.c_str());
++
+                     Core::TextSegmentIterator iterator(Core::TextFragment(settings, 0, static_cast<uint16_t>(settings.length())), false, DELIMITER);
+ 
+                     _path.clear();
+-- 
+2.34.1
+

@@ -2,7 +2,7 @@ inherit onemw_build_type
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
 
-RDEPENDS_${PN} += "rfc libodherr"
+RDEPENDS_${PN} += "rfc libodherr thunder-config-reparser"
 DEPENDS_remove = "breakpad-wrapper"
 DEPENDS_append = " breakpad"
 DEPENDS_append = " glib-2.0"
@@ -87,6 +87,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0156-ONEM-31419-MessageUnit-adaptation.patch \
             file://0157-ONEM-32192-switch-libWPEFrameworkProcessContainers-t.patch \
             file://0158-ONEM-32195-Failed-to-start-cryptography-testcases.patch \
+            file://0159-ONEM-32575-Fix-logging-configuration.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
             file://0159-ONEM-32583-increase-RPC-comm-timeout.patch \
