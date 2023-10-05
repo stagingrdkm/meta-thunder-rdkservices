@@ -1,0 +1,29 @@
+From 43570b63046450027fd670c60c694a69926cf81b Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Thu, 5 Oct 2023 13:22:32 +0000
+Subject: [PATCH] ONEM-31898 opencdm_dispose: only destroy accessor
+
+opencdm_dispose now destroys all singletons,
+'pulling the rug' from under the other singleton-
+-using code (the socket code from thunder, for
+example)
+---
+ Source/ocdm/open_cdm.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/ocdm/open_cdm.cpp b/Source/ocdm/open_cdm.cpp
+index 7306467..b7234c5 100644
+--- a/Source/ocdm/open_cdm.cpp
++++ b/Source/ocdm/open_cdm.cpp
+@@ -623,7 +623,7 @@ OpenCDMError opencdm_get_metric_session_data(struct OpenCDMSession* session,
+ 
+ 
+ void opencdm_dispose() {
+-    Core::Singleton::Dispose();
++    Core::SingletonType<OpenCDMAccessor>::Dispose();
+ }
+ 
+ bool OpenCDMAccessor::WaitForKey(const uint8_t keyLength, const uint8_t keyId[],
+-- 
+2.30.0
+
