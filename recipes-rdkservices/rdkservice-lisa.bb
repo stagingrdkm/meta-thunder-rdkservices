@@ -33,9 +33,13 @@ FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 TOOLCHAIN = "gcc"
 EXTRA_OECMAKE += "-DCMAKE_SYSROOT=${STAGING_DIR_HOST}"
 EXTRA_OECMAKE += "-DBUILD_REFERENCE=${SRCREV}"
-EXTRA_OECMAKE_brcm += "-DBUILD_BROADCOM=ON"
-EXTRA_OECMAKE_rpi += "-DBUILD_RASPBERRYPI=ON"
-EXTRA_OECMAKE_amlrefapp += "-DBUILD_AMLOGIC=ON"
+
+# the lines below were taken from upstream recipe, but were cancelling subsequent 'EXTRA_OECMAKE' (probably because they use _brcm postfix)
+# so now we just use EXTRA_OECMAKE, without any suffixes
+#EXTRA_OECMAKE_brcm += "-DBUILD_BROADCOM=ON"
+#EXTRA_OECMAKE_rpi += "-DBUILD_RASPBERRYPI=ON"
+#EXTRA_OECMAKE_amlrefapp += "-DBUILD_AMLOGIC=ON"
+EXTRA_OECMAKE += "-DBUILD_BROADCOM=ON"
 
 
 SRC_URI += "file://lisa@.service"
