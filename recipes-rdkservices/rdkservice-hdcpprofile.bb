@@ -6,6 +6,7 @@ PLUGINDIR="HdcpProfile"
 require rdkservices-common/common_plugin.inc
 
 RDEPENDS_${PN} += "devicesettings"
+DEPENDS += "iarmmgrs"
 
 EXTRA_OECMAKE += " \
     -DPLUGIN_HDCPPROFILE_AUTOSTART=true \

@@ -12,4 +12,4 @@ EXTRA_OECMAKE += " \
  "
 
 RDEPENDS_${PN} += "devicesettings"
-DEPENDS += "devicesettings"
+DEPENDS += "devicesettings iarmmgrs"

@@ -8,5 +8,7 @@ PLUGINDIR="LgiSystemServices"
 
 require rdkservices-common/common_plugin.inc
 
+DEPENDS += "iarmmgrs"
+
 EXTRA_OECMAKE += "-DPLUGIN_LGISYSTEMSERVICE_AUTOSTART=true"
 

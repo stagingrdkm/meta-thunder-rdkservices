@@ -16,7 +16,7 @@ EXTRA_OECMAKE += " \
 
 CXXFLAGS += "-DLGI_CUSTOM_IMPL"
 
-DEPENDS += "hdmicec"
+DEPENDS += "hdmicec iarmmgrs"
 RDEPENDS_${PN} += "devicesettings"
 
 do_install_append() {

@@ -5,6 +5,8 @@ PLUGINDIR="DeviceIdentification"
 
 require rdkservices-common/common_plugin.inc
 
+DEPENDS += "iarmmgrs"
+
 EXTRA_OECMAKE += " \
     -DPLUGIN_DEVICEIDENTIFICATION_AUTOSTART=true \
 "

@@ -11,4 +11,4 @@ OECMAKE_TARGET_COMPILE = "WPEFrameworkNetwork"
 
 EXTRA_OECMAKE  += "-DPLUGIN_LGINETWORK=ON "
 
-DEPENDS += "glib-2.0"
+DEPENDS += "glib-2.0 iarmmgrs"

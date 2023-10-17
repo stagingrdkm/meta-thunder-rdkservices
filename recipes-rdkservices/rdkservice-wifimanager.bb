@@ -13,4 +13,4 @@ EXTRA_OECMAKE += " \
  "
 
 # RDEPENDS_${PN} += "devicesettings"
-DEPENDS += "glib-2.0"
+DEPENDS += "glib-2.0 iarmmgrs"

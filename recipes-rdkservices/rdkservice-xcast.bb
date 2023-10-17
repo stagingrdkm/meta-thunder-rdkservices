@@ -7,7 +7,7 @@ require rdkservices-common/common_plugin.inc
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 
-DEPENDS += "cjson rfc rtremote wpeframework-clientlibraries rtremote"
+DEPENDS += "cjson rfc rtremote wpeframework-clientlibraries rtremote iarmmgrs"
 RDEPENDS_${PN} += "cjson rfc rtremote"
 
 EXTRA_OECMAKE += " \
