@@ -70,14 +70,12 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0126-ONEM-22947_allow_assert_with_trace.patch \
             file://0127-ONEM-22947-Additional-EXTERNAL.patch \
             file://0129-ONEMPERS-285-Limit-thunder-container-access-to-global-tmp.patch \
-            file://0131-HUMAXEOSR-995-Termination-thread-introduced.patch \
             file://0132-HUMAXEOSR-995-Block-plugins-activation-when-WPE.patch \
             file://0133-ONEMPERS-367-Avoid-sending-unknown-method-response.patch \
             file://0135-ARRISEOS-41575-extend_timeout_to_25sec.patch \
             file://0142-HUMAXEOS-4773-Fix-wpeframework-crashes-during-reboot.patch \
             file://0143-ARRISAPOL-2718-Add-JSONRPC-helper-prints.patch \
             file://0145-ARRISEOS-42502-Fix-random-crashes-under-stress.patch \
-            file://0146-ARRISEOS-43856-add-join-and-return-value-for-termination-thread.patch \
             file://0148-FindSlauncher-lost-letter.patch \
             file://0148-ARRISAPP-713-exit-on-assert.patch \
             file://0149-ONEM-30824-fix-find-lxc-cmake-includes-path.patch \
