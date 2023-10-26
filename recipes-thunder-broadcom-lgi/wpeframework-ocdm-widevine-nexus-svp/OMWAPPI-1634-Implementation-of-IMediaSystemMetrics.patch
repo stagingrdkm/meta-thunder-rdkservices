@@ -9,16 +9,17 @@ Subject: [PATCH] 0116-OMWAPPI-1634-Implementation-of-IMediaSystemMetrics
  MediaSystem.cpp  | 21 ++++++++++++++++++++-
  3 files changed, 39 insertions(+), 2 deletions(-)
 
-diff --git a/MediaSession.cpp b/MediaSession.cpp
-index 5973f3f..5c5a7bf 100644
---- a/MediaSession.cpp
-+++ b/MediaSession.cpp
-@@ -655,4 +655,18 @@ CDMi_RESULT MediaKeySession::ReleaseClearContent(
+Index: OCDM-Widevine-Nexus-SVP/MediaSession.cpp
+===================================================================
+--- OCDM-Widevine-Nexus-SVP.orig/MediaSession.cpp
++++ OCDM-Widevine-Nexus-SVP/MediaSession.cpp
+@@ -655,4 +655,22 @@ CDMi_RESULT MediaKeySession::ReleaseClea
      uint8_t  *f_pbClearContentOpaque ){
    return CDMi_SUCCESS;
  }
 +
 +CDMi_RESULT MediaKeySession::Metrics(uint32_t& bufferLength, uint8_t buffer[]) const {
++#if CENC_VERSION >= 16
 +    std::string metrics;
 +    if(widevine::Cdm::kSuccess == m_cdm->getMetrics(&metrics)) {
 +        if(bufferLength < metrics.size()) {
@@ -28,14 +29,17 @@ index 5973f3f..5c5a7bf 100644
 +        memcpy(buffer, reinterpret_cast<const uint8_t*>(metrics.c_str()), bufferLength);
 +        return CDMi_SUCCESS;
 +    }
++#else
++    bufferLength = 0;
++#endif
 +    return CDMi_S_FALSE;
 +}
 +
  }  // namespace CDMi
-diff --git a/MediaSession.h b/MediaSession.h
-index c4d878c..8f8dabf 100644
---- a/MediaSession.h
-+++ b/MediaSession.h
+Index: OCDM-Widevine-Nexus-SVP/MediaSession.h
+===================================================================
+--- OCDM-Widevine-Nexus-SVP.orig/MediaSession.h
++++ OCDM-Widevine-Nexus-SVP/MediaSession.h
 @@ -69,7 +69,7 @@
  
  namespace CDMi
@@ -56,10 +60,10 @@ index c4d878c..8f8dabf 100644
  private:
      void onKeyStatusError(widevine::Cdm::Status status);
  
-diff --git a/MediaSystem.cpp b/MediaSystem.cpp
-index 6e45eeb..8b94203 100644
---- a/MediaSystem.cpp
-+++ b/MediaSystem.cpp
+Index: OCDM-Widevine-Nexus-SVP/MediaSystem.cpp
+===================================================================
+--- OCDM-Widevine-Nexus-SVP.orig/MediaSystem.cpp
++++ OCDM-Widevine-Nexus-SVP/MediaSystem.cpp
 @@ -59,7 +59,7 @@ using namespace WPEFramework;
  
  namespace CDMi {
@@ -69,7 +73,7 @@ index 6e45eeb..8b94203 100644
  {
  private:
      WideVine (const WideVine&) = delete;
-@@ -358,6 +358,25 @@ public:
+@@ -358,6 +358,29 @@ public:
          _adminLock.Unlock();
      }
  #endif
@@ -77,6 +81,7 @@ index 6e45eeb..8b94203 100644
 +    // IMediaSystemMetrics overrides
 +    // ------------------------------------------------------------------------------------------
 +    CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const override {
++#if CENC_VERSION >= 16
 +        std::string metrics;
 +        if(_cdm == nullptr) {
 +            return CDMi_S_FALSE;
@@ -89,12 +94,12 @@ index 6e45eeb..8b94203 100644
 +            memcpy(buffer, reinterpret_cast<const uint8_t*>(metrics.c_str()), bufferLength);
 +            return CDMi_SUCCESS;
 +        }
++#else
++	bufferLength = 0;
++#endif
 +        return CDMi_S_FALSE;
 +    }
 +
  private:
      WPEFramework::Core::CriticalSection _adminLock;
      widevine::Cdm* _cdm;
--- 
-2.25.1
-
