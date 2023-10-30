@@ -17,4 +17,4 @@ index 5e54760..2196e59 100644
 +        ${NAMESPACE}Core::${NAMESPACE}Core
          ssl
          crypto
-         utility
+         NXCLIENT::NXCLIENT

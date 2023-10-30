@@ -58,10 +58,10 @@ Index: git/Source/cryptography/implementation/Icrypto-nexus/CMakeLists.txt
  
  add_library(${TARGET} STATIC
      Nexus.cpp
-@@ -60,6 +61,8 @@ add_library(${TARGET} STATIC
+@@ -58,6 +59,8 @@ add_library(${TARGET} STATIC
+     SageNetflix/AES.cpp
+     SageNetflix/DiffieHellman.cpp
      SageNetflix/NetflixSecurity.cpp
-     CobaltSecurity/Vault.cpp
-     CobaltSecurity/HMAC.cpp
 +    PlatformSecurity/PlatformVault.cpp
 +    PlatformSecurity/PlatformAES.cpp
  )

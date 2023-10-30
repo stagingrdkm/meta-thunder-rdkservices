@@ -5,19 +5,19 @@ Platform vault implementation tests; see design here:
 https://wikiprojects.upc.biz/display/CTOM/iCrypto+for+AVPKv5
 
 ---
- .../tests/cryptography_test/CMakeLists.txt    |  28 +
+ .../tests/cryptography_test/CMakeLists.txt    |  27 +
  .../LgiPlatformInterfaceTests.cpp             | 530 ++++++++++++++++++
- 2 files changed, 558 insertions(+)
+ 2 files changed, 556 insertions(+)
  create mode 100644 Source/cryptography/tests/cryptography_test/LgiPlatformInterfaceTests.cpp
 
 Index: git/Source/cryptography/tests/cryptography_test/CMakeLists.txt
 ===================================================================
 --- git.orig/Source/cryptography/tests/cryptography_test/CMakeLists.txt
 +++ git/Source/cryptography/tests/cryptography_test/CMakeLists.txt
-@@ -139,3 +139,31 @@ target_link_libraries(cobalttests
-     )
+@@ -136,3 +136,30 @@ target_link_libraries(cobalttests
  
  install(TARGETS cobalttests DESTINATION bin)
+ endif()
 +
 +#################
 +
@@ -38,7 +38,6 @@ Index: git/Source/cryptography/tests/cryptography_test/CMakeLists.txt
 +        ${NAMESPACE}Cryptography
 +        ssl
 +        crypto
-+        utility
 +        NXCLIENT::NXCLIENT
 +        -Wl,--no-undefined
 +    )

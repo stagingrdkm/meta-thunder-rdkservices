@@ -4,43 +4,64 @@ Date: Fri, 3 Feb 2023 17:49:58 +0100
 Subject: [PATCH] [OMWAPPI-1119] Cobalt vault implementation on BCM StarboardTL
  library
 
----
- CMakeLists.txt           |   3 +
- CobaltSecurity/HMAC.cpp  | 174 ++++++++++++++++++++++++++++++++
- CobaltSecurity/Vault.cpp | 207 +++++++++++++++++++++++++++++++++++++++
- Implementation.cpp       |  12 ++-
- Platform.h               |   9 +-
- SageNetflix/Vault.cpp    |  20 ++++
- 6 files changed, 420 insertions(+), 5 deletions(-)
- create mode 100644 CobaltSecurity/HMAC.cpp
- create mode 100644 CobaltSecurity/Vault.cpp
+ONEM-32896: (31 Oct 2023):
 
-diff --git a/CMakeLists.txt b/CMakeLists.txt
-index b11fde5..38fb730 100644
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -58,6 +58,8 @@ add_library(${TARGET} STATIC
-     SageNetflix/AES.cpp
-     SageNetflix/DiffieHellman.cpp
-     SageNetflix/NetflixSecurity.cpp
+* Conditionally compile Cobalt Vault when COBALT_VAULT_ENABLED=ON
+* Conditionally link libWPEFrameworkCryptogreaphy with Broadcom utility library
+* use BSEAV/lib/security/sage/utility/starboard_tl.h include
+
+---
+ Source/cryptography/CMakeLists.txt            |   1 +
+ .../Icrypto-nexus/CMakeLists.txt              |  12 +
+ .../Icrypto-nexus/CobaltSecurity/HMAC.cpp     | 174 +++++++++++++++
+ .../Icrypto-nexus/CobaltSecurity/Vault.cpp    | 207 ++++++++++++++++++
+ .../Icrypto-nexus/Implementation.cpp          |  12 +-
+ .../implementation/Icrypto-nexus/Platform.h   |   9 +-
+ .../Icrypto-nexus/SageNetflix/Vault.cpp       |  20 ++
+ 7 files changed, 430 insertions(+), 5 deletions(-)
+ create mode 100644 Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/HMAC.cpp
+ create mode 100644 Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/Vault.cpp
+
+diff --git a/Source/cryptography/CMakeLists.txt b/Source/cryptography/CMakeLists.txt
+index 9a6036c..9372609 100644
+--- a/Source/cryptography/CMakeLists.txt
++++ b/Source/cryptography/CMakeLists.txt
+@@ -34,6 +34,7 @@ string(REPLACE "-Wl,--as-needed" "" CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LI
+ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-as-needed")
+ 
+ option(INCLUDE_SOFTWARE_CRYPTOGRAPHY_LIBRARY "Include explicitly a software based cryptography library" OFF)
++option(COBALT_VAULT_ENABLED "Enable starboard_tl Cobalt vault implementation" OFF)
+ 
+ find_package(ProxyStubGenerator REQUIRED)
+ 
+diff --git a/Source/cryptography/implementation/Icrypto-nexus/CMakeLists.txt b/Source/cryptography/implementation/Icrypto-nexus/CMakeLists.txt
+index b11fde5..24bc016 100644
+--- a/Source/cryptography/implementation/Icrypto-nexus/CMakeLists.txt
++++ b/Source/cryptography/implementation/Icrypto-nexus/CMakeLists.txt
+@@ -73,6 +73,18 @@ target_link_libraries(${TARGET}
+         -lbcrypt
+ )
+ 
++if (COBALT_VAULT_ENABLED)
++target_sources(${TARGET} PRIVATE
 +    CobaltSecurity/Vault.cpp
 +    CobaltSecurity/HMAC.cpp
- )
- 
- target_link_libraries(${TARGET}
-@@ -71,6 +73,7 @@ target_link_libraries(${TARGET}
-         -lcmndrm_tl
-         -ldrmrootfs
-         -lbcrypt
-+        -lutility
- )
- 
++)
++
++target_link_libraries(${TARGET}
++    PRIVATE
++        utility
++)
++endif()
++
  target_include_directories(${TARGET}
-diff --git a/CobaltSecurity/HMAC.cpp b/CobaltSecurity/HMAC.cpp
+     PUBLIC
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../>
+diff --git a/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/HMAC.cpp b/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/HMAC.cpp
 new file mode 100644
 index 0000000..02b50df
 --- /dev/null
-+++ b/CobaltSecurity/HMAC.cpp
++++ b/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/HMAC.cpp
 @@ -0,0 +1,174 @@
 +/*
 + * ============================================================================
@@ -88,7 +109,7 @@ index 0000000..02b50df
 +*/
 +
 +#include <nexus_config.h>
-+#include <starboard_tl.h>
++#include <BSEAV/lib/security/sage/utility/starboard_tl.h>
 +#include "../../../Module.h"
 +
 +#include "../Administrator.h"
@@ -216,11 +237,11 @@ index 0000000..02b50df
 +} // namespace Platform
 +
 +} // namespace Implementation
-diff --git a/CobaltSecurity/Vault.cpp b/CobaltSecurity/Vault.cpp
+diff --git a/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/Vault.cpp b/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/Vault.cpp
 new file mode 100644
 index 0000000..09a3219
 --- /dev/null
-+++ b/CobaltSecurity/Vault.cpp
++++ b/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/Vault.cpp
 @@ -0,0 +1,207 @@
 +/*
 + * ============================================================================
@@ -268,7 +289,7 @@ index 0000000..09a3219
 +*/
 +#include <cstring>
 +#include <nexus_config.h>
-+#include <starboard_tl.h>
++#include <BSEAV/lib/security/sage/utility/starboard_tl.h>
 +#include <unistd.h>
 +
 +#include "../../../Module.h"
@@ -429,10 +450,10 @@ index 0000000..09a3219
 +} // namespace Platform
 +
 +} // namespace Implementation
-diff --git a/Implementation.cpp b/Implementation.cpp
+diff --git a/Source/cryptography/implementation/Icrypto-nexus/Implementation.cpp b/Source/cryptography/implementation/Icrypto-nexus/Implementation.cpp
 index 1464c38..cc9c1bd 100644
---- a/Implementation.cpp
-+++ b/Implementation.cpp
+--- a/Source/cryptography/implementation/Icrypto-nexus/Implementation.cpp
++++ b/Source/cryptography/implementation/Icrypto-nexus/Implementation.cpp
 @@ -258,22 +258,26 @@ uint32_t diffiehellman_derive(struct VaultImplementation* vault,
  
  uint32_t persistent_key_exists(struct VaultImplementation* vault, const char locator[], bool* result)
@@ -464,10 +485,10 @@ index 1464c38..cc9c1bd 100644
  }
  
  } // extern "C"
-diff --git a/Platform.h b/Platform.h
+diff --git a/Source/cryptography/implementation/Icrypto-nexus/Platform.h b/Source/cryptography/implementation/Icrypto-nexus/Platform.h
 index fb6a2b4..1825184 100644
---- a/Platform.h
-+++ b/Platform.h
+--- a/Source/cryptography/implementation/Icrypto-nexus/Platform.h
++++ b/Source/cryptography/implementation/Icrypto-nexus/Platform.h
 @@ -51,7 +51,7 @@
  #include <hash_implementation.h>
  #include <cipher_implementation.h>
@@ -491,10 +512,10 @@ index fb6a2b4..1825184 100644
      };
  
      inline VaultImplementation* Handle(IVaultImplementation* impl) { return reinterpret_cast<VaultImplementation*>(impl); }
-diff --git a/SageNetflix/Vault.cpp b/SageNetflix/Vault.cpp
+diff --git a/Source/cryptography/implementation/Icrypto-nexus/SageNetflix/Vault.cpp b/Source/cryptography/implementation/Icrypto-nexus/SageNetflix/Vault.cpp
 index 95ceb56..105f999 100644
---- a/SageNetflix/Vault.cpp
-+++ b/SageNetflix/Vault.cpp
+--- a/Source/cryptography/implementation/Icrypto-nexus/SageNetflix/Vault.cpp
++++ b/Source/cryptography/implementation/Icrypto-nexus/SageNetflix/Vault.cpp
 @@ -219,6 +219,26 @@ namespace Netflix {
  
              return (result);

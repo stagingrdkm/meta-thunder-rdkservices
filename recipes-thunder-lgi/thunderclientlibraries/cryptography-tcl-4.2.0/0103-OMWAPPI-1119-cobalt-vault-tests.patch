@@ -5,11 +5,15 @@ Subject: [PATCH] [OMWAPPI-1119] Cobalt vault tests based on Cobalt porting
  implementation
 
 from https://code.rdkcentral.com/r/plugins/gitiles/rdk/components/generic/cobalt/+/refs/heads/23.lts.dev/src/third_party/starboard/rdk/shared/system/system_sign_with_certification_secret_key.cc
+
+ONEM-32896: (31 Oct 2023):
+* Conditionally compile Cobalt Vault testcases when COBALT_VAULT_ENABLED=ON
+* use BSEAV/lib/security/sage/utility/starboard_tl.h include
 ---
- .../tests/cryptography_test/CMakeLists.txt    |  29 +
+ .../tests/cryptography_test/CMakeLists.txt    |  31 +
  .../CobaltInterfaceTests.cpp                  | 563 ++++++++++++++++++
  .../CobaltVaultHardcodesApolloV1Plus.h        |  69 +++
- 3 files changed, 661 insertions(+)
+ 3 files changed, 663 insertions(+)
  create mode 100644 Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp
  create mode 100644 Source/cryptography/tests/cryptography_test/CobaltVaultHardcodesApolloV1Plus.h
 
@@ -25,7 +29,7 @@ index a1054e7..cd29486 100644
  
  set(CMAKE_CXX_STANDARD 11)
  
-@@ -105,3 +106,31 @@ if(${CRYPTOGRAPHY_IMPLEMENTATION} STREQUAL "OpenSSL")
+@@ -105,3 +106,33 @@ if(${CRYPTOGRAPHY_IMPLEMENTATION} STREQUAL "OpenSSL")
  elseif (${CRYPTOGRAPHY_IMPLEMENTATION} STREQUAL "SecApi")
     add_definitions(-DSecApi)
  endif()
@@ -34,6 +38,7 @@ index a1054e7..cd29486 100644
 +
 +find_package(NXCLIENT REQUIRED)
 +
++if (COBALT_VAULT_ENABLED)
 +add_executable(cobalttests
 +        CobaltInterfaceTests.cpp
 +        Helpers.cpp
@@ -57,6 +62,8 @@ index a1054e7..cd29486 100644
 +    )
 +
 +install(TARGETS cobalttests DESTINATION bin)
++endif()
++
 diff --git a/Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp b/Source/cryptography/tests/cryptography_test/CobaltInterfaceTests.cpp
 new file mode 100644
 index 0000000..be97b88
@@ -93,7 +100,7 @@ index 0000000..be97b88
 +#include <berr.h>
 +#include <bkni.h>
 +#include <nxclient.h>
-+#include <starboard_tl.h>
++#include <BSEAV/lib/security/sage/utility/starboard_tl.h>
 +
 +#include "Helpers.h"
 +#include "Test.h"
