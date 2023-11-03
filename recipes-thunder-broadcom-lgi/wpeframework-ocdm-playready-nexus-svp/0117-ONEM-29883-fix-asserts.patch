@@ -5,25 +5,31 @@ Index: OCDM-Playready-Nexus-SVP/MediaSessionExt.cpp
 ===================================================================
 --- OCDM-Playready-Nexus-SVP.orig/MediaSessionExt.cpp
 +++ OCDM-Playready-Nexus-SVP/MediaSessionExt.cpp
-@@ -135,7 +135,7 @@ DRM_RESULT opencdm_output_levels_callbac
-     MediaKeySession::DecryptContext * const decryptContext = const_cast<MediaKeySession::DecryptContext *>(static_cast<const MediaKeySession::DecryptContext*>(data));
+@@ -137,10 +137,9 @@ DRM_RESULT opencdm_output_levels_callback(
+     const DRM_PLAY_OPL_EX2 * const opl = static_cast<const DRM_PLAY_OPL_EX2 *>(outputLevels);
+ #else
      const DRM_PLAY_OPL_LATEST * const opl = static_cast<const DRM_PLAY_OPL_LATEST *>(outputLevels);
++    ASSERT(opl->dwVersion == VER_DRM_PLAY_OPL_LATEST);
+ #endif
  
 -    ASSERT(opl->dwVersion == 0);
-+    ASSERT(opl->dwVersion == VER_DRM_PLAY_OPL_LATEST);
- 
+-
      decryptContext->outputProtection.setOutputLevels(opl->minOPL);
  
-@@ -143,10 +143,11 @@ DRM_RESULT opencdm_output_levels_callbac
-     const DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_IDS_LATEST &dvopi = opl->dvopi;
-     for (size_t i = 0; i < dvopi.cEntries; ++i)
-     {
+     // MaxRes Decode
+@@ -154,11 +153,14 @@ DRM_RESULT opencdm_output_levels_callback(
+ #ifdef URSR_VERSION_LESS_OR_EQUAL_20
+         const DRM_OUTPUT_PROTECTION_EX &dope = dvopi.rgVop[i];
+ #else
 +        ASSERT(dvopi.dwVersion == VER_DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_IDS_LATEST);
          const DRM_ANALOG_VIDEO_OUTPUT_PROTECTION_LATEST &dope = dvopi.rgVop[i];
+ #endif
          if (DRM_IDENTICAL_GUIDS(&dope.guidId, &g_guidMaxResDecode))
          {
 -            ASSERT(dope.dwVersion == 3);
++#ifndef URSR_VERSION_LESS_OR_EQUAL_20
 +            ASSERT(dope.dwVersion == VER_DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_LATEST);
++#endif
              uint32_t mrdWidth, mrdHeight;
              const int inc = sizeof(uint32_t);
              ASSERT(dope.cbConfigData >= 2*inc);

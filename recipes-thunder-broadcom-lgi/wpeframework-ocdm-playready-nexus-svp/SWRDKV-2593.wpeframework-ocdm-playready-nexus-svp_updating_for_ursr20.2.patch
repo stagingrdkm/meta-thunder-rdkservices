@@ -1,65 +1,113 @@
---- old/MediaSessionExt.cpp	2020-10-05 14:35:34.919057449 -0400
-+++ new/MediaSessionExt.cpp	2020-10-05 14:44:52.136096967 -0400
-@@ -133,17 +133,17 @@ DRM_RESULT opencdm_output_levels_callback(
-     } 
+---
+ CMakeLists.txt      |  4 ++++
+ MediaSession.cpp    | 16 ++++++++++++++++
+ MediaSessionExt.cpp | 16 ++++++++++++++++
+ 3 files changed, 36 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a4d1da4..23c7e1d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -87,6 +87,10 @@ target_compile_definitions(${DRM_PLUGIN_NAME}
+         DRM_BUILD_PROFILE=900
+ )
  
-     MediaKeySession::DecryptContext * const decryptContext = const_cast<MediaKeySession::DecryptContext *>(static_cast<const MediaKeySession::DecryptContext*>(data));
--    const DRM_PLAY_OPL_EX2 * const opl = static_cast<const DRM_PLAY_OPL_EX2 *>(outputLevels);
-+    const DRM_PLAY_OPL_LATEST * const opl = static_cast<const DRM_PLAY_OPL_LATEST *>(outputLevels);
- 
-     ASSERT(opl->dwVersion == 0);
- 
-     decryptContext->outputProtection.setOutputLevels(opl->minOPL);
- 
-     // MaxRes Decode
--    const DRM_VIDEO_OUTPUT_PROTECTION_IDS_EX &dvopi = opl->dvopi;
-+    const DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_IDS_LATEST &dvopi = opl->dvopi;
-     for (size_t i = 0; i < dvopi.cEntries; ++i)
-     {
--        const DRM_OUTPUT_PROTECTION_EX &dope = dvopi.rgVop[i];
-+        const DRM_ANALOG_VIDEO_OUTPUT_PROTECTION_LATEST &dope = dvopi.rgVop[i];
-         if (DRM_IDENTICAL_GUIDS(&dope.guidId, &g_guidMaxResDecode))
-         {
-             ASSERT(dope.dwVersion == 3);
-@@ -286,7 +286,7 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
-     // response. There is always only a single BID per server response.
- 
-     // BID
--    mBatchId = drmLicenseResponse.m_oBatchID; 
-+    mBatchId = drmLicenseResponse.m_idSession; 
-     PrintBase64(sizeof(mBatchId.rgb), mBatchId.rgb, "BatchId/SecureStopId");
- 
-     // Microsoft says that a batch ID of all zeros indicates some sort of error
---- old/MediaSession.cpp	2020-10-09 15:24:22.694528387 -0400
-+++ new/MediaSession.cpp	2020-10-12 16:34:41.594217761 -0400
-@@ -360,7 +360,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
++if(${URSR_VERSION} VERSION_LESS "20" OR ${URSR_VERSION} VERSION_EQUAL "20")
++    target_compile_definitions(${DRM_PLUGIN_NAME} PRIVATE URSR_VERSION_LESS_OR_EQUAL_20=1)
++endif()
++
+ target_link_libraries(${DRM_PLUGIN_NAME} 
+     PRIVATE
+         ${NAMESPACE}Core::${NAMESPACE}Core 
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index d0b4ee4..2ceb5a6 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -360,7 +360,11 @@ DRM_RESULT MediaKeySession::PolicyCallback(
  {
      /*!+!hla fix this, implement for something. */
      DRM_RESULT dr = DRM_SUCCESS;
--    const DRM_PLAY_OPL_EX2 *oplPlay = NULL;
++#ifdef URSR_VERSION_LESS_OR_EQUAL_20
+     const DRM_PLAY_OPL_EX2 *oplPlay = NULL;
++#else
 +    const DRM_PLAY_OPL_LATEST *oplPlay = NULL;
++#endif
  
      BSTD_UNUSED(f_pKID);
      BSTD_UNUSED(f_pLID);
-@@ -371,7 +371,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+@@ -371,7 +375,11 @@ DRM_RESULT MediaKeySession::PolicyCallback(
          case DRM_PLAY_OPL_CALLBACK:
              printf("  Got DRM_PLAY_OPL_CALLBACK from Bind:\r\n");
              ChkArg( f_pvPolicyCallbackData != NULL );
--            oplPlay = (const DRM_PLAY_OPL_EX2*)f_pvPolicyCallbackData;
++#ifdef URSR_VERSION_LESS_OR_EQUAL_20
+             oplPlay = (const DRM_PLAY_OPL_EX2*)f_pvPolicyCallbackData;
++#else
 +            oplPlay = (const DRM_PLAY_OPL_LATEST*)f_pvPolicyCallbackData;
++#endif
  
              printf("    minOPL:\r\n");
              printf("    wCompressedDigitalVideo   = %d\r\n", oplPlay->minOPL.wCompressedDigitalVideo);
-@@ -453,6 +453,12 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+@@ -453,6 +461,14 @@ DRM_RESULT MediaKeySession::PolicyCallback(
              printf("\r\n\r\n");
          }
              break;
++#ifndef URSR_VERSION_LESS_OR_EQUAL_20
 +        case DRM_ENABLE_LICENSE_REJECTION_CALLBACK:
 +        {
 +            printf("  Got DRM_ENABLE_LICENSE_REJECTION_CALLBACK from Bind:\r\n");
 +            dr = DRM_SUCCESS;
 +        }
 +            break;
++#endif
          default:
              LOGGER_NO_THIS(LERROR_, "Callback from Bind with unknown callback type of %d.", f_dwCallbackType);
  
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 0042255..0270899 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -133,17 +133,29 @@ DRM_RESULT opencdm_output_levels_callback(
+     } 
+ 
+     MediaKeySession::DecryptContext * const decryptContext = const_cast<MediaKeySession::DecryptContext *>(static_cast<const MediaKeySession::DecryptContext*>(data));
++#ifdef URSR_VERSION_LESS_OR_EQUAL_20
+     const DRM_PLAY_OPL_EX2 * const opl = static_cast<const DRM_PLAY_OPL_EX2 *>(outputLevels);
++#else
++    const DRM_PLAY_OPL_LATEST * const opl = static_cast<const DRM_PLAY_OPL_LATEST *>(outputLevels);
++#endif
+ 
+     ASSERT(opl->dwVersion == 0);
+ 
+     decryptContext->outputProtection.setOutputLevels(opl->minOPL);
+ 
+     // MaxRes Decode
++#ifdef URSR_VERSION_LESS_OR_EQUAL_20
+     const DRM_VIDEO_OUTPUT_PROTECTION_IDS_EX &dvopi = opl->dvopi;
++#else
++    const DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_IDS_LATEST &dvopi = opl->dvopi;
++#endif
+     for (size_t i = 0; i < dvopi.cEntries; ++i)
+     {
++#ifdef URSR_VERSION_LESS_OR_EQUAL_20
+         const DRM_OUTPUT_PROTECTION_EX &dope = dvopi.rgVop[i];
++#else
++        const DRM_ANALOG_VIDEO_OUTPUT_PROTECTION_LATEST &dope = dvopi.rgVop[i];
++#endif
+         if (DRM_IDENTICAL_GUIDS(&dope.guidId, &g_guidMaxResDecode))
+         {
+             ASSERT(dope.dwVersion == 3);
+@@ -286,7 +298,11 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
+     // response. There is always only a single BID per server response.
+ 
+     // BID
++#ifdef URSR_VERSION_LESS_OR_EQUAL_20
+     mBatchId = drmLicenseResponse.m_oBatchID; 
++#else
++    mBatchId = drmLicenseResponse.m_idSession;
++#endif
+     PrintBase64(sizeof(mBatchId.rgb), mBatchId.rgb, "BatchId/SecureStopId");
+ 
+     // Microsoft says that a batch ID of all zeros indicates some sort of error
+-- 
+2.34.1
+
