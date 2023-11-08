@@ -12,6 +12,7 @@ SRC_URI += "file://0105-iCrypto-nexus-platform-vault-tests.patch"
 SRC_URI += "file://0106-extra-linking-for-testcases.patch"
 SRC_URI += "file://0107-extra-linking-for-cobalt-and-lgiplatform-tests.patch"
 SRC_URI += "file://0108-ONEM-32195-Hash-HMAC-testcases-starts-to-fail-in-cgf.patch"
+SRC_URI += "file://0109-ONEM-33184-switch-key-generation-to-dev-urandom.patch"
 
 # other options OpenSSL, SecApi, Thunder
 CRYPTOGRAPHY_IMPLEMENTATION="Icrypto-nexus"

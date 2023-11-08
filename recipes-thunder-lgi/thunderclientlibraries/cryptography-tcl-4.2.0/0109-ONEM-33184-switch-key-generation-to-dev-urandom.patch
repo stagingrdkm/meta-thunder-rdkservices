@@ -1,0 +1,25 @@
+From 0087ca386dfb7eb8406326a94e688ad9f3933d08 Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Mon, 13 Nov 2023 13:42:25 +0100
+Subject: [PATCH] ONEM-33184: switch key generation to /dev/urandom
+
+---
+ .../implementation/Icrypto-nexus/PlatformSecurity/KeyCache.hpp  | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/KeyCache.hpp b/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/KeyCache.hpp
+index 10ee230..3b8a861 100644
+--- a/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/KeyCache.hpp
++++ b/Source/cryptography/implementation/Icrypto-nexus/PlatformSecurity/KeyCache.hpp
+@@ -81,7 +81,7 @@ namespace Implementation
+                     ssize_t r;
+                     do
+                     {
+-                        r = getrandom(key + retrieved, len - retrieved, GRND_RANDOM | GRND_NONBLOCK);
++                        r = getrandom(key + retrieved, len - retrieved, GRND_NONBLOCK);
+                         if (r != -1)
+                         {
+                             retrieved += r;
+-- 
+2.25.1
+
