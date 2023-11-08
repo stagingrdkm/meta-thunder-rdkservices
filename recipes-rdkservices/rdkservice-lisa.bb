@@ -15,18 +15,15 @@ EXTERNALSRC = ""
 
 DEPENDS += "boost curl libarchive"
 
-# Currently LISA's repository is in stagingrdkm which is staging area for
-# RDK projects therefore we can't use the default way of building rdkservice
+# LISA plugin resides in its own repo: https://github.com/rdkcentral/LISA
+# therefore we can't use the default way of building rdkservice
 # plugin but need to overwrite some of the properties set by common_plugin.inc
-# and slightly alter its behavior. When LISA becomes an official plugin
-# and will be moved to regular plugins repository the following definitions
-# can be removed
+# and slightly alter its behavior.
 SRC_URI_remove = "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=${RDKSERVICES_BRANCH};name=${BPN};destsuffix=git"
-SRC_URI_append = " git://github.com/stagingrdkm/LISA.git;branch=main;protocol=https"
-
-# Overwrite SRCREV to fixed stagingrdkm/LISA revision.
-SRCREV = "cd5391de3d6381e0bea671a35df9081a2b64be55"
-SRCREV_${BPN} = "cd5391de3d6381e0bea671a35df9081a2b64be55"
+SRC_URI_append = " ${CMF_GITHUB_ROOT}/LISA;protocol=${CMF_GIT_PROTOCOL};branch=main"
+SRCREV = "cce4d3a55851efc68eefed4873746f8922bfd721"
+SRCREV_${BPN} = "cce4d3a55851efc68eefed4873746f8922bfd721"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 
@@ -34,18 +31,7 @@ TOOLCHAIN = "gcc"
 EXTRA_OECMAKE += "-DCMAKE_SYSROOT=${STAGING_DIR_HOST}"
 EXTRA_OECMAKE += "-DBUILD_REFERENCE=${SRCREV}"
 
-# the lines below were taken from upstream recipe, but were cancelling subsequent 'EXTRA_OECMAKE' (probably because they use _brcm postfix)
-# so now we just use EXTRA_OECMAKE, without any suffixes
-#EXTRA_OECMAKE_brcm += "-DBUILD_BROADCOM=ON"
-#EXTRA_OECMAKE_rpi += "-DBUILD_RASPBERRYPI=ON"
-#EXTRA_OECMAKE_amlrefapp += "-DBUILD_AMLOGIC=ON"
-EXTRA_OECMAKE += "-DBUILD_BROADCOM=ON"
-
-
 SRC_URI += "file://lisa@.service"
-
-SRC_URI += "file://amlogic.cmake;subdir=git"
-SRC_URI += "file://raspberrypi.cmake;subdir=git"
 
 EXTRA_OECMAKE += "-DPLUGIN_LISA_APPS_GID=251 -DPLUGIN_LISA_DATA_GID=145"
 
