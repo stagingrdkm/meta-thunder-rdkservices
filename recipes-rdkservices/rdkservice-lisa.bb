@@ -21,8 +21,8 @@ DEPENDS += "boost curl libarchive"
 # and slightly alter its behavior.
 SRC_URI_remove = "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=${RDKSERVICES_BRANCH};name=${BPN};destsuffix=git"
 SRC_URI_append = " ${CMF_GITHUB_ROOT}/LISA;protocol=${CMF_GIT_PROTOCOL};branch=main"
-SRCREV = "cce4d3a55851efc68eefed4873746f8922bfd721"
-SRCREV_${BPN} = "cce4d3a55851efc68eefed4873746f8922bfd721"
+SRCREV = "e8b26299909d2f86e25f49e0db994ef4d793acee"
+SRCREV_${BPN} = "e8b26299909d2f86e25f49e0db994ef4d793acee"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
 
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
@@ -41,3 +41,5 @@ do_install_append() {
 }
 
 SYSTEMD_SERVICE_${PN} += "lisa@.service"
+
+include rdkservice-lisa-dac-config.inc
