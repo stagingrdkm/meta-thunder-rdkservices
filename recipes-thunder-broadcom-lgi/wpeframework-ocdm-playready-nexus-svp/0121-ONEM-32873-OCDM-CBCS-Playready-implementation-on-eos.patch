@@ -1,0 +1,72 @@
+From d0f1d6decd7aa4c0ce5ec89e776b6c3740c7aa40 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Tue, 21 Nov 2023 14:42:58 +0100
+Subject: [PATCH] ONEM-32873 OCDM CBCS Playready implementation on eos2008c
+
+cbcs implementation in BRCM_REFSWSecurity_PRDY_3_0_HostLib_URSR_19_2_2_LGI_E1_20201208 doesn't
+accept blocks that are not aligned in size to multiples of 16 bytes. The modulo_16 part at the end
+of such block is unencrypted - so we need to split eg.
+[335 encrypted ,0 clear] block into two blocks like: [320 enc,0 clear],[0 enc,15 clear]
+
+see: https://brcmsemiconductor-csm.wolkenservicedesk.com/wolken-support/mycases/request-details?requestId=12323254
+Change-Id: Ic552f8d11beee3996f046dad1c0cdf4b967ccab0
+---
+ MediaSession.cpp | 35 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 35 insertions(+)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 3d5a2c8..abed3d1 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -854,6 +854,29 @@ CDMi_RESULT MediaKeySession::Close(void)
+     return CDMi_SUCCESS;
+ }
+ 
++#ifdef PLAYREADY_CBCS_URSR_19_2_2_ALIGN_16_FIX
++/*
++    ONEM-33069: cbcs implementation in BRCM_REFSWSecurity_PRDY_3_0_HostLib_URSR_19_2_2_LGI_E1_20201208 doesn't
++    accept blocks that are not aligned in size to multiples of 16 bytes. The modulo_16 part at the end of such block is
++    unencrypted - so push_buffers_aligned_to_16 will split eg. [335 encrypted ,0 clear] block
++    into two blocks like: [320 enc,0 clear],[0 enc,15 clear]
++    see: https://brcmsemiconductor-csm.wolkenservicedesk.com/wolken-support/mycases/request-details?requestId=12323254
++*/
++static void push_buffers_aligned_to_16(std::vector<unsigned int>& regionMapping, uint32_t clear, uint32_t encrypted) {
++    if (encrypted < 16) {
++        regionMapping.push_back(clear + encrypted);
++        regionMapping.push_back(0);
++    } else {
++        regionMapping.push_back(clear);
++        regionMapping.push_back(encrypted & ~0xF);
++        if (encrypted & 0xF) {
++            regionMapping.push_back(encrypted & 0xF);
++            regionMapping.push_back(0);
++        }
++    }
++};
++#endif
++
+ CDMi_RESULT MediaKeySession::Decrypt(
+         uint8_t*                 inData,
+         const uint32_t           inDataLength,
+@@ -948,6 +971,18 @@ CDMi_RESULT MediaKeySession::Decrypt(
+         PrivateCopy((void *)pOpaqueData, (const void*)pNexusMemory, inDataLength, true);
+     }
+ 
++#ifdef PLAYREADY_CBCS_URSR_19_2_2_ALIGN_16_FIX
++    // split blocks for cbcs case
++    if (sampleInfo->scheme == AesCbc_Cbcs) {
++        if (sampleInfo->subSampleCount > 0) {
++            for (int i = 0; i < sampleInfo->subSampleCount; i++) {
++                push_buffers_aligned_to_16(encryptedRegionMapping, sampleInfo->subSample[i].clear_bytes, sampleInfo->subSample[i].encrypted_bytes);
++            }
++        } else {
++            push_buffers_aligned_to_16(encryptedRegionMapping, 0, inDataLength);
++        }
++    } else // for cenc, no block splitting needed
++#endif
+     if (sampleInfo->subSampleCount > 0) {
+       for (int i = 0; i < sampleInfo->subSampleCount; i++) {
+         encryptedRegionMapping.push_back(sampleInfo->subSample[i].clear_bytes);
+-- 
+2.25.1
+
