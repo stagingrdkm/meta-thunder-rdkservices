@@ -1,0 +1,133 @@
+From 890de8f3a1b2b46de5e29f3d56b70e159efc3a1a Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Wed, 29 Nov 2023 15:26:21 +0100
+Subject: [PATCH] ONEM-33219 adding missing resolutions
+
+some resolutions reported by box are missing in
+thunder interfaces when compared with the list in
+dsVideoResolutionSettings.h (devicesettings-hal-brcm).
+
+This patch adds support for these strings in Thunder.
+---
+ definitions/Definitions.cpp | 14 ++++++++++++++
+ interfaces/IDeviceInfo.h    |  9 ++++++++-
+ jsonrpc/DeviceInfo.json     | 14 ++++++++++++++
+ 3 files changed, 36 insertions(+), 1 deletion(-)
+
+diff --git a/definitions/Definitions.cpp b/definitions/Definitions.cpp
+index 063c3cd..19f1e04 100644
+--- a/definitions/Definitions.cpp
++++ b/definitions/Definitions.cpp
+@@ -102,6 +102,13 @@ ScreenResolutionWidthHeight resolutionWidthHeightTable[] = {
+     { Exchange::IDeviceVideoCapabilities::ScreenResolution_1080p60Hz, 1920, 1080 },
+     { Exchange::IDeviceVideoCapabilities::ScreenResolution_2160p50Hz, 3840, 2160 },
+     { Exchange::IDeviceVideoCapabilities::ScreenResolution_2160p60Hz, 3840, 2160 },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_480i60Hz, 640, 480 },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_480p60Hz, 640, 480 },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_576i50Hz, 720, 576 },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_720p60Hz, 1280, 720 },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_1080i60Hz, 1920, 1080 },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_2160p24Hz, 3840, 2160 },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_2160p25Hz, 3840, 2160 }
+ };
+ 
+ ENUM_CONVERSION_BEGIN(Exchange::IStream::streamtype)
+@@ -226,6 +233,13 @@ ENUM_CONVERSION_BEGIN(Exchange::IDeviceVideoCapabilities::ScreenResolution)
+     { Exchange::IDeviceVideoCapabilities::ScreenResolution_2160p60Hz, _TXT("2160p60") },
+     { Exchange::IDeviceVideoCapabilities::ScreenResolution_4320p30Hz, _TXT("4320p30") },
+     { Exchange::IDeviceVideoCapabilities::ScreenResolution_4320p60Hz, _TXT("4320p60") },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_480i60Hz, _TXT("480i60") },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_480p60Hz, _TXT("480p60") },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_576i50Hz, _TXT("576i50") },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_720p60Hz, _TXT("720p60") },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_1080i60Hz, _TXT("1080i60") },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_2160p24Hz, _TXT("2160p24") },
++    { Exchange::IDeviceVideoCapabilities::ScreenResolution_2160p25Hz, _TXT("2160p25") },
+ ENUM_CONVERSION_END(Exchange::IDeviceVideoCapabilities::ScreenResolution)
+ 
+ ENUM_CONVERSION_BEGIN(Exchange::IDeviceVideoCapabilities::CopyProtection)
+diff --git a/interfaces/IDeviceInfo.h b/interfaces/IDeviceInfo.h
+index 2a3b48c..c8795b2 100644
+--- a/interfaces/IDeviceInfo.h
++++ b/interfaces/IDeviceInfo.h
+@@ -109,7 +109,14 @@ namespace Exchange {
+             ScreenResolution_2160p50Hz = 18,
+             ScreenResolution_2160p60Hz = 19,
+             ScreenResolution_4320p30Hz = 20,
+-            ScreenResolution_4320p60Hz = 21
++            ScreenResolution_4320p60Hz = 21,
++            ScreenResolution_480i60Hz,
++            ScreenResolution_480p60Hz,
++            ScreenResolution_576i50Hz,
++            ScreenResolution_720p60Hz,
++            ScreenResolution_1080i60Hz,
++            ScreenResolution_2160p24Hz,
++            ScreenResolution_2160p25Hz,
+         };
+ 
+         enum CopyProtection : uint8_t {
+diff --git a/jsonrpc/DeviceInfo.json b/jsonrpc/DeviceInfo.json
+index 82cf33d..b2d4377 100644
+--- a/jsonrpc/DeviceInfo.json
++++ b/jsonrpc/DeviceInfo.json
+@@ -45,21 +45,28 @@
+       "enum": [
+         "unknown",
+         "480i",
++        "480i60",
+         "480p",
++        "480p60",
+         "576i",
++        "576i50",
+         "576p",
+         "576p50",
+         "720p",
+         "720p50",
++        "720p60",
+         "1080i",
+         "1080i25",
+         "1080i50",
++        "1080i60",
+         "1080p",
+         "1080p24",
+         "1080p25",
+         "1080p30",
+         "1080p50",
+         "1080p60",
++        "2160p24",
++        "2160p25",
+         "2160p30",
+         "2160p50",
+         "2160p60",
+@@ -69,21 +76,28 @@
+       "enumids": [
+         "RESOLUTION_UNKNOWN",
+         "RESOLUTION_480I",
++        "RESOLUTION_480I60",
+         "RESOLUTION_480P",
++        "RESOLUTION_480P60",
+         "RESOLUTION_576I",
++        "RESOLUTION_576I50",
+         "RESOLUTION_576P",
+         "RESOLUTION_576P50",
+         "RESOLUTION_720P",
+         "RESOLUTION_720P50",
++        "RESOLUTION_720P60",
+         "RESOLUTION_1080I",
+         "RESOLUTION_1080I25",
+         "RESOLUTION_1080I50",
++        "RESOLUTION_1080I60",
+         "RESOLUTION_1080P",
+         "RESOLUTION_1080P24",
+         "RESOLUTION_1080P25",
+         "RESOLUTION_1080P30",
+         "RESOLUTION_1080P50",
+         "RESOLUTION_1080P60",
++        "RESOLUTION_2160P24",
++        "RESOLUTION_2160P25",
+         "RESOLUTION_2160P30",
+         "RESOLUTION_2160P50",
+         "RESOLUTION_2160P60",
+-- 
+2.25.1
+

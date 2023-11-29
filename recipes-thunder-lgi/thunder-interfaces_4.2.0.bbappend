@@ -17,6 +17,8 @@ SRC_URI  += "file://0112-ONEM-30922-Webkitbrowser-plugin-fail-to-compile.patch"
 SRC_URI += "file://0113-OMWAPPI-1794-JDolbyOutput.diffcode"
 SRC_URI += "file://0111-ARRISAPP-394-add_STEREO_SURROUND_MAT_FOLLOW-th4.patch"
 
+SRC_URI += "file://0114-ONEM-33219-add_missing_resolutions.patch"
+
 require thunder-interfaces-4.2.0/interfaces.inc
 
 do_configure_append() {
