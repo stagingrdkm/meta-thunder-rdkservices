@@ -1,4 +1,4 @@
-ASMS_URL ?= ""
+ASMS_URL ?= "http://localhost:81/common-service/appstore-metadata-service/"
 LISA_DAC_CONFIG_PLATFORM ?= ""
 LISA_DAC_CONFIG_FIRMWARE ?= ""
 
