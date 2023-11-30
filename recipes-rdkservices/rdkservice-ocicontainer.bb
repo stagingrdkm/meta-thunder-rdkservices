@@ -10,4 +10,4 @@ FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 ## patches and files from rdkservice-ocicontainer
 SRC_URI += "file://CMakeLists.txt;subdir=git/"
 
-DEPENDS += "wpeframework-clientlibraries dobby omi devicesettings iarmbus iarmmgrs-hal-headers rfc"
+DEPENDS += "wpeframework-clientlibraries dobby devicesettings iarmbus iarmmgrs-hal-headers rfc"
