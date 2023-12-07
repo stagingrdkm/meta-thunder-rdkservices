@@ -88,6 +88,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0157-ONEM-32192-switch-libWPEFrameworkProcessContainers-t.patch \
             file://0158-ONEM-32195-Failed-to-start-cryptography-testcases.patch \
             file://0159-ONEM-32575-Fix-logging-configuration.patch \
+            file://0160-ONEM-33584-Unable-activate-LISA-plugin.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
             file://0159-ONEM-32583-increase-RPC-comm-timeout.patch \

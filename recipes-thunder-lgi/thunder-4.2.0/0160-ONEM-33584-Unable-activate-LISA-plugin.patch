@@ -1,0 +1,55 @@
+From d99f4617c7f79b0d919084666aef50234fa7dece Mon Sep 17 00:00:00 2001
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Thu, 7 Dec 2023 09:25:05 +0100
+Subject: [PATCH] ONEM-33584 [RDK6][dev/int] Unable activate LISA plugin.
+
+* _connection->Terminate() restored in ReleaseInterfaces (like it is in R4.3 and later versions)
+* synchronous termination of container plugins introduced
+---
+ Source/WPEFramework/PluginServer.h |  2 +-
+ Source/com/Communicator.cpp        | 16 +++++++++++++++-
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
+index 00a0552..199b819 100644
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -1277,7 +1277,7 @@ namespace PluginHost {
+                     // ID) is not destructed the next time we start this plugin
+                     // again, we will forcefully kill it !!!
+                     _lastId = _connection->Id();
+-
++                    _connection->Terminate();
+                     _connection->Release();
+                     _connection = nullptr;
+                 }
+diff --git a/Source/com/Communicator.cpp b/Source/com/Communicator.cpp
+index 97ee1f4..2229dab 100644
+--- a/Source/com/Communicator.cpp
++++ b/Source/com/Communicator.cpp
+@@ -473,7 +473,21 @@ namespace RPC {
+     void Communicator::ContainerProcess::Terminate() /* override */
+     {
+         ASSERT(_container != nullptr);
+-        g_destructor.Destruct<ContainerClosingInfo>(Id(), _container);
++        TRACE_L1("ContainerProcess Terminate synchronous");
++        int cnt = 0;
++        while (_container->IsRunning() && cnt < 2) {
++            if (_container->Stop(0)) {
++                TRACE_L1("ContainerProcess Terminate synchronous - container stopped");
++                break;
++            }
++            cnt++;
++            TRACE_L1("ContainerProcess Terminate synchronous - container not stopped cnt=%d", cnt);
++        }
++        TRACE_L1("ContainerProcess Terminate synchronous - finished isRunning=%d", _container->IsRunning());
++        if (_container->IsRunning()) {
++            TRACE_L1("ContainerProcess Terminate - make fallback asynchronous termination");
++            g_destructor.Destruct<ContainerClosingInfo>(Id(), _container);
++        }
+     }
+ 
+     void Communicator::ContainerProcess::PostMortem() /* override */
+-- 
+2.25.1
+
