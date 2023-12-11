@@ -33,6 +33,8 @@ SRC_URI += "file://0001-Thunder_json_quoted_string_parsing_fix.patch \
             file://R4.3.2_Wait_for_Open_in_Communication_Channel.patch \
             file://RDKTV-24021.patch \
             file://ONEM-31782_R4.patch \
+            file://dsmanagerplugin;subdir=git/Source \
+            file://ONEM-33502-Add-DSManagerPlugin.patch \
             "
 
 inherit systemd update-rc.d python3native
@@ -122,6 +124,7 @@ EXTRA_OECMAKE += " \
     -DHIDE_NON_EXTERNAL_SYMBOLS=OFF \
     -DEXIT_REASONS=${WPEFRAMEWORK_EXIT_REASONS} \
     -DMESSAGING=ON \
+    -DDSMANAGERPLUGIN=ON \
     -DUMASK=001 \
 "
 

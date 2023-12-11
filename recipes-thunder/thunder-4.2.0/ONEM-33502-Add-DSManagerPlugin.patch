@@ -1,0 +1,36 @@
+From 7475756b573c9743811ea9f1d74233aed0f95385 Mon Sep 17 00:00:00 2001
+From: Dawid Trendota <dawid.trendota@consult.red>
+Date: Fri, 15 Dec 2023 14:15:44 +0100
+Subject: [PATCH] Add DSManagerPlugin
+
+---
+ Source/CMakeLists.txt | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/CMakeLists.txt b/Source/CMakeLists.txt
+index 2f5bd775..d520f8c1 100644
+--- a/Source/CMakeLists.txt
++++ b/Source/CMakeLists.txt
+@@ -28,6 +28,8 @@ option(TRACING
+         "Include the tracing library." ON)
+ option(MESSAGING
+         "Include the messaging library." OFF)
++option(DSMANAGERPLUGIN
++        "Include the DSManagerPlugin base class." OFF)
+ option(PROFILER
+         "Include the profiler library." OFF)
+ option(COM
+@@ -104,6 +106,10 @@ if(MESSAGING)
+     add_subdirectory(messaging)
+ endif()
+ 
++if(DSMANAGERPLUGIN)
++    add_subdirectory(dsmanagerplugin)
++endif()
++
+ if(PROCESSCONTAINERS)
+     add_subdirectory(processcontainers)
+ endif()
+-- 
+2.34.1
+
