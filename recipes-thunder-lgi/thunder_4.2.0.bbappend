@@ -3,10 +3,12 @@ inherit onemw_build_type
 FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
 
 RDEPENDS_${PN} += "rfc libodherr thunder-config-reparser"
+RDEPENDS_${PN} += "devicesettings"
 DEPENDS_remove = "breakpad-wrapper"
 DEPENDS_append = " breakpad"
 DEPENDS_append = " glib-2.0"
 DEPENDS_append = " dbus libodherr lxc systemd"
+DEPENDS_append = " devicesettings"
 
 SRC_URI += "file://0001-RDK-28534-Security-Agent-Utility-and-Logging-OnlyFindRFC.patch"
 
@@ -89,6 +91,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0158-ONEM-32195-Failed-to-start-cryptography-testcases.patch \
             file://0159-ONEM-32575-Fix-logging-configuration.patch \
             file://0160-ONEM-33584-Unable-activate-LISA-plugin.patch \
+            file://0161-ONEM-33622-devicesettings-static-logger-callbacks.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
             file://0159-ONEM-32583-increase-RPC-comm-timeout.patch \
