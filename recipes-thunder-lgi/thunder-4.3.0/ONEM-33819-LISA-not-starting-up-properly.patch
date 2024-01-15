@@ -1,0 +1,79 @@
+(2024.01.15) Stefan Verkoyen <sverkoyen.contractor@libertyglobal.com>
+ONEM-33819 LISA not starting up properly
+
+slauncher/awc waits on cpeconfig to become available since this change:
+https://gerrit.onemw.net/c/onemw-src/+/114849/5/slauncher/awc2/MemoryPolicy.cpp
+
+This can take multiple seconds and by that time, thunder already tried to start
+LISA, which fails because AWC DBUS interface was not yet serving any calls:
+
+dbus[3696]: Error is set from message. Error.name: org.freedesktop.DBus.Error.ServiceUnknown,
+Error.message: The name com.lgi.rdk.utils.awc.server was not provided by any .service files
+
+Fix: so now we wait before starting any service via AWC by checking AWC service ready status:
+WaitUntilAWCReady().
+
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.cpp
+===================================================================
+--- git.orig/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.cpp
++++ git/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.cpp
+@@ -62,6 +62,38 @@ bool AWCContainer::IsRunning() const
+     return isRunning;
+ }
+ 
++bool AWCContainer::WaitUntilAWCReady() const
++{
++    TRACE_L1("AWC ready?");
++    const int maxAttempts = 60; // for a total of max 30 secs
++    int attemptCount = 0;
++    bool result = false, is_ready = false;
++    awc::AWCClient::awc_status_t awc_result;
++    do {
++        {
++          std::lock_guard<std::mutex> lock(_mutex);
++          is_ready = false;
++          awc_result = _client->isServiceReady(is_ready);
++          result = (awc_result == awc::AWCClient::AWC_STATUS_OK);
++        }
++        attemptCount++;
++
++        if ((!result || !is_ready) && attemptCount < maxAttempts) {
++            TRACE_L1("AWC is not ready yet (%d,%d,%d), give it some more time...", awc_result, result, is_ready);
++            std::this_thread::sleep_for(std::chrono::milliseconds(500));
++        } else {
++            break;
++	}
++    } while (true);
++
++    if (!result || !is_ready) {
++      TRACE_L1("Giving up on waiting on awc to be ready. It is not. (%d,%d)");
++    } else {
++      TRACE_L1("Yes, AWC is ready!");
++    }
++    return is_ready;
++}
++
+ bool AWCContainer::Start(const string& command, IStringIterator& parameters)
+ {
+     if(IsRunning())
+@@ -70,6 +102,8 @@ bool AWCContainer::Start(const string& c
+         return false;
+     }
+ 
++    WaitUntilAWCReady();
++
+     awc::AWCClient::str_vect_sptr_t windowParams = std::make_shared<std::vector<std::string>>();
+     awc::AWCClient::str_vect_sptr_t appParams = std::make_shared<std::vector<std::string>>();
+ 
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.h
+===================================================================
+--- git.orig/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.h
++++ git/Source/processcontainers/implementations/AWCImplementation/AWCImplementation.h
+@@ -55,6 +55,7 @@ private:
+     mutable std::mutex _mutex;
+     std::condition_variable _cv;
+     bool _waitForResponse{false};
++    bool WaitUntilAWCReady() const;
+ };
+ 
+ } /* ProcessContainers */

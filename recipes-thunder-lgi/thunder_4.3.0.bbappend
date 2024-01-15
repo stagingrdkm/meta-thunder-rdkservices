@@ -87,6 +87,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0156-ONEM-31419-MessageUnit-adaptation.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
+            file://ONEM-33819-LISA-not-starting-up-properly.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:

@@ -93,6 +93,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
             file://0159-ONEM-32583-increase-RPC-comm-timeout.patch \
+            file://ONEM-33819-LISA-not-starting-up-properly.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:
