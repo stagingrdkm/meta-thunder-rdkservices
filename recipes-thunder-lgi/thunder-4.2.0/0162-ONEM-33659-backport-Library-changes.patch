@@ -1,0 +1,52 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Wed, 17 Jan 2024 16:34:54 +0100
+Subject:[ONEM-33659] Backport Library.cpp/h implementation from R4_4/master
+
+diff --git a/Source/core/Library.cpp b/Source/core/Library.cpp
+index fe1b6ec..eb294b7 100644
+--- a/Source/core/Library.cpp
++++ b/Source/core/Library.cpp
+@@ -101,6 +101,12 @@ namespace Core {
+     {
+         AddRef();
+     }
++    Library::Library(Library&& move)
++        : _refCountedHandle(move._refCountedHandle)
++    {
++        move._refCountedHandle = nullptr;
++    }
++
+     Library::~Library()
+     {
+         Release();
+@@ -163,7 +169,8 @@ namespace Core {
+     uint32_t Library::Release()
+     {
+         if (_refCountedHandle != nullptr) {
+-            if (_refCountedHandle->_referenceCount == 1) {
++            ASSERT(_refCountedHandle->_referenceCount > 0);
++            if (Core::InterlockedDecrement(_refCountedHandle->_referenceCount) == 0) {
+ 
+                 ModuleUnload function = reinterpret_cast<ModuleUnload>(LoadFunction(_T("ModuleUnload")));
+ 
+@@ -180,8 +187,6 @@ namespace Core {
+ #endif
+                 TRACE_L1("Unloaded library: %s", _refCountedHandle->_name.c_str());
+                 delete _refCountedHandle;
+-            } else {
+-                Core::InterlockedDecrement(_refCountedHandle->_referenceCount);
+             }
+             _refCountedHandle = nullptr;
+         }
+diff --git a/Source/core/Library.h b/Source/core/Library.h
+index 31ef148..9ef1128 100644
+--- a/Source/core/Library.h
++++ b/Source/core/Library.h
+@@ -45,6 +45,7 @@ namespace Core {
+         Library();
+         Library(const void* functionInLibrary);
+         Library(const TCHAR fileName[]);
++        Library(Library&& move);
+         Library(const Library& copy);
+         ~Library();
+ 
