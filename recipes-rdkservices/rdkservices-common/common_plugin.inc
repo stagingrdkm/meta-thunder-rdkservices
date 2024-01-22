@@ -21,7 +21,7 @@ SRC_URI += "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=$
 
 SRCREV_${BPN}= "${@onemw_variable_switch ('ONEMW_THUNDER4_VERSION_MINOR', \
                    '1',    '143c11fa5bc65dfae846f91589f601f68ac40a00', \
-                   '2',    'f45afb190b48ba6e336dc40b7c298dd0117bb12a', \
+                   '2',    '321821945037b679eef0cb02461320ba786647c9', \
                    '3',    '09af974572c25c21af8f4fa25ee92c68212bd12f', \
                  d)}"
 
