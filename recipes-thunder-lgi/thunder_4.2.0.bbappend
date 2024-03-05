@@ -80,7 +80,6 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0148-ARRISAPP-713-exit-on-assert.patch \
             file://0149-ONEM-30824-fix-find-lxc-cmake-includes-path.patch \
             file://0150-ONEM-31207-thunder-only-direct-output-for-tracing.patch \
-            file://0152-ONEM-31546-do-not-invoke-Terminate-on-notice-of-clos.patch \
             file://0153-OMWAPPI-1798-Fix-for-taken-deallocated-lock.patch \
             file://0154-OMWAPPI-1798-MessageUnit-_opened-flag-introduced.patch \
             file://0155-OMWAPPI-1798-Don-t-flush-libraries-in-Idle.patch \

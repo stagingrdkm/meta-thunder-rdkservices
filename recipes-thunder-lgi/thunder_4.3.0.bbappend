@@ -80,7 +80,6 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0150-ONEM-30919-linking_com_with_processcontainers.patch \
             file://0150-ONEM-31207-thunder-only-direct-output-for-tracing.patch \
             file://0151-ONEM-30919-use_connectionMap_instead_of_reporter.patch \
-            file://0152-ONEM-31546-do-not-invoke-Terminate-on-notice-of-clos.patch \
             file://0153-OMWAPPI-1798-Fix-for-taken-deallocated-lock.patch \
             file://0154-OMWAPPI-1798-MessageUnit-_opened-flag-introduced.patch \
             file://0155-OMWAPPI-1798-Don-t-flush-libraries-in-Idle.patch \
