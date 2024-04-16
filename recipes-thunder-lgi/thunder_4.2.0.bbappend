@@ -91,6 +91,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0161-ONEM-33622-devicesettings-static-logger-callbacks.patch \
             file://0162-ONEM-33659-backport-Library-changes.patch \
             file://0163-ONEM-34263-do-not-unload-libWPEFrameworkWebKitBrowse.patch \
+            file://0164-ARRISAPOL-3401-Ignore-the-stop-call-when-other-in-pr.patch \
             file://fix-compilation-with-warning-reporting-disabled.patch \
             file://no_color_in_trace.patch \
             file://0159-ONEM-32583-increase-RPC-comm-timeout.patch \

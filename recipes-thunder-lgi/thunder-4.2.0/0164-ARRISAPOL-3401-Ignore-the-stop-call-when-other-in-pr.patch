@@ -1,0 +1,79 @@
+From 8c3c1289cdabf2ae8f7f1c20c692291cb4c5da69 Mon Sep 17 00:00:00 2001
+From: Marcin Mielczarczyk <marcin.mielczarczyk@redembedded.com>
+Date: Tue, 16 Apr 2024 00:56:01 +0200
+Subject: [PATCH] ARRISAPOL-3401: Ignore the stop call when other in progress
+
+Thunder 4.2 started to call Communicator::Terminate() method twice which
+lead to break stopContainer() behaviour.
+Ignore stop call when the one is already in progress.
+---
+ .../AWCImplementation/AWCProxyContainer.cpp   | 24 ++++++++++++++++++-
+ .../AWCImplementation/AWCProxyContainer.h     |  3 +++
+ 2 files changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp b/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
+index a75b827e..6fb20c7e 100644
+--- a/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
++++ b/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
+@@ -59,6 +59,18 @@ bool AWCProxyContainer::waitForStateChange(
+     return r;
+ }
+ 
++void AWCProxyContainer::SetStopInProgress(bool state)
++{
++    std::lock_guard<std::mutex> lock(mutex_);
++    stopInProgress_ = state;
++}
++
++bool AWCProxyContainer::IsStopInProgress() const
++{
++    std::lock_guard<std::mutex> lock(mutex_);
++    return stopInProgress_;
++}
++
+ AWCProxyContainer::AWCProxyContainer(
+     const string& name, const PluginConfig &cfg, dbus::Client *client):
+         AWCContainerBase(name),
+@@ -170,7 +182,17 @@ bool AWCProxyContainer::Stop(const uint32_t timeout /*ms*/)
+ 
+     const auto now = Clock::now();
+ 
+-    if(!dbusInterface_->stopContainer(client_, stopTimeout_))
++    if (IsStopInProgress())
++    {
++        TRACE_L1("stop is already in progress id=%s(%p)", Id().c_str(), this);
++        return true;
++    }
++
++    SetStopInProgress(true);
++    bool res = dbusInterface_->stopContainer(client_, stopTimeout_);
++    SetStopInProgress(false);
++
++    if (!res)
+     {
+         TRACE_L1("failed to stop id=%s(%p)", Id().c_str(), this);
+         return false;
+diff --git a/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h b/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h
+index 79b5e1e1..2c700bfa 100644
+--- a/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h
++++ b/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h
+@@ -33,6 +33,8 @@ class AWCProxyContainer: public AWCContainerBase
+     AWCProxyContainer(const string &name, const PluginConfig &, dbus::Client *);
+ 
+     bool waitForStateChange(Lock &, AppState, milliseconds);
++    void SetStopInProgress(bool);
++    bool IsStopInProgress() const;
+ public:
+     AWCProxyContainer(const AWCProxyContainer&) = delete;
+     ~AWCProxyContainer() override final;
+@@ -52,6 +54,7 @@ protected:
+     const milliseconds startTimeout_;
+     const milliseconds stopTimeout_;
+     dbus::Client *const client_;
++    bool stopInProgress_;
+ };
+ 
+ } /* ProcessContainers */
+-- 
+2.40.1
+
