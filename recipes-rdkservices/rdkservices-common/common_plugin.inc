@@ -5,6 +5,8 @@ PR = "r1"
 PV = "3.0+git${SRCPV}"
 S = "${WORKDIR}/git"
 
+require rdkservices_version.inc
+
 inherit onemw_externalsrc cmake pkgconfig systemd onemw_rdkversion
 EXTERNALSRC = ""
 
@@ -13,7 +15,7 @@ DEPENDS += "wpeframework-tools-native wpeframework wpeframework-interfaces"
 # rdkservices location, Thunder R4
 RDKSERVICES_BRANCH = "${@onemw_variable_switch ('ONEMW_THUNDER4_VERSION_MINOR', \
                    '1',    'lgi-thunder4-20230518',   \
-                   '2',    'lgi-thunder4.2-20230922', \
+                   '2',    '${RDKSERVICES_BUILD_BRANCH}', \
                    '3',    'lgi-thunder4.3-20230628', \
                  d)}"
 
@@ -21,7 +23,7 @@ SRC_URI += "git://github.com/LibertyGlobal/rdkservices.git;protocol=git;branch=$
 
 SRCREV_${BPN}= "${@onemw_variable_switch ('ONEMW_THUNDER4_VERSION_MINOR', \
                    '1',    '143c11fa5bc65dfae846f91589f601f68ac40a00', \
-                   '2',    '4deee65592d4cf5a2ee30e2d8614a00bc0073804', \
+                   '2',    '${RDKSERVICES_BUILD_REV}', \
                    '3',    '09af974572c25c21af8f4fa25ee92c68212bd12f', \
                  d)}"
 
