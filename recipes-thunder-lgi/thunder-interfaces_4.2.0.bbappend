@@ -5,7 +5,6 @@ FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
 SRC_URI += "file://0107-ONEM-25037-enable-stub-generation-for-Register-Unreg.patch"
 
 SRC_URI += "file://0001-RDK-31882-Add-GstCaps-parsing-in-OCDM-wpeframework-interfaces-rdknext.patch"
-SRC_URI += "file://0108-ARRISEOS-41993-Use-string-arguments-in-IBrowser-inte.patch"
 
 # is there applied in thunder-interfaces_4.2.0.bb (patch from upstream): 0110-OMWAPPI-910-Increase-subsamples-limit-for-4k-content_new.patch
 #SRC_URI += "file://0110-OMWAPPI-910-Increase-subsamples-limit-for-4k-content.patch"
