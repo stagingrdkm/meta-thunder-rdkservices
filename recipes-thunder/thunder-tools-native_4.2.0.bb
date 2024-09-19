@@ -2,6 +2,8 @@ SUMMARY = "Host/Native tooling for the Web Platform for Embedded Framework"
 require include/thunder.inc
 require include/thunder_${PV}.inc
 
+SRC_URI += "file://0001_fix_string_value_access.patch"
+
 PROVIDES += "wpeframework-tools-native"
 
 inherit cmake pkgconfig native python3native

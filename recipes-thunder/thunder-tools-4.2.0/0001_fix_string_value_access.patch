@@ -1,0 +1,44 @@
+From 73810233b4a05402c8aadd2648b5278f5089b949 Mon Sep 17 00:00:00 2001
+From: suresh-khurdiya-infosys <skhurdiya.ext@libertyglobal.com>
+Date: Tue, 1 Oct 2024 14:23:09 +0530
+Subject: [PATCH] [ONEM-36849] [RDK6.1] [SCA] WPE2.38 and Thunder fails on
+ clang compilation
+
+---
+ Tools/JsonGenerator/JsonGenerator.py | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Tools/JsonGenerator/JsonGenerator.py b/Tools/JsonGenerator/JsonGenerator.py
+index e2ca4f35..f1fb4b07 100755
+--- a/Tools/JsonGenerator/JsonGenerator.py
++++ b/Tools/JsonGenerator/JsonGenerator.py
+@@ -2073,7 +2073,7 @@ def EmitRpcCode(root, emit, header_file, source_file, data_emitted):
+                             arg2 = q[0]
+                             arg2_type = q[1]
+                             if var == arg.schema["length"]:
+-                                emit.Line("%s %s{%s};" % (arg2.cpp_native_type, arg2.TempName(), "%s%s" % (parent if parent else "", arg2.cpp_name) if arg2_type != WRITE_ONLY else ""))
++                                emit.Line("%s %s{%s};" % (arg2.cpp_native_type, arg2.TempName(), "%s%s.Value()" % (parent if parent else "", arg2.cpp_name) if arg2_type != WRITE_ONLY else ""))
+                                 break
+                         encode = "encode" in arg.schema and arg.schema["encode"]
+                         if arg_type == READ_ONLY and not encode:
+@@ -2101,7 +2101,7 @@ def EmitRpcCode(root, emit, header_file, source_file, data_emitted):
+                                 emit.Line("auto _Iterator = %s.Elements();" % ((parent if parent else "") + arg.cpp_name))
+                                 emit.Line("while (_Iterator.Next() == true) {")
+                                 emit.Indent()
+-                                emit.Line("_elements.push_back(_Iterator.Current());")
++                                emit.Line("_elements.push_back(_Iterator.Current().Value());")
+                                 emit.Unindent()
+                                 emit.Line("}")
+                                 impl = arg.iterator[:arg.iterator.index('<')].replace("IIterator", "Iterator") + "<%s>" % arg.iterator
+@@ -2123,7 +2123,7 @@ def EmitRpcCode(root, emit, header_file, source_file, data_emitted):
+                         emit.Line("%s%s %s%s;" % ("const " if (arg_type == READ_ONLY) else "", arg.cpp_native_type, arg.TempName(), "(%s%s)" % (parent if parent and not isinstance(arg.parent, JsonMethod) else "", arg.cpp_name) if arg_type != WRITE_ONLY else "{}"))
+                     # All Other
+                     else:
+-                        emit.Line("%s%s %s{%s};" % ("const " if (arg_type == READ_ONLY) else "", arg.cpp_native_type, arg.TempName(), "%s%s" % (parent if parent else "", arg.cpp_name) if arg_type != WRITE_ONLY else ""))
++                        emit.Line("%s%s %s{%s};" % ("const " if (arg_type == READ_ONLY) else "", arg.cpp_native_type, arg.TempName(), "%s%s.Value()" % (parent if parent else "", arg.cpp_name) if arg_type != WRITE_ONLY else ""))
+ 
+                 cond = ""
+                 for _, _record in vars.items():
+-- 
+2.34.1
+
