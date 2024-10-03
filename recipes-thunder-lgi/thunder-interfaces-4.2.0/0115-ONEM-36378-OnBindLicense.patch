@@ -1,0 +1,297 @@
+From 9db1262a6595dd81e2a17502f7362ce46a3a4b04 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Thu, 3 Oct 2024 15:19:28 +0200
+Subject: [PATCH] ONEM-36378 OnBindLicense callback and serialization code for
+ PleayReady _EXTENDED_RESTRICTION_CONDITION_DATA bind callback
+
+---
+ interfaces/CMakeLists.txt         |  3 +
+ interfaces/DRMCallbackData.h      | 23 ++++++++
+ interfaces/DRMCallbackSerialize.h | 95 +++++++++++++++++++++++++++++++
+ interfaces/IDRM.h                 | 88 ++++++++++++++++++++++++++++
+ interfaces/IOCDM.h                |  3 +
+ 5 files changed, 212 insertions(+)
+ create mode 100644 interfaces/DRMCallbackData.h
+ create mode 100644 interfaces/DRMCallbackSerialize.h
+
+diff --git a/interfaces/CMakeLists.txt b/interfaces/CMakeLists.txt
+index 31de9e2..0fbfecd 100644
+--- a/interfaces/CMakeLists.txt
++++ b/interfaces/CMakeLists.txt
+@@ -44,6 +44,9 @@ list(APPEND INTERFACES_HEADERS ValuePoint.h)
+ list(APPEND INTERFACES_HEADERS Portability.h)
+ list(APPEND INTERFACES_HEADERS Module.h)
+ 
++list(APPEND INTERFACES_HEADERS DRMCallbackData.h)
++list(APPEND INTERFACES_HEADERS DRMCallbackSerialize.h)
++
+ file(GLOB PROXY_STUB_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/generated/ProxyStubs*.cpp")
+ add_library(${Target} SHARED
+         Module.cpp
+diff --git a/interfaces/DRMCallbackData.h b/interfaces/DRMCallbackData.h
+new file mode 100644
+index 0000000..17fdf8c
+--- /dev/null
++++ b/interfaces/DRMCallbackData.h
+@@ -0,0 +1,23 @@
++#pragma once
++
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++enum BindCallbackType : uint32_t {
++    PRD30_EXTENDED_RESTRICTION_CONDITION
++};
++
++struct PRD30_EXTENDED_RESTRICTION_CONDITION_DATA {
++    uint8_t kid[16];
++    uint8_t lid[16];
++    uint64_t dwBeginDate;
++    uint64_t dwEndDate;
++    bool fValid;
++};
++
++#ifdef __cplusplus
++} // extern "C"
++#endif
+\ No newline at end of file
+diff --git a/interfaces/DRMCallbackSerialize.h b/interfaces/DRMCallbackSerialize.h
+new file mode 100644
+index 0000000..6303aba
+--- /dev/null
++++ b/interfaces/DRMCallbackSerialize.h
+@@ -0,0 +1,95 @@
++#pragma once
++
++#include "interfaces/IDRM.h"
++#include "interfaces/DRMCallbackData.h"
++
++#include <utility>
++
++namespace {
++
++    // to catch unsupported cases
++    template<typename WriterT, typename T>
++    bool serialize(WriterT &writer, const T& val) {
++        static_assert(sizeof(T) == 0, "type serialization not implemented");
++        throw false;
++    }
++
++    template<typename WriterT>
++    bool serialize(WriterT &writer, const uint64_t& val) {
++        return writer.Write8(val);
++    }
++
++    template<typename WriterT>
++    bool serialize(WriterT &writer, const bool& val) {
++        return writer.WriteBool(val);;
++    }
++
++    template<typename WriterT>
++    bool serialize(WriterT &writer, const std::pair<const uint8_t*, int>& a) {
++        return writer.WriteBytes(a.first, a.second);
++    }
++
++    // to catch unsupported cases
++    template<typename WriterT, typename T>
++    bool deserialize(WriterT &writer, T* val) {
++        static_assert(sizeof(T) == 0, "type deserialization not implemented");
++        throw false;
++    }
++
++    bool deserialize(BufferReader &reader, uint64_t* val) {
++        return reader.Read8(val);
++    }
++
++    bool deserialize(BufferReader &reader, bool* val) {
++        uint8_t v;
++        bool ret = reader.Read1(&v);
++        (*val) = v;
++        return ret;
++    }
++
++    bool deserialize(BufferReader &reader, std::pair<uint8_t*,int> a) {
++        return reader.ReadBytes(a.first, a.second);
++    }
++
++    template<typename WriterT>
++    void serializeArgs(WriterT &writer) {}
++
++    template <typename WriterT, typename T, typename ...ArgsType >
++    void serializeArgs(WriterT &writer, T t, ArgsType... Args) {
++        serialize(writer, t);
++        serializeArgs(writer, Args...);
++    }
++
++    void deserializeArgs(BufferReader &reader) {}
++
++    template <typename T, typename ...ArgsType >
++    void deserializeArgs(BufferReader &reader, T t, ArgsType... Args) {
++        deserialize(reader, t);
++        deserializeArgs(reader, Args...);
++    }
++}
++
++
++namespace CDMi {
++
++    struct PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer
++    {
++        BufferWriter<sizeof(PRD30_EXTENDED_RESTRICTION_CONDITION_DATA)> writer;
++
++        PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer(const uint8_t *kid, const uint8_t *lid, uint64_t dwBeginDate, uint64_t dwEndDate, bool fValid)
++        {
++            serializeArgs(writer, std::make_pair(kid, 16), std::make_pair(lid, 16), dwBeginDate, dwEndDate, fValid);
++        }
++    };
++
++    struct PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Deserializer
++    {
++        PRD30_EXTENDED_RESTRICTION_CONDITION_DATA obj;
++
++        PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Deserializer(const uint8_t *data, size_t sz)
++        {
++            BufferReader reader {data, sz};
++            deserializeArgs(reader, std::make_pair(obj.kid, 16), std::make_pair(obj.lid, 16), &obj.dwBeginDate, &obj.dwEndDate, &obj.fValid);
++        }
++    };
++}
+diff --git a/interfaces/IDRM.h b/interfaces/IDRM.h
+index d0404b2..d0071d0 100644
+--- a/interfaces/IDRM.h
++++ b/interfaces/IDRM.h
+@@ -46,6 +46,7 @@
+ #include <type_traits>
+ #include <typeinfo>
+ #include <vector>
++#include <cstring>
+ 
+ #include <interfaces/Portability.h>
+ 
+@@ -148,12 +149,97 @@ public:
+         return false;
+     }
+ 
++    inline bool ReadBytes(uint8_t* b, size_t count) WARNING_RESULT_NOT_USED
++    {
++        if (HasBytes(count) == true)
++        {
++            memcpy(b, buf_ + pos_, count);
++            pos_ += count;
++            return true;
++        }
++        return false;
++    }
++
+ private:
+     const uint8_t* buf_;
+     size_t size_;
+     size_t pos_;
+ };
+ 
++
++template <size_t SZ>
++class BufferWriter
++{
++private:
++    BufferWriter(const BufferWriter &) = delete;
++    BufferWriter &operator=(const BufferWriter &) = delete;
++
++    template <typename T>
++    bool Write(const T *v, size_t sz = sizeof(T))
++    {
++        if (HasBytes(sz))
++        {
++            memcpy(buf_ + pos_, (void *)v, sz);
++            pos_ += sz;
++            return true;
++        }
++        return false;
++    }
++
++    template <typename T>
++    bool WriteInt(T val)
++    {
++        constexpr size_t sz = sizeof(T);
++        if (HasBytes(sz))
++        {
++            for (size_t i = 0; i < sz; ++i)
++            {
++                // BufferReader expects big endian
++                buf_[pos_ + sz - i - 1] = val & 0xFF;
++                val >>= 8;
++            }
++            pos_ += sz;
++            return true;
++        }
++        return false;
++    }
++
++public:
++    BufferWriter() {}
++
++    ~BufferWriter() = default;
++
++    inline bool HasBytes(size_t count) const { return pos_ + count <= SZ; }
++
++    inline bool WriteBytes(const uint8_t *bytes, size_t len) WARNING_RESULT_NOT_USED
++    {
++        return Write(bytes, len);
++    }
++
++    inline bool WriteBool(bool val) WARNING_RESULT_NOT_USED
++    {
++        uint8_t b{val};
++        return Write(&b);
++    }
++
++    inline bool Write8(uint64_t v) WARNING_RESULT_NOT_USED
++    {
++        return WriteInt(v);
++    }
++
++    inline bool Write8s(uint64_t v) WARNING_RESULT_NOT_USED
++    {
++        return WriteInt(v);
++    }
++
++    inline const uint8_t *data() { return buf_; }
++    inline size_t size() const { return SZ; }
++
++private:
++    uint8_t buf_[SZ];
++    size_t pos_{0};
++};
++
+ namespace WPEFramework
+ {
+    namespace PluginHost
+@@ -307,6 +393,8 @@ public:
+     //Event fired on key status update
+     virtual void OnKeyStatusUpdate(const char* keyMessage, const uint8_t* buffer, const uint8_t length) = 0;
+     virtual void OnKeyStatusesUpdated() const = 0;
++
++    virtual void OnBindLicense(const uint32_t callbackType, const uint8_t *licenseMessage /* @in @length:licenseMessageLength */, const uint8_t licenseMessageLength) = 0;
+ };
+ 
+ class ICapsParser {
+diff --git a/interfaces/IOCDM.h b/interfaces/IOCDM.h
+index f42d34a..fce81f9 100644
+--- a/interfaces/IOCDM.h
++++ b/interfaces/IOCDM.h
+@@ -80,6 +80,9 @@ struct ISession : virtual public Core::IUnknown {
+                                        const ISession::KeyStatus status) = 0;
+ 
+         virtual void OnKeyStatusesUpdated() const = 0;
++
++        // Event fired when a license is bound to DRM component.
++        virtual void OnBindLicense(const uint32_t callbackType, const uint8_t *licenseMessage /* @in @length:licenseMessageLength */, const uint8_t licenseMessageLength) = 0;
+     };
+ 
+     enum { ID = ID_SESSION };
+-- 
+2.25.1
+

@@ -13,6 +13,8 @@ SRC_URI += "file://0001-OMWAPPI-912-Fix-artifacts-when-playing-CBCS-content-v2.p
 SRC_URI += "file://0106-ARRISAPP-713-disable-ocmd-assert-in-Reconect.patch"
 SRC_URI += "file://0107-ONEM-31898-opencdm_dispose-only-destroy-accessor.patch"
 
+SRC_URI += "file://0108-ONEM-36378-OnBindLicense.patch"
+
 EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
 
 TARGET_CXXFLAGS += "${@bb.utils.contains('MACHINE_FEATURES', 'debug', '-D_TRACE_LEVEL=2 -D__ENABLE_ASSERT__=ON -DSETUP_TEST_KEY', '', d)}"

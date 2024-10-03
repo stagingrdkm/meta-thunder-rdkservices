@@ -1,0 +1,81 @@
+From 927d8cc51e46c0541808df830864ca37337c9f99 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Thu, 3 Oct 2024 09:21:50 +0200
+Subject: [ONEM-36378] OnBindLicense implementation
+
+Change-Id: I8ccc46aa164782873ffd587dcf47fc2e90e8e65e
+---
+ MediaSession.cpp | 36 ++++++++++++++++++++++++++++++++----
+ 1 file changed, 32 insertions(+), 4 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 150f30e..684595c 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -72,6 +72,8 @@
+ 
+ #include "ReportPlayreadyErrors.h"
+ 
++#include <interfaces/DRMCallbackSerialize.h>
++
+ using SafeCriticalSection = WPEFramework::Core::SafeSyncType<WPEFramework::Core::CriticalSection>;
+ extern WPEFramework::Core::CriticalSection drmAppContextMutex_;
+ 
+@@ -366,9 +368,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+     const DRM_PLAY_OPL_LATEST *oplPlay = NULL;
+ #endif
+ 
+-    BSTD_UNUSED(f_pKID);
+-    BSTD_UNUSED(f_pLID);
+-    BSTD_UNUSED(f_pv);
++    MediaKeySession *session = (MediaKeySession*)f_pv;
+ 
+     switch( f_dwCallbackType )
+     {
+@@ -440,6 +440,34 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+                 printf("0x%.2X ", pExtCallback->pRestriction->pbBuffer[ i ] );
+             }
+             printf("\r\n\r\n");
++
++            if (session->m_piCallback)
++            {
++                static const DRM_BYTE _empty_kid_lid[16] {};
++                bool fValid = false;
++                uint64_t dwBeginDate = 0, dwEndDate = 0;
++                DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT const *extRestriction = (DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT const *)f_pvPolicyCallbackData;
++                if (extRestriction->pXMRLicense)
++                {
++                    fValid = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.RealTimeExpiration.fValid;
++                    if (fValid)
++                    {
++                        dwBeginDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwBeginDate;
++                        dwEndDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwEndDate;
++                    }
++                }
++                else
++                {
++                    printf("XMR license object not available\n");
++                }
++                CDMi::PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer serializer {
++                    f_pKID ? f_pKID->rgb : _empty_kid_lid,
++                    f_pLID ? f_pLID->rgb : _empty_kid_lid,
++                    dwBeginDate,
++                    dwEndDate,
++                    fValid};
++                session->m_piCallback->OnBindLicense(PRD30_EXTENDED_RESTRICTION_CONDITION, serializer.writer.data() , serializer.writer.size());
++            }
+         }
+             break;
+         case DRM_EXTENDED_RESTRICTION_ACTION_CALLBACK:
+@@ -761,7 +789,7 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+                         g_rgpdstrRights,
+                         DRM_NO_OF(g_rgpdstrRights),
+                         PolicyCallback,
+-                        nullptr,
++                        this,
+                         m_oDecryptContext)) == DRM_E_BUFFERTOOSMALL) {
+         uint8_t *pbNewOpaqueBuffer = nullptr;
+         m_cbOpaqueBuffer *= 2;
+-- 
+2.25.1
+

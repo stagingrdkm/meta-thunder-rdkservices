@@ -30,3 +30,5 @@ SRC_URI += "file://0117-ONEM-29883-fix-asserts.patch"
 SRC_URI += "file://0118-ARRISAPP-270-NTS-ERROR-REPORTING-TC1-failed.patch"
 SRC_URI += "file://0119-ARRISAPP-410-pass-keyHistoryFileName-to-playready-initialization.patch"
 SRC_URI += "file://0120-ARRISAPP-594-NEXUS_MemoryBlock_DestroyToken-on-decry.patch"
+
+SRC_URI += "file://0121-ONEM-36378-OnBindLicense.patch"
