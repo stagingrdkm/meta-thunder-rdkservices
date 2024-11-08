@@ -1,0 +1,195 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 12 Nov 2024 14:10:35 +0100
+Subject: [PATCH] ARRISAPP-1204: independent notification thread for handling
+ jsonrpc events
+
+It was not possible to correctly invoke json rpc call from event notification thread.
+It is possible now.
+
+Notification thread is started/stopped by CommunicationChannel.
+ChannelLink::Invound handle only jsonrpc call responses.
+Events are handled by separate thread: ChannelLink::InboundEvent method.
+---
+ Source/websocket/JSONRPCLink.h | 106 +++++++++++++++++++++++++++++----
+ 1 file changed, 93 insertions(+), 13 deletions(-)
+
+diff --git a/Source/websocket/JSONRPCLink.h b/Source/websocket/JSONRPCLink.h
+index 3acfa38..f6ff8eb 100644
+--- a/Source/websocket/JSONRPCLink.h
++++ b/Source/websocket/JSONRPCLink.h
+@@ -190,15 +190,87 @@ namespace WPEFramework {
+ 					CommunicationChannel& _parent;
+ 				};
+ 
++				class NotificationThread : public Core::Thread {
++					public:
++						NotificationThread(CommunicationChannel * channel)
++							: Core::Thread(Thread::DefaultStackSize(), "NotificationThread")
++							, _stateLock()
++							, _observersLock()
++							, _event(false, true)
++							, _channel(*channel) {
++						}
++						void PostEvent(const Core::ProxyType<Core::JSONRPC::Message>& inbound) {
++							_stateLock.Lock();
++							if (!terminate)  {
++								_events.emplace_back(inbound);
++								_event.SetEvent();
++							}
++							_stateLock.Unlock();
++						}
++						void StopProcessing() {
++							Stop();
++							_stateLock.Lock();
++							terminate = true;
++							_event.SetEvent();
++							_stateLock.Unlock();
++							Terminate();
++						}
++						void LockForObservers() {
++							_observersLock.Lock();
++						}
++						void UnlockForObservers() {
++							_observersLock.Unlock();
++						}
++					private:
++						uint32_t Worker() override {
++							if (_event.Lock() == Core::ErrorCodes::ERROR_NONE) {
++
++								_stateLock.Lock();
++								_event.ResetEvent();
++								if (terminate) {
++									_stateLock.Unlock();
++									return Core::infinite;
++								}
++								std::list<Core::ProxyType<Core::JSONRPC::Message>> events(_events);
++								_events.clear();
++								_stateLock.Unlock();
++
++								_observersLock.Lock();
++								auto eventIterator = events.begin();
++								while (eventIterator != events.end()) {
++									typename std::list<LinkType<INTERFACE>*>::iterator observersIterator(_channel._observers.begin());
++									while (observersIterator != _channel._observers.end()) {
++										(*observersIterator)->InboundEvent(*eventIterator);
++										observersIterator++;
++									}
++									eventIterator++;
++								}
++								_observersLock.Unlock();
++							}
++							return Core::infinite;
++						}
++
++						Core::CriticalSection _stateLock;
++						Core::CriticalSection _observersLock;
++						Core::Event _event;
++						std::list<Core::ProxyType<Core::JSONRPC::Message>> _events;
++						CommunicationChannel& _channel;
++						volatile bool terminate = false;
++			};
++
+ 			protected:
+ 				CommunicationChannel(const Core::NodeId& remoteNode, const string& callsign, const string& query)
+ 					: _channel(this, remoteNode, callsign, query)
+ 					, _sequence(0)
++					, _notificationThread(this)
+ 				{
++					_notificationThread.Run();
+ 				}
+ 
+ 			public:
+-				virtual ~CommunicationChannel() = default;
++				virtual ~CommunicationChannel() {
++					_notificationThread.StopProcessing();
++				};
+ 				static Core::ProxyType<CommunicationChannel> Instance(const Core::NodeId& remoteNode, const string& callsign, const string& query)
+ 				{
+ 					static Core::ProxyMapType<string, CommunicationChannel> channelMap;
+@@ -223,6 +295,7 @@ namespace WPEFramework {
+ 				}
+ 				void Register(LinkType<INTERFACE>& client)
+ 				{
++					_notificationThread.LockForObservers();
+ 					_adminLock.Lock();
+ 					ASSERT(std::find(_observers.begin(), _observers.end(), &client) == _observers.end());
+ 					_observers.push_back(&client);
+@@ -230,9 +303,11 @@ namespace WPEFramework {
+ 						client.Opened();
+ 					}
+ 					_adminLock.Unlock();
++					_notificationThread.UnlockForObservers();
+ 				}
+ 				void Unregister(LinkType<INTERFACE>& client)
+ 				{
++					_notificationThread.LockForObservers();
+ 					_adminLock.Lock();
+ 					typename std::list<LinkType<INTERFACE>* >::iterator index(std::find(_observers.begin(), _observers.end(), &client));
+ 					if (index != _observers.end()) {
+@@ -240,6 +315,7 @@ namespace WPEFramework {
+ 					}
+ 					FactoryImpl::Instance().Revoke(&client);
+ 					_adminLock.Unlock();
++					_notificationThread.UnlockForObservers();
+ 				}
+ 				void Submit(const Core::ProxyType<INTERFACE>& message)
+ 				{
+@@ -297,6 +373,11 @@ namespace WPEFramework {
+ 						result = (*index)->Inbound(inbound);
+ 						index++;
+ 					}
++					// Invound handle only jsonrpc responses,
++					// events are handled by separate thread, post data to process for that thread
++					if (result != Core::ERROR_NONE) {
++						_notificationThread.PostEvent(inbound);
++					}
+ 					_adminLock.Unlock();
+ 
+ 					return (result);
+@@ -307,6 +388,7 @@ namespace WPEFramework {
+ 				ChannelImpl _channel;
+ 				mutable std::atomic<uint32_t> _sequence;
+ 				std::list< LinkType<INTERFACE>*> _observers;
++				NotificationThread _notificationThread;
+ 			};
+ 			class Entry {
+ 			private:
+@@ -1041,6 +1123,16 @@ namespace WPEFramework {
+ 
+ 				return (result);
+ 			}
++			void InboundEvent(const Core::ProxyType<Core::JSONRPC::Message>& inbound)
++			{
++				if (inbound->Id.IsSet() == false || (inbound->Result.IsSet() == false && inbound->Error.IsSet() == false)) {
++					string callsign(inbound->FullCallsign());
++					if (callsign == _localSpace) {
++						string response;
++						_handler.Invoke(Core::JSONRPC::Context(), inbound->FullMethod(), inbound->Parameters.Value(), response);
++					}
++				}
++			}
+ 			uint32_t Inbound(const Core::ProxyType<Core::JSONRPC::Message>& inbound)
+ 			{
+ 				uint32_t result = Core::ERROR_INVALID_SIGNATURE;
+@@ -1068,18 +1160,6 @@ namespace WPEFramework {
+ 
+ 					_adminLock.Unlock();
+ 				}
+-				else {
+-					// check if we understand this message (correct callsign?)
+-					string callsign(inbound->FullCallsign());
+-
+-					if (callsign == _localSpace) {
+-						// Looks like this is an event.
+-						ASSERT(inbound->Id.IsSet() == false);
+-
+-						string response;
+-						_handler.Invoke(Core::JSONRPC::Context(), inbound->FullMethod(), inbound->Parameters.Value(), response);
+-					}
+-				}
+ 
+ 				return (result);
+ 			}
+-- 
+2.47.0
+
