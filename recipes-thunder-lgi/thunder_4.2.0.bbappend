@@ -15,8 +15,8 @@ SRC_URI += "file://0001-RDK-28534-Security-Agent-Utility-and-Logging-OnlyFindRFC
 EXTRA_OECMAKE += "${@in_debug_or_release_no_ops(bb, d, '-DBINDING=0.0.0.0')}"
 EXTRA_OECMAKE += "-DTRACING_ONLY_DIRECT_OUTPUT=ON"
 EXTRA_OECMAKE += "-DTRACE_SETTINGS=logCfg.json"
-# this is not setup of umask to 0 value, but leave the value that is originally set
-EXTRA_OECMAKE += "-DUMASK=000"
+# this is not setup of umask value, but leave the value that is originally set
+EXTRA_OECMAKE += "-DUMASK="
 EXTRA_OECMAKE += "-DHIDE_NON_EXTERNAL_SYMBOLS=ON"
 EXTRA_OECMAKE += "-DCOMMUNICATOR=/run/wpeframework/communicator"
 EXTRA_OECMAKE += "-DINPUT_LOCATOR=/run/wpeframework/keyhandler"
