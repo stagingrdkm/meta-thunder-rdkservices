@@ -8,8 +8,6 @@ PACKAGECONFIG[opencdmi_ck]    = "-DPLUGIN_OPENCDMI_CLEARKEY=ON,,,wpeframework-oc
 PACKAGECONFIG[opencdmi_pr]    = "-DPLUGIN_OPENCDMI_PLAYREADY=ON,,,wpeframework-ocdm-playready"
 PACKAGECONFIG[opencdmi_prnx]  = "-DPLUGIN_OPENCDMI_PLAYREADY_NEXUS=ON,,,wpeframework-ocdm-playready-nexus"
 PACKAGECONFIG[opencdmi_prnx_svp]  = "-DPLUGIN_OPENCDMI_PLAYREADY_NEXUS_SVP=ON -DPLUGIN_OCDM_PLAYREADY_STORE_LOCATION=/mnt/drm_storage/wpeframework/OCDM/drmstore -DPLUGIN_OCDM_PLAYREADY_READ_DIR=/mnt/drm_storage/wpeframework/OCDM/,,,wpeframework-ocdm-playready-nexus-svp"
-PACKAGECONFIG[opencdmi_prnx_svp_netflix]  = "-DPLUGIN_OPENCDMI_PLAYREADY_NEXUS_SVP_NETFLIX=ON -DPLUGIN_OCDM_PLAYREADY_STORE_LOCATION_NETFLIX=/mnt/drm_storage/wpeframework/OCDM/drmstore-netflix -DPLUGIN_OCDM_PLAYREADY_READ_DIR_NETFLIX=/mnt/drm_storage/wpeframework/OCDM/,,,wpeframework-ocdm-playready-nexus-svp"
-
 PACKAGECONFIG[opencdmi_vgrdm] = "-DPLUGIN_OPENCDMI_PLAYREADY_VGDRM=ON,,"
 PACKAGECONFIG[opencdmi_wv]    = "-DPLUGIN_OPENCDMI_WIDEVINE=ON,,,wpeframework-ocdm-widevine"
 PACKAGECONFIG[opencdmi_wv2]   = "-DPLUGIN_OPENCDMI_WIDEVINE2=ON,,,wpeframework-ocdm-widevine2"

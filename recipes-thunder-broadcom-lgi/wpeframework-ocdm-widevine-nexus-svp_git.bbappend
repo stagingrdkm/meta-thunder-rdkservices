@@ -41,3 +41,5 @@ SRC_URI += "file://OMWAPPI-1492-Implement-Widewine-settings-in-WideVine.patch"
 SRC_URI += "file://FindNEXUS.cmake;subdir=OCDM-Widevine-Nexus-SVP/cmake"
 SRC_URI += "file://FindNXCLIENT.cmake;subdir=OCDM-Widevine-Nexus-SVP/cmake"
 
+SRC_URI += "file://ONEM-38782-Secure-store-separation.patch"
+

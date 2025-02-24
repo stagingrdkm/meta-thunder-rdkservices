@@ -1,0 +1,42 @@
+From 30895ca4d537708046a96e42f08423b0fc5f00ab Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Tue, 1 Apr 2025 17:00:58 +0530
+Subject: [PATCH] ONEM-38782: Secure store separation
+
+---
+ interfaces/IDRM.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/interfaces/IDRM.h b/interfaces/IDRM.h
+index d0071d0..f125e9b 100644
+--- a/interfaces/IDRM.h
++++ b/interfaces/IDRM.h
+@@ -446,7 +446,7 @@ public:
+     virtual const char* GetSessionId(void) const = 0;
+ 
+     // Return the key system of the MediaKeySession.
+-    virtual const char* GetKeySystem(void) const = 0;
++    virtual std::string GetKeySystem(void) const = 0;
+ 
+     DEPRECATED virtual CDMi_RESULT Decrypt(
+         const uint8_t* f_pbSessionKey VARIABLE_IS_NOT_USED,
+@@ -594,7 +594,7 @@ public:
+ 
+     virtual CDMi_RESULT DeleteKeyStore() = 0;
+ 
+-    virtual CDMi_RESULT DeleteSecureStore() = 0;
++    virtual CDMi_RESULT DeleteSecureStore(const std::string& keySystem) = 0;
+ 
+     virtual CDMi_RESULT GetKeyStoreHash(
+         uint8_t secureStoreHash[],
+@@ -602,6 +602,7 @@ public:
+         = 0;
+ 
+     virtual CDMi_RESULT GetSecureStoreHash(
++        const std::string& keySystem,
+         uint8_t secureStoreHash[],
+         uint32_t secureStoreHashLength)
+         = 0;
+-- 
+2.25.1
+

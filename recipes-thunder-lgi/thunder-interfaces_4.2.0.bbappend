@@ -20,6 +20,8 @@ SRC_URI += "file://0114-ONEM-33219-add_missing_resolutions.patch"
 
 SRC_URI += "file://0115-ONEM-36378-OnBindLicense.patch"
 
+SRC_URI += "file://0116-ONEM-38782-Secure-Store-Separation.patch"
+
 require thunder-interfaces-4.2.0/interfaces.inc
 
 do_configure_append() {

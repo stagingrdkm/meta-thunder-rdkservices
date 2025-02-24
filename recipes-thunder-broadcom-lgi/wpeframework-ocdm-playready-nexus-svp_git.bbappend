@@ -32,3 +32,5 @@ SRC_URI += "file://0119-ARRISAPP-410-pass-keyHistoryFileName-to-playready-initia
 SRC_URI += "file://0120-ARRISAPP-594-NEXUS_MemoryBlock_DestroyToken-on-decry.patch"
 
 SRC_URI += "file://0121-ONEM-36378-OnBindLicense.patch"
+
+SRC_URI += "file://0122-ONEM-38782-Secure-Store-Separation.patch"

@@ -1,0 +1,729 @@
+From 828d89449786dbde5ac7804d36754a24fd3e5063 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Tue, 1 Apr 2025 17:03:02 +0530
+Subject: [PATCH] ONEM-38782: Secure store separation
+
+Change-Id: I91c732829dcf60ef78bb52163ab1c027f67b3e0f
+---
+ MediaSession.cpp |  11 +-
+ MediaSession.h   |   6 +-
+ MediaSystem.cpp  | 326 +++++++++++++++++++++++++----------------------
+ 3 files changed, 183 insertions(+), 160 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 684595c..01282d4 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -512,7 +512,8 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+  MediaKeySession::MediaKeySession(
+      const uint8_t *f_pbInitData, uint32_t f_cbInitData, 
+      const uint8_t *f_pbCDMData, uint32_t f_cbCDMData, 
+-     DRM_VOID *f_pOEMContext, DRM_APP_CONTEXT * appContext)
++     DRM_VOID *f_pOEMContext, DRM_APP_CONTEXT * appContext,
++     const std::string& keySystem)
+         : m_poAppContext(appContext)
+         , m_oDecryptContext(nullptr)
+         , m_pbOpaqueBuffer(nullptr)
+@@ -531,7 +532,8 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+         , pNexusMemory(nullptr)
+         , mNexusMemorySize(512 * 1024)
+         , mDmaJob(nullptr)
+-        , mDmaHandle(nullptr) {
++        , mDmaHandle(nullptr)
++        , m_keySystem(keySystem) {
+ 
+     LOGGER(LINFO_, "Contruction MediaKeySession, Build: %s", __TIMESTAMP__ );
+     m_oDecryptContext = new DRM_DECRYPT_CONTEXT;
+@@ -600,10 +602,9 @@ const char *MediaKeySession::GetSessionId(void) const
+     return m_rgchSessionID;
+ }
+ 
+-const char *MediaKeySession::GetKeySystem(void) const
++std::string MediaKeySession::GetKeySystem(void) const
+ {
+-
+-    return NYI_KEYSYSTEM; // FIXME : replace with keysystem and test.
++    return m_keySystem;
+ }
+ 
+ void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCallback)
+diff --git a/MediaSession.h b/MediaSession.h
+index 21e8797..bbb5b20 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -140,7 +140,8 @@ public:
+     MediaKeySession(
+         const uint8_t *f_pbInitData, uint32_t f_cbInitData, 
+         const uint8_t *f_pbCDMData, uint32_t f_cbCDMData, 
+-        DRM_VOID *f_pOEMContext, DRM_APP_CONTEXT * poAppContext);
++        DRM_VOID *f_pOEMContext, DRM_APP_CONTEXT * poAppContext,
++        const std::string& keySystem);
+    
+     ~MediaKeySession();
+     bool playreadyGenerateKeyRequest();
+@@ -161,7 +162,7 @@ public:
+     virtual CDMi_RESULT Close(void) override;
+ 
+     virtual const char *GetSessionId(void) const override;
+-    virtual const char *GetKeySystem(void) const override;
++    virtual std::string GetKeySystem(void) const override;
+     virtual CDMi_RESULT Decrypt(
+         uint8_t*                 inData,
+         const uint32_t           inDataLength,
+@@ -240,6 +241,7 @@ private:
+     DRM_CHAR m_rgchSessionID[CCH_BASE64_EQUIV(sizeof(DRM_ID)) + 1];
+     DRM_BOOL m_fCommit;
+     DRM_VOID *m_pOEMContext;
++    std::string m_keySystem;
+ 
+     std::vector<uint8_t> mDrmHeader;
+     uint32_t m_SessionId;
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index edb31e1..c914c46 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -71,6 +71,12 @@ using namespace WPEFramework;
+ using SafeCriticalSection = Core::SafeSyncType<WPEFramework::Core::CriticalSection>;
+ Core::CriticalSection drmAppContextMutex_;
+ 
++// Keysystem used for secure stop APIs(CommitSecureStop, GetSecureStop, GetSecureStopIds)
++// as they currently in disabled state since they are not used by any of the apps.
++// To make them enabled extend the APIs by adding keysystem as argument and replace
++// DUMMY_KEYSYSTEM with actual keysystem.
++#define DUMMY_KEYSYSTEM "dummy"
++
+ // Each challenge saves a nonce to the PlayReady3 nonce store, and each license
+ // bind removes a nonce. The nonce store is also a FIFO, with the oldest nonce
+ // rolling off if the store is full when a new challenge is generated. This can
+@@ -79,6 +85,14 @@ Core::CriticalSection drmAppContextMutex_;
+ // via the getLdlSessionLimit() API.
+ const uint32_t NONCE_STORE_SIZE = 100;
+ 
++struct KeySystemCtx
++{
++    DRM_APP_CONTEXT drmAppctx{};
++    std::array<uint8_t, MINIMUM_APPCONTEXT_OPAQUE_BUFFER_SIZE> opaqueBuffer{};
++    std::array<uint8_t, REVOCATION_BUFFER_SIZE > revocationBuffer{};
++    int32_t mediaKeySessionsCount{};
++};
++
+ namespace {
+ 
+ class Stopwatch {
+@@ -177,14 +191,11 @@ public:
+         , m_nxAllocResults() 
+         , m_drmDirectory()
+         , m_drmStore()
+-        , m_pbOpaqueBuffer(nullptr)
+-        , m_pbRevocationBuffer(nullptr)
+-        , m_poAppContext(nullptr)
++        , m_keySystemCtxs{}
+         , m_readDir()
+         , m_storeLocation()
+         , m_meteringCertificate(nullptr)
+         , m_meteringCertificateSize(0)
+-        , m_mediaKeySessionsCount(0)
+         , m_dstrHDSPath(DRM_EMPTY_DRM_STRING)
+         , m_persistentKeyCount(0)
+         , m_persistentCountThreshold(20)
+@@ -194,7 +205,6 @@ public:
+         NEXUS_Error rc;
+         DRM_RESULT dr = DRM_SUCCESS;
+ 
+-        BKNI_Memset(&m_oemSettings, 0, sizeof(OEM_Settings));
+         NxClient_GetDefaultJoinSettings(&joinSettings);
+         strncpy(joinSettings.name, "playready3x", NXCLIENT_MAX_NAME);
+         joinSettings.ignoreStandbyRequest = true;
+@@ -225,10 +235,7 @@ public:
+             m_meteringCertificate = nullptr;
+         }
+         delete [] drmdir_;
+-        delete [] m_oemSettings.binFileName;
+-        delete [] m_oemSettings.defaultRWDirName;
+-        delete [] m_oemSettings.keyHistoryFileName;
+-        ASSERT(m_poAppContext.get() == nullptr);
++        ASSERT(m_keySystemCtxs.empty());
+         NxClient_Free(&m_nxAllocResults);
+         NxClient_Uninit();
+     }
+@@ -274,38 +281,39 @@ public:
+         }
+     }
+ 
+-    CDMi_RESULT InitializeSystemRefCounted(){
++    CDMi_RESULT InitializeSystemRefCounted(const std::string& keySystem) {
+         CDMi_RESULT cr = CDMi_SUCCESS;
+-
+-        if (m_mediaKeySessionsCount++ == 0) {
++        int count = 0;
++        auto it = m_keySystemCtxs.find(keySystem);
++        if (it != m_keySystemCtxs.end()) {
++            count = it->second->mediaKeySessionsCount;
++        }
++        if (count == 0) {
+             Stopwatch sw;
+-            cr = InitializeSystem();
+-            LOGGER(LINFO_, "InitializeSystem() == %d took %.03f", static_cast<int>(cr), sw.elapsed());
+-            if (cr != CDMi_SUCCESS) {
+-                --m_mediaKeySessionsCount;
++            if (m_drmOemContext == nullptr) {
++                cr = InitializePlatform();
++            }
++            if (cr == CDMi_SUCCESS) {
++                cr = CreateSystemExt(keySystem);
++                if (cr != CDMi_SUCCESS) {
++                    DeinitializeSystemRefCounted(keySystem);
++                }
+             }
++            LOGGER(LINFO_, "Initialization == %d took %.03f", static_cast<int>(cr), sw.elapsed());
++
++        } else {
++            LOGGER(LINFO_, "Keysystem: %s, sessionsCount: %d\n", keySystem.c_str(),count);
+         }
+ 
+         return cr;
+     }
+ 
+-    CDMi_RESULT InitializeSystem(){
+-        CDMi_RESULT cr = CDMi_S_FALSE;
++    CDMi_RESULT InitializePlatform() {
++        CDMi_RESULT cr = CDMi_SUCCESS;
+         LOGGER(LINFO_, "Initialize PlayReady System, Build: %s", __TIMESTAMP__ );
+-
+-        if(m_poAppContext.get()){
+-            DeinitializeSystem();
+-        }
+-
+-        delete [] m_oemSettings.binFileName;
+-        delete [] m_oemSettings.defaultRWDirName;
+-        delete [] m_oemSettings.keyHistoryFileName;
+-        m_oemSettings.binFileName = nullptr;
+-        m_oemSettings.defaultRWDirName = nullptr;
+-        m_oemSettings.keyHistoryFileName = nullptr;
+-
++        OEM_Settings oemSettings = {};
+         WPEFramework::Core::Directory(m_readDir.c_str()).CreatePath();
+-        
++
+         NEXUS_ClientConfiguration platformConfig;
+         NEXUS_MemoryAllocationSettings heapSettings;
+         DRM_RESULT dr = DRM_SUCCESS;
+@@ -329,27 +337,29 @@ public:
+         string playreadyKeyHistoryPath;
+         Core::SystemInfo::GetEnvironment(_T("PLAYREADY_KEY_HISTORY_PATH"), playreadyKeyHistoryPath);
+ 
+-        m_oemSettings.heap = heapSettings.heap;
+-        m_oemSettings.binFileName = createDrmWchar(playreadyPath);
+-        m_oemSettings.defaultRWDirName = createDrmWchar(m_readDir);
++        oemSettings.heap = heapSettings.heap;
++        oemSettings.binFileName = createDrmWchar(playreadyPath);
++        oemSettings.defaultRWDirName = createDrmWchar(m_readDir);
+         if (!playreadyKeyHistoryPath.empty())
+         {
+-            m_oemSettings.keyHistoryFileName = createDrmWchar(playreadyKeyHistoryPath);
++            oemSettings.keyHistoryFileName = createDrmWchar(playreadyKeyHistoryPath);
+         }
+ 
+-        dr = Drm_Platform_Initialize((void *)&m_oemSettings);
+-        if (DRM_FAILED(dr)) goto ErrorExit;
+-        
+-        m_drmOemContext = m_oemSettings.f_pOEMContext;
++        dr = Drm_Platform_Initialize((void *)&oemSettings);
++        if (DRM_FAILED(dr)) {
++            goto ErrorExit;
++        }
++
++        m_drmOemContext = oemSettings.f_pOEMContext;
+         ChkMem(m_drmOemContext);
+ 
+-        cr = CreateSystemExt();
+     ErrorExit:
+         if (DRM_FAILED(dr))
+         {
+             if (dr == DRM_E_BRCM_PLATFORM_ALREADY_INITIALIZED) {
+                 cr = CDMi_BUSY_CANNOT_INITIALIZE;
+             } else {
++                cr = CDMi_S_FALSE;
+                 LOGGER(LERROR_, "Playready System Initialize failed (error: 0x%08X)", static_cast<unsigned int>(dr));
+             }
+         }
+@@ -365,97 +375,82 @@ public:
+          printf("%d percent progressed, %d licenses left\n", cPercent, cLicenses );
+          return DRM_SUCCESS;
+     }
+-  
+-    void DeinitializeSystemRefCounted() {
+-        if (--m_mediaKeySessionsCount == 0) {
++
++    void DeinitializeSystemRefCounted(const std::string& keySystem) {
++        auto it = m_keySystemCtxs.find(keySystem);
++        ASSERT(it != m_keySystemCtxs.end());
++        if (it->second->mediaKeySessionsCount == 0) {
+             Stopwatch sw;
+-            DeinitializeSystem();
+-            LOGGER(LINFO_, "DeinitializeSystem() took %.03f", sw.elapsed());
++            CleanupStore(keySystem);
++            Drm_Uninitialize(&it->second->drmAppctx);
++            m_keySystemCtxs.erase(it);
++            DeinitializePlatform();
++            LOGGER(LINFO_, "Deinitialization of %s keysytem took %.03f", keySystem.c_str(), sw.elapsed());
+         }
+         else {
+            if (m_persistentKeyCount > m_persistentCountThreshold) {
+               m_persistentKeyCount = 0;
+-              CleanupStore();
+-          }
++              CleanupStore(keySystem);
++            }
+         }
+     }
+ 
+-    void CleanupStore() {
+-      LOGGER(LINFO_, "CleanupStore. Nontemporary sessions count: %u. Current sessions %u\n",m_persistentKeyCount, m_mediaKeySessionsCount );
+-        if(m_poAppContext.get()) {
+-            DRM_RESULT dr = Drm_StoreMgmt_CleanupStore(m_poAppContext.get(),
+-                                            DRM_STORE_CLEANUP_DELETE_REMOVAL_DATE_LICENSES,
+-                                            nullptr, 20, ReportProgress);
+-            if(DRM_FAILED(dr))
+-            {
+-                LOGGER(LERROR_,  "Warning, Drm_StoreMgmt_CleanupStore returned 0x%08lX", dr);
+-            }
+-        }
+-  }
+-
+-  void DeinitializeSystem() {
+-        LOGGER(LINFO_, "Deinitialize PlayReady System, Build: %s", __TIMESTAMP__ );
+-        CleanupStore();
+-        if (m_poAppContext.get()) {
+-           // Uninitialize drm context
+-           Drm_Uninitialize(m_poAppContext.get());
+-           m_poAppContext.reset();
++    void CleanupStore(const std::string& keySystem) {
++        auto it = m_keySystemCtxs.find(keySystem);
++        ASSERT(it != m_keySystemCtxs.end());
++        LOGGER(LINFO_, "CleanupStore. Nontemporary sessions count: %u. Current sessions %u\n",m_persistentKeyCount, it->second->mediaKeySessionsCount);
++        DRM_RESULT dr = Drm_StoreMgmt_CleanupStore(&it->second->drmAppctx,
++                                        DRM_STORE_CLEANUP_DELETE_REMOVAL_DATE_LICENSES,
++                                        nullptr, 20, ReportProgress);
++        if(DRM_FAILED(dr))
++        {
++            LOGGER(LERROR_,  "Warning, Drm_StoreMgmt_CleanupStore returned 0x%08lX", dr);
+         }
++    }
+ 
+-        Drm_Platform_Uninitialize(m_drmOemContext);
+-        if (drmdir_ != nullptr) delete [] drmdir_;
+-        if (m_oemSettings.binFileName != nullptr) delete [] m_oemSettings.binFileName;
+-        if (m_oemSettings.defaultRWDirName != nullptr ) delete [] m_oemSettings.defaultRWDirName;
+-        if (m_oemSettings.keyHistoryFileName != nullptr ) delete [] m_oemSettings.keyHistoryFileName;
+-
+-        drmdir_ = nullptr;
+-        m_oemSettings.binFileName = nullptr;
+-        m_oemSettings.defaultRWDirName = nullptr;
+-        m_oemSettings.keyHistoryFileName = nullptr;
+-        if (m_pbOpaqueBuffer != NULL) SAFE_OEM_FREE(m_pbOpaqueBuffer);
+-        m_pbOpaqueBuffer = NULL;
+-        if (m_pbRevocationBuffer != NULL) SAFE_OEM_FREE(m_pbRevocationBuffer);
+-        m_pbRevocationBuffer = NULL;
+-        if (m_dstrHDSPath.pwszString != nullptr ) delete [] m_dstrHDSPath.pwszString;
+-        m_dstrHDSPath.pwszString = nullptr;
++    void DeinitializePlatform() {
++        if (m_keySystemCtxs.size() == 0) {
++            Drm_Platform_Uninitialize(m_drmOemContext);
++            LOGGER(LINFO_, "Drm_Platform_Uninitialize");
++            m_drmOemContext = nullptr;
++        }
++        if (drmdir_ != nullptr) {
++            delete [] drmdir_;
++            drmdir_ = nullptr;
++        }
++        if (m_dstrHDSPath.pwszString != nullptr ) {
++            delete [] m_dstrHDSPath.pwszString;
++            m_dstrHDSPath.pwszString = nullptr;
++        }
+     }
+ 
+     CDMi_RESULT CreateMediaKeySession(
+         const std::string& keySystem,
+         int32_t licenseType,
+         const char *f_pwszInitDataType,
+-        const uint8_t *f_pbInitData, uint32_t f_cbInitData, 
+-        const uint8_t *f_pbCDMData, uint32_t f_cbCDMData, 
++        const uint8_t *f_pbInitData, uint32_t f_cbInitData,
++        const uint8_t *f_pbCDMData, uint32_t f_cbCDMData,
+         IMediaKeySession **f_ppiMediaKeySession) {
+         SafeCriticalSection systemLock(drmAppContextMutex_);
+ 
+-        CDMi_RESULT cr = InitializeSystemRefCounted();
++        CDMi_RESULT cr = InitializeSystemRefCounted(keySystem);
+         if (cr != CDMi_SUCCESS) {
+             return cr;
+         }
+-
+-        // ToDo: This needs to be solved a bit nicer... 
+-        // Since the OCDM server is not aware of the location of the store but exposes a "delete store" API,
+-        // we need to check somewhere if it's deleted and recover it. Sadly the only way to recover is to
+-        // reinitialize the system. ¯\_(ツ)_/¯ 
+-        //
+-        // For now I think this seems to be the most logical place... 
+-
+-        Core::File file(m_storeLocation);
+-        if(file.Exists() == false){
+-            InitializeSystem();
+-        }
+-
+        // count permanent licenses
+        if (licenseType != Temporary) m_persistentKeyCount++;
+-
+-        *f_ppiMediaKeySession = new CDMi::MediaKeySession(
++       auto it = m_keySystemCtxs.find(keySystem);
++       ASSERT(it != m_keySystemCtxs.end());
++       CDMi::MediaKeySession* newSession= new CDMi::MediaKeySession(
+             f_pbInitData, f_cbInitData, 
+             f_pbCDMData, f_cbCDMData, 
+-            m_drmOemContext, m_poAppContext.get()
++            m_drmOemContext, &it->second->drmAppctx,
++            keySystem
+             );
++        *f_ppiMediaKeySession = newSession;
++        it->second->mediaKeySessionsCount++;
+ 
+-        return CDMi_SUCCESS; 
++        return CDMi_SUCCESS;
+     }
+ 
+     CDMi_RESULT SetServerCertificate(
+@@ -470,11 +465,16 @@ public:
+         MediaKeySession * mediaKeySession = dynamic_cast<MediaKeySession *>(f_piMediaKeySession);
+         ASSERT((mediaKeySession != nullptr) && "Expected a locally allocated MediaKeySession");
+ 
++        std::string keySystem = mediaKeySession->GetKeySystem();
+         delete f_piMediaKeySession;
+         f_piMediaKeySession= nullptr;
+-
+-        DeinitializeSystemRefCounted();
+-
++        auto it = m_keySystemCtxs.find(keySystem);
++        if (it != m_keySystemCtxs.end()) {
++            it->second->mediaKeySessionsCount--;
++            DeinitializeSystemRefCounted(keySystem);
++        } else {
++            LOGGER(LERROR_, "No keySystemCtx found");
++        }
+         return CDMi_SUCCESS;
+     }
+ 
+@@ -532,18 +532,23 @@ public:
+ 
+     CDMi_RESULT GetSecureStopIds(uint8_t ids[], uint16_t idsLength, uint32_t & count)
+     {
++        ASSERT(false && "GetSecureStopIds API is disabled");
++        return CDMi_S_FALSE;
++
+         SafeCriticalSection lock(drmAppContextMutex_);
+ 
+-        CDMi_RESULT cr = InitializeSystemRefCounted();
++        CDMi_RESULT cr = InitializeSystemRefCounted(DUMMY_KEYSYSTEM);
+         if (cr != CDMi_SUCCESS) {
+             return cr;
+         }
+ 
+         DRM_ID *ssSessionIds = nullptr;
++        auto it = m_keySystemCtxs.find(DUMMY_KEYSYSTEM);
++        ASSERT(it != m_keySystemCtxs.end());
+ 
+         DRM_RESULT dr;
+         dr = Drm_SecureStop_EnumerateSessions(
+-                m_poAppContext.get(),
++                &it->second->drmAppctx,
+                 m_meteringCertificateSize, //playready3MeteringCertSize,
+                 m_meteringCertificate,     //playready3MeteringCert,
+                 &count,
+@@ -566,7 +571,7 @@ public:
+         
+         SAFE_OEM_FREE(ssSessionIds);
+ 
+-        DeinitializeSystemRefCounted();
++        DeinitializeSystemRefCounted(DUMMY_KEYSYSTEM);
+ 
+         return cr;
+     }
+@@ -577,9 +582,12 @@ public:
+             uint8_t * rawData,
+             uint16_t & rawSize)
+     {
++        ASSERT(false && "GetSecureStop API is disabled");
++        return CDMi_S_FALSE;
++
+         SafeCriticalSection lock(drmAppContextMutex_);
+ 
+-        CDMi_RESULT cr = InitializeSystemRefCounted();
++        CDMi_RESULT cr = InitializeSystemRefCounted(DUMMY_KEYSYSTEM);
+         if (cr != CDMi_SUCCESS) {
+             return cr;
+         }
+@@ -592,8 +600,10 @@ public:
+         DRM_DWORD ssChallengeSize;
+         DRM_BYTE *ssChallenge;
+ 
++        auto it = m_keySystemCtxs.find(DUMMY_KEYSYSTEM);
++        ASSERT(it != m_keySystemCtxs.end());
+         DRM_RESULT dr = Drm_SecureStop_GenerateChallenge(
+-                m_poAppContext.get(),
++                &it->second->drmAppctx,
+                 &ssSessionDrmId,
+                 m_meteringCertificateSize, //playready3MeteringCertSize,
+                 m_meteringCertificate,     //playready3MeteringCert,
+@@ -611,7 +621,7 @@ public:
+             rawSize = ssChallengeSize; 
+         }
+ 
+-        DeinitializeSystemRefCounted();
++        DeinitializeSystemRefCounted(DUMMY_KEYSYSTEM);
+ 
+         return cr;
+     }
+@@ -622,9 +632,12 @@ public:
+             const uint8_t serverResponse[],
+             uint32_t serverResponseLength) override
+     {
++        ASSERT(false && "CommitSecureStop API is disabled");
++        return CDMi_S_FALSE;
++
+         SafeCriticalSection lock(drmAppContextMutex_);
+ 
+-        CDMi_RESULT cr = InitializeSystemRefCounted();
++        CDMi_RESULT cr = InitializeSystemRefCounted(DUMMY_KEYSYSTEM);
+         if (cr != CDMi_SUCCESS) {
+             return cr;
+         }
+@@ -646,8 +659,10 @@ public:
+             DRM_CHAR *pCustomData = NULL;
+             
+             DRM_RESULT dr;
++            auto it = m_keySystemCtxs.find(DUMMY_KEYSYSTEM);
++            ASSERT(it != m_keySystemCtxs.end());
+             dr = Drm_SecureStop_ProcessResponse(
+-                m_poAppContext.get(),
++                &it->second->drmAppctx,
+                 &sessionDrmId,
+                 m_meteringCertificateSize, //playready3MeteringCertSize,
+                 m_meteringCertificate,     //playready3MeteringCert,
+@@ -673,12 +688,12 @@ public:
+             SAFE_OEM_FREE(pCustomData);
+         }
+ 
+-        DeinitializeSystemRefCounted();
++        DeinitializeSystemRefCounted(DUMMY_KEYSYSTEM);
+ 
+         return cr;
+     }
+ 
+-    bool LoadRevocationList(const char *revListFile)
++    bool LoadRevocationList(const char *revListFile, DRM_APP_CONTEXT *pDrmAppCtx)
+     {
+         DRM_RESULT dr = DRM_SUCCESS;
+         FILE    * fRev;
+@@ -718,7 +733,7 @@ public:
+         }
+ 
+         ChkDR( Drm_Revocation_StorePackage(
+-                m_poAppContext.get(),
++                pDrmAppCtx,
+                 ( DRM_CHAR * )revBuf,
+                 fileSize ) );
+ 
+@@ -867,7 +882,7 @@ public:
+         return rc;
+     }
+ 
+-    CDMi_RESULT CreateSystemExt()
++    CDMi_RESULT CreateSystemExt(const std::string& keySystem)
+     {
+         CDMi_RESULT cr = CDMi_SUCCESS;
+         DRM_RESULT dr = DRM_SUCCESS;
+@@ -888,32 +903,28 @@ public:
+         g_dstrDrmPath.pwszString = drmdir_;
+         g_dstrDrmPath.cchString = rdir.length();
+ 
+-        m_poAppContext.reset(new DRM_APP_CONTEXT);
+-        memset(m_poAppContext.get(), 0, sizeof(DRM_APP_CONTEXT));
+-
+-        m_pbOpaqueBuffer = (DRM_BYTE *)Oem_MemAlloc(MINIMUM_APPCONTEXT_OPAQUE_BUFFER_SIZE);
+-        m_cbOpaqueBuffer = MINIMUM_APPCONTEXT_OPAQUE_BUFFER_SIZE;
+-        
+         // Store store location
+-        m_dstrHDSPath.pwszString =  createDrmWchar(m_storeLocation);
+-        m_dstrHDSPath.cchString = m_storeLocation.length();
++        std::string storeLocation = getStoreLocation(keySystem);
++        m_dstrHDSPath.pwszString =  createDrmWchar(storeLocation);
++        m_dstrHDSPath.cchString = storeLocation.length();
+ 
+-        dr  = Drm_Initialize(m_poAppContext.get(), 
++        auto keySystemCtx = std::make_shared<KeySystemCtx>();
++
++        dr  = Drm_Initialize(&keySystemCtx->drmAppctx,
+                             m_drmOemContext,
+-                            m_pbOpaqueBuffer,
+-                            m_cbOpaqueBuffer,
++                            keySystemCtx->opaqueBuffer.data(),
++                            keySystemCtx->opaqueBuffer.size(),
+                             &m_dstrHDSPath);
+ 
+         if(DRM_FAILED(dr)) {
+             LOGGER(LERROR_, "Error in Drm_Initialize: 0x%08lX\n", dr);
+             goto ErrorExit;
+         }
+-
+-            dr = Drm_SecureTime_GetValue( m_poAppContext.get(), &ftSystemTime, &eClockType  );
++            dr = Drm_SecureTime_GetValue(&keySystemCtx->drmAppctx, &ftSystemTime, &eClockType  );
+             if( (dr == DRM_E_SECURETIME_CLOCK_NOT_SET) || (dr == DRM_E_TEE_PROVISIONING_REQUIRED) )
+             {
+                 /* setup the Playready secure clock */
+-                if(InitSecureClock(m_poAppContext.get()) != 0)
++                if (InitSecureClock(&keySystemCtx->drmAppctx) != 0)
+                 {
+                     LOGGER(LERROR_, "Failed to initiize Secure Clock, quitting...");
+                     goto ErrorExit;
+@@ -939,7 +950,7 @@ public:
+                 systemTime.wSecond       = tm->tm_sec;
+                 systemTime.wMilliseconds = tv.tv_usec/1000;
+ 
+-                if(Drm_AntiRollBackClock_Init(m_poAppContext.get(), &systemTime) != 0)
++                if (Drm_AntiRollBackClock_Init(&keySystemCtx->drmAppctx, &systemTime) != 0)
+                 {
+                     LOGGER(LERROR_, "Failed to initiize Anti-Rollback Clock, quitting....");
+                     goto ErrorExit;
+@@ -957,7 +968,7 @@ public:
+         // grow above this size if required during usage, using a memory-doubling
+         // algorithm. So it is more efficient, but not required, to get the size
+         // correct from the beginning.
+-        dr = Drm_ResizeInMemoryLicenseStore(m_poAppContext.get(), MAX_NUM_LICENSES * LICENSE_SIZE_BYTES);
++        dr = Drm_ResizeInMemoryLicenseStore(&keySystemCtx->drmAppctx, MAX_NUM_LICENSES * LICENSE_SIZE_BYTES);
+         if (DRM_FAILED(dr)) {
+             LOGGER(LERROR_,  "Error in Drm_ResizeInMemoryLicenseStore 0x%08lX", dr);
+             goto ErrorExit;
+@@ -965,13 +976,11 @@ public:
+ 
+         if (DRM_REVOCATION_IsRevocationSupported())
+         {
+-            ChkMem(m_pbRevocationBuffer = (DRM_BYTE *)Oem_MemAlloc(REVOCATION_BUFFER_SIZE));
++            ChkDR(Drm_Revocation_SetBuffer(&keySystemCtx->drmAppctx,
++                                        keySystemCtx->revocationBuffer.data(),
++                                        keySystemCtx->revocationBuffer.size()));
+ 
+-            ChkDR(Drm_Revocation_SetBuffer(m_poAppContext.get(),
+-                                        m_pbRevocationBuffer,
+-                                        REVOCATION_BUFFER_SIZE));
+-
+-            if( !LoadRevocationList(DRM_DEFAULT_REVOCATION_LIST_FILE))
++            if( !LoadRevocationList(DRM_DEFAULT_REVOCATION_LIST_FILE, &keySystemCtx->drmAppctx))
+             {
+                 LOGGER(LERROR_,  "Error in Drm_Revocation_SetBuffer 0x%08lX", dr);
+                 goto ErrorExit;
+@@ -981,17 +990,18 @@ public:
+             /* set encryption/decryption mode */
+             dwEncryptionMode = OEM_TEE_DECRYPTION_MODE_HANDLE;
+             ChkDR(Drm_Content_SetProperty(
+-                    m_poAppContext.get(),
++                    &keySystemCtx->drmAppctx,
+                     DRM_CSP_DECRYPTION_OUTPUT_MODE,
+                     (const DRM_BYTE*)&dwEncryptionMode,
+                     sizeof( DRM_DWORD ) ) );
++
+     ErrorExit:
+         if (DRM_FAILED(dr)) {
+-            m_poAppContext.reset();
+             cr =  CDMi_S_FALSE;
+             LOGGER(LERROR_,  "Error in creating system ext,  0x%08lX", dr);
+         }
+ 
++        m_keySystemCtxs.emplace(keySystem,keySystemCtx);
+         return cr;
+     }
+ 
+@@ -1001,18 +1011,20 @@ public:
+         return CDMi_SUCCESS;
+     }
+ 
+-    CDMi_RESULT DeleteSecureStore() override
++    CDMi_RESULT DeleteSecureStore(const std::string& keySystem) override
+     {
++        auto it = m_keySystemCtxs.find(keySystem);
++        ASSERT(it == m_keySystemCtxs.end());
+         SafeCriticalSection lock(drmAppContextMutex_);
++        const std::string storeLocation = getStoreLocation(keySystem);
+         
+         // As a linux reference implementation, we are cheating a bit by just using
+         // stdio to delete the drm store from the filesystem. A real implementation
+         // will be more complicated.
+ 
+-        if (remove(m_storeLocation.c_str()) != 0) {
++        if (remove(storeLocation.c_str()) != 0) {
+             LOGGER(LINFO_, "Error removing DRM store file");
+         }
+-
+         return CDMi_SUCCESS;
+     }
+ 
+@@ -1025,12 +1037,13 @@ public:
+     }
+ 
+     CDMi_RESULT GetSecureStoreHash(
++            const std::string& keySystem,
+             uint8_t secureStoreHash[],
+             uint32_t secureStoreHashLength) override
+     {
+         SafeCriticalSection lock(drmAppContextMutex_);
+ 
+-        if (calcFileSha256(m_storeLocation, secureStoreHash, secureStoreHashLength) == false)
++        if (calcFileSha256(getStoreLocation(keySystem), secureStoreHash, secureStoreHashLength) == false)
+         {
+             LOGGER(LERROR_, "Error: calcFileSha256 failed");
+             return CDMi_S_FALSE;
+@@ -1045,28 +1058,35 @@ public:
+         bufferLength = 0;
+         return CDMi_METHOD_NOT_IMPLEMENTED;
+     }
++private:
++    const std::string getStoreLocation(const std::string& keySystem) {
++        // for each keySystem a separate store file, eg.
++        // ├── drmstore_com.netflix.playready
++        std::string dir = m_storeLocation.substr(0, m_storeLocation.find_last_of("/"));
++        std::string filename = m_storeLocation.substr(m_storeLocation.find_last_of("/") + 1);
++        std::string path = dir + "/" + filename + "_" + keySystem;
++        LOGGER(LINFO_, "PlayReady::getStoreLocation(%s): %s\n", keySystem.c_str(), path.c_str());
++        return path;
++    }
+ 
+ private:
+     DRM_WCHAR* drmdir_;
+ 
+-    OEM_Settings m_oemSettings;
+     DRM_VOID *m_drmOemContext;
+     NxClient_AllocResults m_nxAllocResults;
+ 
+     DRM_WCHAR* m_drmDirectory;
+     DRM_CONST_STRING m_drmStore;
+ 
+-    DRM_BYTE *m_pbOpaqueBuffer;
+-    DRM_DWORD m_cbOpaqueBuffer;
+-
+-    DRM_BYTE *m_pbRevocationBuffer ;
+-    std::unique_ptr<DRM_APP_CONTEXT> m_poAppContext;
++    // Map to keep track of app contexts,opaque buffer and revocation buffer created for particular keysystems (designators)
++    // It gets updated upon calls to Drm_Initialize / Drm_Uninitialize
++    std::unordered_map<std::string, std::shared_ptr<KeySystemCtx>> m_keySystemCtxs;
+ 
+     std::string m_readDir;
+     std::string m_storeLocation;
+     DRM_BYTE* m_meteringCertificate;
+     uint32_t m_meteringCertificateSize;
+-    int32_t m_mediaKeySessionsCount;
++
+     DRM_CONST_STRING m_dstrHDSPath;
+     uint32_t m_persistentKeyCount;
+     uint32_t m_persistentCountThreshold;
+-- 
+2.25.1
+

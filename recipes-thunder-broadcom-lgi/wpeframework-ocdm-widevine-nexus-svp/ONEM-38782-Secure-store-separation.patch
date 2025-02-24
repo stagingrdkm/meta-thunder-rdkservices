@@ -1,0 +1,40 @@
+From cddbf16ed6c888c7b00b3e24fd90417c6becc7b7 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Tue, 1 Apr 2025 17:03:55 +0530
+Subject: [PATCH] ONEM-38782: Secure store separation
+
+Change-Id: I2c815da87c5f3ccfe6e0ffad0499a73c3de07d97
+---
+ MediaSession.cpp | 2 +-
+ MediaSession.h   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 56cddda..3bad443 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -397,7 +397,7 @@ const char* MediaKeySession::GetSessionId(void) const {
+   return m_sessionId.c_str();
+ }
+ 
+-const char* MediaKeySession::GetKeySystem(void) const {
++std::string MediaKeySession::GetKeySystem(void) const {
+   return NYI_KEYSYSTEM;//TODO: replace with keysystem and test
+ }
+ 
+diff --git a/MediaSession.h b/MediaSession.h
+index 22d328b..1df14d6 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -92,7 +92,7 @@ public:
+ 
+     virtual const char* GetSessionId(void) const;
+ 
+-    virtual const char* GetKeySystem(void) const;
++    virtual std::string GetKeySystem(void) const;
+ 
+     CDMi_RESULT Init(
+         int32_t licenseType,
+-- 
+2.25.1
+

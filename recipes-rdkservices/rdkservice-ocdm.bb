@@ -23,7 +23,6 @@ RDEPENDS_${PN} += "devicesettings libodherr"
 PACKAGECONFIG ?= " \
     opencdmi \
     ${@bb.utils.contains('DISTRO_FEATURES', 'playready_nexus_svp',  'opencdmi_prnx_svp', '', d)} \
-    ${@bb.utils.contains('DISTRO_FEATURES', 'playready_nexus_svp_netflix',  'opencdmi_prnx_svp_netflix', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'widevine_nexus_svp',   'opencdmi_wv_svp', '', d)} \
     ${@bb.utils.contains('DISTRO_FEATURES', 'clearkey',             'opencdmi_ck', '', d)} \
 "
