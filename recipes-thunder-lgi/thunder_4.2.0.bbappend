@@ -96,6 +96,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0159-ONEM-32583-increase-RPC-comm-timeout.patch \
             file://ONEM-33819-LISA-not-starting-up-properly.patch \
             file://ARRISAPP-1204-independent-notification-thread-for-websocket-connection.patch \
+            file://ONEM-39636-setup-RIALTO_SOCKET_PATH.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:

@@ -1,0 +1,34 @@
+From: Mikolaj Staworzynski <mikolaj.staworzynski@redembedded.com>
+Date: Tue, 1 Apr 2025 15:37:34 +0200
+Subject: [PATCH] ONEM-39636: setup RIALTO_SOCKET_PATH
+
+Only for WebkkitBrowser plugin case (based on class name).
+Value based on the callsign:
+* being equal to appId (for Rialto case)
+* being equal to WebKitBrowser (for ordinary launching case)
+---
+ Source/WPEProcess/Process.cpp | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/Source/WPEProcess/Process.cpp b/Source/WPEProcess/Process.cpp
+index db77375..24a3409 100644
+--- a/Source/WPEProcess/Process.cpp
++++ b/Source/WPEProcess/Process.cpp
+@@ -653,6 +653,14 @@ int main(int argc, char** argv)
+                 Core::ProcessCurrent().User(string(options.User));
+             }
+ 
++            // based on -c WebKitImplementation and -C WebKitBrowser - for base Webkit
++            // ... or on -c WebKitImplementation and -C variable_callsign_depending_on_firebolt_app_id
++            // setup the RIALTO_SOCKET_PATH
++            if (options.ClassName && strcmp(options.ClassName, "WebKitImplementation") == 0) {
++                char socketPath[256];
++                snprintf(socketPath, 256, "/var/run/rialto/%s", callsign.c_str());
++                Core::SystemInfo::SetEnvironment(_T("RIALTO_SOCKET_PATH"), socketPath);
++            }
+             process.Startup(options.Threads, remoteNode, callsign);
+ 
+             // Register an interface to handle incoming requests for interfaces.
+-- 
+2.43.0
+
