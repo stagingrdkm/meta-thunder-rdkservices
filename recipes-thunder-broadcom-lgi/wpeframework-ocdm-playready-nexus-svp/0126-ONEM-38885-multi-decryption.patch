@@ -1,0 +1,143 @@
+From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+ONEM-38885 Implementation extended with possibility to pass multiple sample for decryption at one Decrypt call
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 01282d4..a4915cd 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -905,6 +905,7 @@ CDMi_RESULT MediaKeySession::Decrypt(
+         uint8_t**                outData,
+         uint32_t*                outDataLength,
+         const SampleInfo*        sampleInfo,
++        const uint16_t           sampleCount,
+         const IStreamProperties* properties)
+ {
+     SafeCriticalSection systemLock(drmAppContextMutex_);
+@@ -918,11 +919,10 @@ CDMi_RESULT MediaKeySession::Decrypt(
+     void *pOpaqueData = nullptr;
+     NEXUS_MemoryBlockHandle pNexusMemoryBlock = nullptr;
+     static NEXUS_HeapHandle secureHeap = NEXUS_Heap_Lookup(NEXUS_HeapLookupType_eCompressedRegion);
+-    DRM_DWORD encryptedRegionIvCounts = 1;
+-    DRM_UINT64 iv_high = 0;
+-    DRM_UINT64 iv_low = 0;
+-    std::vector<uint32_t> encryptedRegionMapping;
+-    DRM_DWORD encryptedRegionCounts = 0;
++    std::vector<DRM_UINT64> ivsHigh;
++    std::vector<DRM_UINT64> ivsLow;
++    std::vector<DRM_DWORD> encryptedRegionCounts;
++    std::vector<DRM_DWORD> encryptedRegionMapping;
+     std::vector<DRM_DWORD> encryptedRegionSkip;
+ 
+     {
+@@ -938,12 +938,7 @@ CDMi_RESULT MediaKeySession::Decrypt(
+     {
+         // The current state MUST be KEY_READY otherwise error out.
+         ChkBOOL(m_eKeyState == KEY_READY, DRM_E_INVALIDARG);
+-        ChkArg(sampleInfo->iv != nullptr && (sampleInfo->ivLength == sizeof(DRM_UINT64) || sampleInfo->ivLength == 2*sizeof(DRM_UINT64)));
+-    }
+-
+-    NETWORKBYTES_TO_QWORD(iv_high, sampleInfo->iv, 0);
+-    if (sampleInfo->ivLength == 16) {
+-        NETWORKBYTES_TO_QWORD(iv_low, sampleInfo->iv, 8);
++        ChkArg(sampleInfo[0].iv != nullptr && (sampleInfo[0].ivLength == sizeof(DRM_UINT64) || sampleInfo[0].ivLength == 2*sizeof(DRM_UINT64)));
+     }
+ 
+     // Reallocate input memory if needed.
+@@ -988,41 +983,57 @@ CDMi_RESULT MediaKeySession::Decrypt(
+     // Copy provided payload to Input of Decryption.
+     ::memcpy(pNexusMemory, inData, inDataLength);
+     NEXUS_FlushCache(pNexusMemory, inDataLength);
+-    if (sampleInfo->pattern.clear_blocks != 0) {
++
++    //Check just first sample
++    if (sampleInfo[0].pattern.encrypted_blocks != 0) {
+         // Copy whole encrypted data into secure memory to include clear pattern
+         PrivateCopy((void *)pOpaqueData, (const void*)pNexusMemory, inDataLength, true);
+-    }
+ 
+-    if (sampleInfo->subSampleCount > 0) {
+-      for (int i = 0; i < sampleInfo->subSampleCount; i++) {
+-        encryptedRegionMapping.push_back(sampleInfo->subSample[i].clear_bytes);
+-        encryptedRegionMapping.push_back(sampleInfo->subSample[i].encrypted_bytes);
+-      }
+-    } else {
+-        encryptedRegionMapping.push_back(0);
+-        encryptedRegionMapping.push_back(inDataLength);
++        //According to playready documentation encryptedRegionSkip should be of size 0 or 2
++        encryptedRegionSkip.push_back(sampleInfo[0].pattern.encrypted_blocks);
++        encryptedRegionSkip.push_back(sampleInfo[0].pattern.clear_blocks);
+     }
+ 
+-    encryptedRegionCounts = encryptedRegionMapping.size()/2;
++    for (uint16_t index = 0; index < sampleCount; index++) {
++        DRM_UINT64 iv{};
++        NETWORKBYTES_TO_QWORD(iv, sampleInfo[index].iv, 0);
++        ivsHigh.push_back(iv);
++        if (sampleInfo[index].ivLength == 16) {
++            NETWORKBYTES_TO_QWORD(iv, sampleInfo[index].iv, 8);
++            ivsLow.push_back(iv);
++        }
+ 
+-    if (sampleInfo->pattern.encrypted_blocks != 0){
+-        encryptedRegionSkip.push_back(sampleInfo->pattern.encrypted_blocks);
+-        encryptedRegionSkip.push_back(sampleInfo->pattern.clear_blocks);
++        if (sampleInfo[index].subSampleCount == 0) {
++            dr = DRM_E_INVALIDARG;
++            goto ErrorExit;
++        }
++        //Assuming the data passed is correct - there are no clear blocks
++        for (int i = 0; i < sampleInfo[index].subSampleCount; i++) {
++            encryptedRegionMapping.push_back(sampleInfo[index].subSample[i].clear_bytes);
++            encryptedRegionMapping.push_back(sampleInfo[index].subSample[i].encrypted_bytes);
++        }
++        encryptedRegionCounts.push_back(sampleInfo[index].subSampleCount);
++    }//for
++
++    if (!ivsLow.empty() && ivsLow.size() != ivsHigh.size()) {
++        //Count of IV high and IV low should be the same
++        LOGGER(LERROR_, "Size of IV high does not match size of IV low");
++        goto ErrorExit;
+     }
+ 
+     ChkDR(Drm_Reader_DecryptMultipleOpaque(
+             m_oDecryptContext,
+ 
+-            encryptedRegionIvCounts,
+-            &iv_high,
+-            sampleInfo->ivLength == 16 ? &iv_low : nullptr,
++            ivsHigh.size(),
++            ivsHigh.data(),
++            ivsLow.empty() ? nullptr : ivsLow.data(),
++            encryptedRegionCounts.data(),
+ 
+-            &encryptedRegionCounts,
+             encryptedRegionMapping.size(),
+             encryptedRegionMapping.data(),
+ 
+             encryptedRegionSkip.size(),
+-            encryptedRegionSkip.size() > 0 ? encryptedRegionSkip.data() : nullptr,
++            encryptedRegionSkip.empty() ? nullptr : encryptedRegionSkip.data(),
+ 
+             inDataLength,
+             (DRM_BYTE*)pNexusMemory,
+@@ -1057,7 +1068,7 @@ ErrorExit:
+             // Some of the errors require 32bit type.
+             // Therefore the last param is used to pass error code as string.
+             char errorCode[11];
+-            snprintf(errorCode, 11, "0x%08X", dr);
++            snprintf(errorCode, 11, "0x%08lX", dr);
+             m_piCallback->OnError(0, CDMi_S_FALSE, errorCode);
+         }
+     }
+diff --git a/MediaSession.h b/MediaSession.h
+index bbb5b20..902b836 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -169,6 +169,7 @@ public:
+         uint8_t**                outData,
+         uint32_t*                outDataLength,
+         const SampleInfo*        sampleInfo,
++        const uint16_t           sampleCount,
+         const IStreamProperties* properties);
+ 
+     virtual CDMi_RESULT ReleaseClearContent(

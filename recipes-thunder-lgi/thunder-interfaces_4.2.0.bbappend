@@ -23,6 +23,7 @@ SRC_URI += "file://0115-ONEM-36378-OnBindLicense.patch"
 SRC_URI += "file://0116-ONEM-38782-Secure-Store-Separation.patch"
 SRC_URI += "file://0117-ONEM-39202-New-store-clean-up-API.patch"
 SRC_URI += "file://0118-ONEM-38588-Improve-PR-lifecycle.patch"
+SRC_URI += "file://0119-ONEM-38885-multi-decryption.patch"
 
 require thunder-interfaces-4.2.0/interfaces.inc
 

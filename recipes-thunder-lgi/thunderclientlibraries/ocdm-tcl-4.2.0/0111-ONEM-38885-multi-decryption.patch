@@ -1,0 +1,679 @@
+From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+ONEM-38885 Implementation extended with possibility to pass multiple sample for decryption at one Decrypt call
+
+diff --git a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+index a84c85e..1eb5b9f 100644
+--- a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
++++ b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+@@ -52,8 +52,7 @@
+ #include <nexus_memory.h>
+ #include <gst_brcm_svp_meta.h>
+ #include <assert.h>
+-
+-static const uint8_t nalUnit[] = {0x00, 0x00, 0x00, 0x01};
++#include <numeric>
+ 
+ inline bool mappedBuffer(GstBuffer *buffer, bool writable, uint8_t **data, uint32_t *size)
+ {
+@@ -70,199 +69,326 @@ inline bool mappedBuffer(GstBuffer *buffer, bool writable, uint8_t **data, uint3
+     return true;
+ }
+ 
+-OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
+-                                               GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15)
++struct ProtectionMetaInfo
+ {
+-    OpenCDMError result (ERROR_INVALID_SESSION);
+-
+-    if (session != nullptr) {
++    uint8_t *dataBuf{nullptr};
++    uint32_t dataSize{};
++    gboolean encrypted{};
++    uint8_t *ivBuf{nullptr};
++    uint32_t ivSize{};
++    uint8_t *keyIdBuf{nullptr};
++    uint32_t keyIdSize{};
++    uint8_t *subSamplesBuf{nullptr};
++    uint32_t subSamplesSize{};
++    uint32_t subSamplesCount{};
++    EncryptionPattern pattern{0, 0};
++    EncryptionScheme encScheme{EncryptionScheme::Clear};
++};
++
++void secure_mem_free(void* buffer)
++{
++    if (buffer != NULL) {
++        NEXUS_MemoryBlockHandle block = NEXUS_MemoryBlock_FromAddress(buffer);
++        if (block != NULL) {
++            NEXUS_MemoryBlock_Free(block);
++        } else {
++            TRACE_L1("NEXUS_MemoryBlock_FromAddress failed");
++        }
++    }
++}
+ 
+-        uint8_t *mappedData = nullptr;
+-        uint32_t mappedDataSize = 0;
+-        if (mappedBuffer(buffer, true, &mappedData, &mappedDataSize) == false) {
++static void extractProtectionMeta(GstBuffer* buf, ProtectionMetaInfo& metaInfo)
++{
++    const GValue* value{nullptr};
+ 
+-            TRACE_L1("adapter_session_decrypt: Invalid buffer.");
+-            result = ERROR_INVALID_DECRYPT_BUFFER;
+-            goto exit;
+-        }
++    GstProtectionMeta* protectionMeta = gst_buffer_get_protection_meta(buf);
++    if (!protectionMeta) {
++        TRACE_L1("No ProtectionMeta in the buffer");
++        return;
++    }
+ 
+-        uint8_t *mappedSubSample = nullptr;
+-        uint32_t mappedSubSampleSize = 0;
+-        if (subSample != nullptr && mappedBuffer(subSample, false, &mappedSubSample, &mappedSubSampleSize) == false) {
++    bool encryptedFound{false};
++    if (gst_structure_get_boolean(protectionMeta->info, "encrypted", &metaInfo.encrypted)) {
++        encryptedFound = true;
++    }
+ 
+-            TRACE_L1("adapter_session_decrypt: Invalid subsample buffer.");
+-            result = ERROR_INVALID_DECRYPT_BUFFER;
+-            goto exit;
++    value = gst_structure_get_value(protectionMeta->info, "iv");
++    if (value) {
++        GstBuffer *ivBuffer = gst_value_get_buffer(value);
++        if(ivBuffer) {
++            if(false == mappedBuffer(ivBuffer, false, &metaInfo.ivBuf, &metaInfo.ivSize)) {
++                TRACE_L1("iv mapping failed!!!");
++            } else if (!encryptedFound) {
++                metaInfo.encrypted = true;
++            }
+         }
++    } else {
++        TRACE_L1("No 'iv' buffer in protectionMeta");
++    }
+ 
+-        uint8_t *mappedIV = nullptr;
+-        uint32_t mappedIVSize = 0;
++    if (!metaInfo.ivSize || !metaInfo.encrypted) {
++        metaInfo.encrypted = false;
++        return;
++    }
+ 
+-        if (mappedBuffer(IV, false, &mappedIV, &mappedIVSize) == false) {
+-            TRACE_L1("adapter_session_decrypt: Invalid IV buffer.");
+-            result = ERROR_INVALID_DECRYPT_BUFFER;
+-            goto exit;
+-        }
++    //Map the data buffer
++    if(false == mappedBuffer(buf, true, &metaInfo.dataBuf, &metaInfo.dataSize)) {
++        TRACE_L1("Data mapping failed!!!");
++    }
+ 
+-        uint8_t *mappedKeyID = nullptr;
+-        uint32_t mappedKeyIDSize = 0;
+-        if (keyID != nullptr && mappedBuffer(keyID, false, &mappedKeyID, &mappedKeyIDSize) == false) {
+-            TRACE_L1("Invalid keyID buffer.");
+-            result = ERROR_INVALID_DECRYPT_BUFFER;
+-            goto exit;
+-        }
++    if (!gst_structure_get_uint(protectionMeta->info, "subsample_count", &metaInfo.subSamplesCount)) {
++        TRACE_L1("No 'subsample_count' in protectionMeta");
++    }
+ 
+-        uint32_t bufferSize = mappedDataSize;
+-
+-        uint32_t encryptedSampleCount = 0;
+-        if (mappedSubSample) {
+-            GstByteReader* reader = gst_byte_reader_new(mappedSubSample, mappedSubSampleSize);
+-            uint16_t inClear = 0;
+-            uint32_t inEncrypted = 0;
+-            uint32_t totalEncrypted = 0;
+-            for (unsigned int position = 0; position < subSampleCount; position++) {
+-                gst_byte_reader_get_uint16_be(reader, &inClear);
+-                gst_byte_reader_get_uint32_be(reader, &inEncrypted);
+-                totalEncrypted += inEncrypted;
+-                if (inEncrypted)
+-                    encryptedSampleCount++;
++    if (metaInfo.subSamplesCount) {
++        value = gst_structure_get_value(protectionMeta->info, "subsamples");
++        if (value) {
++            GstBuffer *subSamplesBuffer = gst_value_get_buffer(value);
++            if(subSamplesBuffer) {
++                if(false == mappedBuffer(subSamplesBuffer, false, &metaInfo.subSamplesBuf, &metaInfo.subSamplesSize)) {
++                    TRACE_L1("subsample mapping failed!!!");
++                }
+             }
+-            gst_byte_reader_free(reader);
++        } else {
++            TRACE_L1("No 'subsamples' buffer in protectionMeta");
++        }
++    }
+ 
+-            if (totalEncrypted == 0) {
+-                result = ERROR_NONE;
+-                goto exit;
++    value = gst_structure_get_value(protectionMeta->info, "kid");
++    if (value) {
++        GstBuffer *keyIdBuffer = gst_value_get_buffer(value);
++        if(keyIdBuffer) {
++            if(false == mappedBuffer(keyIdBuffer, false, &metaInfo.keyIdBuf, &metaInfo.keyIdSize)) {
++                TRACE_L1("key id mapping failed!!!");
+             }
++        }
++    } else {
++        TRACE_L1("No 'keyid' buffer in protectionMeta");
++    }
+ 
+-            bufferSize = totalEncrypted;
++    //Get Enc Scheme and Pattern
++    metaInfo.encScheme = AesCtr_Cenc;
++    if (gst_structure_has_name(protectionMeta->info, "application/x-cbcs")) {
++        metaInfo.encScheme = AesCbc_Cbcs;
++    } else {
++        const char* cipherModeBuf = gst_structure_get_string(protectionMeta->info, "cipher-mode");
++        if(g_strcmp0(cipherModeBuf, "cbcs") == 0) {
++            metaInfo.encScheme = AesCbc_Cbcs;
+         }
++    }
++    gst_structure_get_uint(protectionMeta->info, "crypt_byte_block", &metaInfo.pattern.encrypted_blocks);
++    gst_structure_get_uint(protectionMeta->info, "skip_byte_block", &metaInfo.pattern.clear_blocks);
++}
+ 
+-        uint8_t* encryptedData = reinterpret_cast<uint8_t*> (::malloc(bufferSize));
+-        uint8_t* encryptedDataIter = encryptedData;
++OpenCDMError opencdm_gstreamer_session_multi_decrypt(struct OpenCDMSession* session, std::vector<GstBuffer*> const& vbuff)
++{
++    OpenCDMError result{ERROR_NONE};
++    if (session != nullptr) {
+ 
+-        brcm_svp_meta_data_t* svpMeta = static_cast<brcm_svp_meta_data_t *>(g_malloc(sizeof(brcm_svp_meta_data_t)));
+-        memset(svpMeta, 0, sizeof(brcm_svp_meta_data_t));
+-        svpMeta->sub_type = GST_META_BRCM_SVP_TYPE_3;
+-        svpMeta->u.u3.chunks_cnt = encryptedSampleCount > 0 ? encryptedSampleCount : 1;
+-        svpMeta->u.u3.chunk_info = static_cast<svp_chunk_info *>(g_malloc(svpMeta->u.u3.chunks_cnt * sizeof(svp_chunk_info)));
+-
+-        if (mappedSubSample) {
+-            GstByteReader* reader = gst_byte_reader_new(mappedSubSample, mappedSubSampleSize);
+-            uint16_t inClear = 0;
+-            uint32_t inEncrypted = 0;
+-            for (uint32_t indexClr = 0, index = 0, position = 0; index < subSampleCount; index++) {
+-                gst_byte_reader_get_uint16_be(reader, &inClear);
+-                gst_byte_reader_get_uint32_be(reader, &inEncrypted);
+-
+-                // Ignore whole clean subsamples, do not process them in decryption
+-                if (inEncrypted) {
+-                    ::memcpy(encryptedDataIter, mappedData + indexClr + inClear, inEncrypted);
+-                    svpMeta->u.u3.chunk_info[position].clear_size = inClear;
+-                    svpMeta->u.u3.chunk_info[position].encrypted_size = inEncrypted;
+-                    svpMeta->u.u3.chunk_info[position].offset = indexClr;
+-                    encryptedDataIter += inEncrypted;
+-                    position++;
++        auto bufferLength = std::accumulate(
++                vbuff.cbegin(), vbuff.cend(), 0UL, [](unsigned long acc, GstBuffer* const& buff) -> unsigned long {
++                    return acc + gst_buffer_get_size(buff);
++                });
++        uint8_t* encryptedData = static_cast<uint8_t*>(malloc(bufferLength));
++        uint8_t* encryptedDataIter = encryptedData;
++        assert(encryptedData);
++
++        std::vector<brcm_svp_meta_data_t*> vSvpMeta(vbuff.size());
++        std::vector<SampleInfo> vSampleInfo;
++        std::vector<std::vector<SubSampleInfo>> vSubSampleInfo(vbuff.size());
++
++        for (size_t vBuffIdx = 0; vBuffIdx < vbuff.size(); ++vBuffIdx) {
++            ProtectionMetaInfo metaInfo;
++            extractProtectionMeta(vbuff[vBuffIdx], metaInfo);
++
++            uint32_t encryptedSubSampleCount{};
++            //====================================================
++            //Check if there is anything to decrypt in the sample
++            if (metaInfo.encrypted) {
++                if (metaInfo.subSamplesBuf) {
++                    GstByteReader* reader = gst_byte_reader_new(metaInfo.subSamplesBuf, metaInfo.subSamplesSize);
++                    uint16_t inClear = 0;
++                    uint32_t inEncrypted = 0;
++                    for (unsigned int position = 0; position < metaInfo.subSamplesCount; position++) {
++                        gst_byte_reader_get_uint16_be(reader, &inClear);
++                        gst_byte_reader_get_uint32_be(reader, &inEncrypted);
++                        if (inEncrypted) {
++                            encryptedSubSampleCount++;
++                        }
++                    }
++                    gst_byte_reader_free(reader);
++                    if (encryptedSubSampleCount == 0) {
++                        result = ERROR_NONE;
++                        //TRACE_L1("Sample marked as encrypted but nothing to decrypt in subSamplesi, sample id: %d", vBuffIdx);
++                        continue;
++                    }
+                 }
+-                indexClr += inClear + inEncrypted;
++            } else {
++                /* DONT COPY CLEAR BUFFER*/
++                //TRACE_L1("Nothing to decrypt in sample number: %d", vBuffIdx);
++                continue;
+             }
+-            gst_byte_reader_free(reader);
+-        } else {
+-            svpMeta->u.u3.chunk_info[0].clear_size = 0;
+-            svpMeta->u.u3.chunk_info[0].encrypted_size = mappedDataSize;
+-            svpMeta->u.u3.chunk_info[0].offset = 0;
+-
+-            ::memcpy(encryptedDataIter, mappedData , mappedDataSize);
+ 
+-        }
+-     
+-        //Set the Encryption Scheme and Pattern to defaults.
+-        EncryptionScheme encScheme = AesCtr_Cenc;
+-        EncryptionPattern pattern = {0};
+-
+-        //Lets try to get Enc Scheme and Pattern from the Protection Metadata.
+-        GstProtectionMeta* protectionMeta = reinterpret_cast<GstProtectionMeta*>(gst_buffer_get_protection_meta(buffer));
+-        if (protectionMeta != NULL) {
+-            if (gst_structure_has_name(protectionMeta->info, "application/x-cbcs")) {
+-                encScheme = AesCbc_Cbcs;
++            //====================================================
++            //Prepare SVP meta
++            brcm_svp_meta_data_t* svpMeta = static_cast<brcm_svp_meta_data_t *>(g_malloc(sizeof(brcm_svp_meta_data_t)));
++            memset(svpMeta, 0, sizeof(brcm_svp_meta_data_t));
++            svpMeta->sub_type = GST_META_BRCM_SVP_TYPE_4;
++            svpMeta->u.u4.chunks_cnt = encryptedSubSampleCount > 0 ? encryptedSubSampleCount : 1;
++            svpMeta->u.u4.chunk_info = static_cast<svp_chunk_info *>(g_malloc(svpMeta->u.u4.chunks_cnt * sizeof(svp_chunk_info)));
++
++            if (metaInfo.subSamplesBuf) {
++                GstByteReader* reader = gst_byte_reader_new(metaInfo.subSamplesBuf, metaInfo.subSamplesSize);
++                uint16_t inClear = 0;
++                uint32_t inEncrypted = 0;
++                for (uint32_t dataIdx = 0, index = 0, position = 0; index < metaInfo.subSamplesCount; index++) {
++                    gst_byte_reader_get_uint16_be(reader, &inClear);
++                    gst_byte_reader_get_uint32_be(reader, &inEncrypted);
++
++                    // Ignore whole clean subsamples, do not process them in decryption
++                    if (inEncrypted) {
++                        ::memcpy(encryptedDataIter, metaInfo.dataBuf + dataIdx + inClear, inEncrypted);
++                        svpMeta->u.u4.chunk_info[position].clear_size = inClear;
++                        svpMeta->u.u4.chunk_info[position].encrypted_size = inEncrypted;
++                        svpMeta->u.u4.chunk_info[position].offset = dataIdx;
++                        encryptedDataIter += inEncrypted;
++                        position++;
++                    }
++                    dataIdx += inClear + inEncrypted;
++                }
++                gst_byte_reader_free(reader);
+             } else {
+-                const char* cipherModeBuf = gst_structure_get_string(protectionMeta->info, "cipher-mode");
+-                if(g_strcmp0(cipherModeBuf, "cbcs") == 0) {
+-                    encScheme = AesCbc_Cbcs;
++                svpMeta->u.u4.chunk_info[0].clear_size = 0;
++                svpMeta->u.u4.chunk_info[0].encrypted_size = metaInfo.dataSize;
++                svpMeta->u.u4.chunk_info[0].offset = 0;
++
++                ::memcpy(encryptedDataIter, metaInfo.dataBuf , metaInfo.dataSize);
++                encryptedDataIter += metaInfo.dataSize;
++            }
++            vSvpMeta[vBuffIdx] = svpMeta;
++
++            //====================================================
++            //Prepare SampleInfo
++            if (metaInfo.subSamplesBuf) {
++                GstByteReader* reader = gst_byte_reader_new(metaInfo.subSamplesBuf, metaInfo.subSamplesSize);
++                uint16_t inClear = 0;
++                uint32_t inEncrypted = 0;
++                for (uint32_t index = 0; index < metaInfo.subSamplesCount; index++) {
++                    gst_byte_reader_get_uint16_be(reader, &inClear);
++                    gst_byte_reader_get_uint32_be(reader, &inEncrypted);
++
++                    // Filter out empty subsampleInfo - they can cause decrypt method to return error
++                    if (inEncrypted > 0) {
++                        inClear = 0;
++                        vSubSampleInfo[vBuffIdx].emplace_back(SubSampleInfo{inClear, inEncrypted});
++                    }
+                 }
++                gst_byte_reader_free(reader);
++            } else {
++                uint16_t inClear = 0;
++                uint32_t inEncrypted = metaInfo.dataSize;
++                vSubSampleInfo[vBuffIdx].emplace_back(SubSampleInfo{0, inEncrypted});
+             }
+ 
+-            gst_structure_get_uint(protectionMeta->info, "crypt_byte_block", &pattern.encrypted_blocks);
+-            gst_structure_get_uint(protectionMeta->info, "skip_byte_block", &pattern.clear_blocks);
+-        }
+-
+-        //Create a SubSampleInfo Array with mapping
+-        SubSampleInfo * subSampleInfoPtr = nullptr;
+-        uint32_t nonEmptySubSampleInfoCount = subSampleCount;
+-        if (subSample != nullptr) {
+-            GstByteReader* reader = gst_byte_reader_new(mappedSubSample, mappedSubSampleSize);
+-            subSampleInfoPtr = reinterpret_cast<SubSampleInfo*>(malloc(subSampleCount * sizeof(SubSampleInfo)));
+-            for (unsigned int i = 0, position = 0; i < subSampleCount; i++, position++) {
+-                gst_byte_reader_get_uint16_be(reader, &subSampleInfoPtr[position].clear_bytes);
+-                // In some cases this can create an empty subsampleInfo (0,0)
+-                subSampleInfoPtr[position].clear_bytes = 0;
+-                gst_byte_reader_get_uint32_be(reader, &subSampleInfoPtr[position].encrypted_bytes);
+-                // Filter out empty subsampleInfo - they can cause decrypt method to return error
+-                if (subSampleInfoPtr[position].clear_bytes == 0 && subSampleInfoPtr[position].encrypted_bytes == 0) {
+-                    //TRACE_L1("Skipping empty subsampleInfo at position:%u", i);
+-                    nonEmptySubSampleInfoCount--;
+-                    // Since the current subsampleInfo gets skipped because it's empty (0,0)
+-                    // then its position can be used by a next non-empty subsampleInfo
+-                    // or left unused if it was the last position
+-                    position--;
++            vSampleInfo.emplace_back(SampleInfo{metaInfo.encScheme, metaInfo.pattern, metaInfo.ivBuf, metaInfo.ivSize,
++                metaInfo.keyIdBuf, metaInfo.keyIdSize, vSubSampleInfo[vBuffIdx].size(), vSubSampleInfo[vBuffIdx].data()});
++        }//for vbuff
++
++        uint32_t bytesToDecrypt = encryptedDataIter-encryptedData;
++        if (bytesToDecrypt) {
++            result = opencdm_session_decrypt_v3(session, encryptedData, bytesToDecrypt, vSampleInfo.data(), vSampleInfo.size(), nullptr);
++
++            if (result == ERROR_NONE) {
++                uint32_t *tokenHandle = reinterpret_cast<uint32_t *>(encryptedData);
++                NEXUS_MemoryBlockHandle block = NEXUS_MemoryBlock_Clone (reinterpret_cast<NEXUS_MemoryBlockTokenHandle>(*tokenHandle));
++                if (block) {
++                    void *opaqueData{nullptr};
++                    NEXUS_MemoryBlock_Lock(block, &opaqueData);
++                    if (opaqueData) {
++
++                        GstMemory* gstOpaqueMem = gst_memory_new_wrapped(
++                                static_cast<GstMemoryFlags>(GstMemoryFlags::GST_MEMORY_FLAG_READONLY |
++                                                            GstMemoryFlags::GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS),
++                                opaqueData, bytesToDecrypt, 0, bytesToDecrypt,
++                                opaqueData, secure_mem_free);
++
++
++                        uint32_t opaqueDataOffset{};
++                        for(size_t vBuffIdx = 0; vBuffIdx < vbuff.size(); vBuffIdx++) {
++                            if (vSvpMeta[vBuffIdx]) {
++                                uint32_t encryptedSize{};
++                                for(size_t svpChunkIdx = 0; svpChunkIdx < vSvpMeta[vBuffIdx]->u.u4.chunks_cnt; svpChunkIdx++) {
++                                    encryptedSize += vSvpMeta[vBuffIdx]->u.u4.chunk_info[svpChunkIdx].encrypted_size;
++                                }
++
++                                vSvpMeta[vBuffIdx]->u.u4.sec_mem = gst_memory_share(gstOpaqueMem, opaqueDataOffset, encryptedSize);;
++                                gst_buffer_add_brcm_svp_meta(vbuff[vBuffIdx], vSvpMeta[vBuffIdx]);
++
++                                opaqueDataOffset += encryptedSize;
++                            } else {
++                                TRACE_L1("SVP meta is null");
++                            }
++                        }
++                        gst_memory_unref(gstOpaqueMem);
++                    } else {
++                        TRACE_L1("Memory block lock error");
++                        result = ERROR_UNKNOWN;
++                    }
++                } else {
++                    TRACE_L1("Memory token alloc error");
++                    result = ERROR_UNKNOWN;
+                 }
++            } else {
++                TRACE_L1("Decryption failed: %d", result);
+             }
+-            gst_byte_reader_set_pos(reader, 0);
+-            gst_byte_reader_free(reader);
+         }
+ 
+-        SampleInfo sampleInfo;
+-        sampleInfo.subSample = subSampleInfoPtr;
+-        sampleInfo.subSampleCount = nonEmptySubSampleInfoCount;
+-        sampleInfo.scheme = encScheme;
+-        sampleInfo.pattern.clear_blocks = pattern.clear_blocks;
+-        sampleInfo.pattern.encrypted_blocks = pattern.encrypted_blocks;
+-        sampleInfo.iv = mappedIV;
+-        sampleInfo.ivLength = mappedIVSize;
+-        sampleInfo.keyId = mappedKeyID;
+-        sampleInfo.keyIdLength = mappedKeyIDSize;
+-
+-        result = opencdm_session_decrypt_v2(session, encryptedData, bufferSize, &sampleInfo, nullptr);
+-      
+-        //Clean up
+-        if(subSampleInfoPtr != nullptr) {
+-            free(subSampleInfoPtr);
+-        }
+-           
+-        if (result != ERROR_NONE) {
+-            TRACE_L1("adapter_session_decrypt: opencdm_session_decrypt failed!");
+-            ::free(encryptedData);
+-            goto exit;
+-        }
+-
+-        uint32_t *tokenHandle = reinterpret_cast<uint32_t *>(encryptedData);
+-        NEXUS_MemoryBlockHandle block = nullptr;
+-        block = NEXUS_MemoryBlock_Clone (reinterpret_cast<NEXUS_MemoryBlockTokenHandle>(*tokenHandle));
+-        if (!block) {
+-            TRACE_L1("Memory token alloc error");
+-            ::free(encryptedData);
+-            goto exit;
+-        }
+         ::free(encryptedData);
+-        void *opaqueData;
+-        NEXUS_MemoryBlock_Lock(block, &opaqueData);
+-        if (!opaqueData) {
+-            TRACE_L1("Memory token alloc error");
+-            goto exit;
++        if (result != ERROR_NONE) {
++            TRACE_L1("Freeing svp meta on decryption failure");
++            for(size_t vBuffIdx = 0; vBuffIdx < vbuff.size(); vBuffIdx++) {
++                if (vSvpMeta[vBuffIdx]) {
++                    if(vSvpMeta[vBuffIdx]->u.u4.chunk_info) {
++                        ::free(vSvpMeta[vBuffIdx]->u.u4.chunk_info);
++                    }
++                    ::free(vSvpMeta[vBuffIdx]);
++                }
++            }
+         }
+ 
+-        svpMeta->u.u3.secbuf_ptr = reinterpret_cast<uintptr_t>(opaqueData);
+-        gst_buffer_add_brcm_svp_meta(buffer, svpMeta);
++    } else {
++        result = ERROR_INVALID_SESSION;
+     }
+-exit:
+-    return (result);
++    return result;
++}
++
++OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, GstBuffer* buffer, GstBuffer* subSample, const uint32_t subSampleCount,
++                                               GstBuffer* IV, GstBuffer* keyID, uint32_t initWithLast15)
++{
++       GstProtectionMeta* protectionMeta = reinterpret_cast<GstProtectionMeta*>(gst_buffer_get_protection_meta(buffer));
++       if (protectionMeta != nullptr) {
++           gst_structure_set (protectionMeta->info,
++                   "subsample_count", G_TYPE_UINT, subSampleCount,
++                   "subsamples", GST_TYPE_BUFFER, subSample,
++                   "iv", GST_TYPE_BUFFER, IV,
++                   "kid", GST_TYPE_BUFFER, keyID,
++                   NULL);
++       } else {
++           GstStructure *properties = gst_structure_new ("application/x-cenc",
++                   "subsample_count", G_TYPE_UINT, subSampleCount,
++                   "subsamples", GST_TYPE_BUFFER, subSample,
++                   "iv", GST_TYPE_BUFFER, IV,
++                   "kid", GST_TYPE_BUFFER, keyID,
++                   NULL);
++
++           if (!properties || !gst_buffer_add_protection_meta(buffer, properties)) {
++               TRACE_L1("Failed to add protection meta");
++               if (properties) {
++                   gst_structure_free (properties);
++               }
++           }
++       }
++
++       std::vector<GstBuffer*> vbuff{buffer};
++       return opencdm_gstreamer_session_multi_decrypt(session, vbuff);
+ }
+diff --git a/Source/ocdm/adapter/open_cdm_adapter.h b/Source/ocdm/adapter/open_cdm_adapter.h
+index e48858d..933471f 100644
+--- a/Source/ocdm/adapter/open_cdm_adapter.h
++++ b/Source/ocdm/adapter/open_cdm_adapter.h
+@@ -21,6 +21,7 @@
+ #define __OPEN_CDM_ADAPTER_H
+ 
+ #include "open_cdm.h"
++#include <vector>
+ 
+ struct _GstBuffer;
+ typedef struct _GstBuffer GstBuffer;
+@@ -107,6 +108,8 @@ extern "C" {
+     
+     EXTERNAL OpenCDMError opencdm_gstreamer_session_decrypt_buffer(struct OpenCDMSession* session, GstBuffer* buffer, GstCaps* caps);
+ 
++    EXTERNAL OpenCDMError opencdm_gstreamer_session_multi_decrypt(struct OpenCDMSession* session, std::vector<GstBuffer*> const& vbuff);
++
+ /**
+  * \brief adds SVP related features to the caps structure (only if needed by the platform)
+  *
+diff --git a/Source/ocdm/open_cdm.cpp b/Source/ocdm/open_cdm.cpp
+index 5d27791..3e0eff6 100644
+--- a/Source/ocdm/open_cdm.cpp
++++ b/Source/ocdm/open_cdm.cpp
+@@ -545,9 +545,10 @@ OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+ {
+     OpenCDMError result(ERROR_INVALID_SESSION);
+     if (session != nullptr) {
++        SubSampleInfo subSamples[1] = {{0, encryptedLength}};
+         SampleInfo sampleInfo;
+-        sampleInfo.subSample = nullptr;
+-        sampleInfo.subSampleCount = 0;
++        sampleInfo.subSample = &subSamples[0];
++        sampleInfo.subSampleCount = 1;
+         sampleInfo.scheme = encScheme;
+         sampleInfo.pattern.clear_blocks = pattern.clear_blocks;
+         sampleInfo.pattern.encrypted_blocks = pattern.encrypted_blocks;
+@@ -555,8 +556,11 @@ OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+         sampleInfo.ivLength = static_cast<uint8_t>(IVLength);
+         sampleInfo.keyId = const_cast<uint8_t*>(keyId);
+         sampleInfo.keyIdLength = static_cast<uint8_t>(keyIdLength);
++
++        const uint32_t sampleInfoLength = 1;
+         result = encryptedLength > 0 ? static_cast<OpenCDMError>(session->Decrypt(
+-            encrypted, encryptedLength, const_cast<const SampleInfo*>(&sampleInfo), initWithLast15, nullptr, streamInfo, streamInfoLength)) : ERROR_NONE;
++            encrypted, encryptedLength, const_cast<const SampleInfo*>(&sampleInfo), sampleInfoLength, initWithLast15,
++            nullptr, streamInfo, streamInfoLength)) : ERROR_NONE;
+     }
+ 
+     return (result);
+@@ -569,16 +573,28 @@ OpenCDMError opencdm_session_decrypt_v2(struct OpenCDMSession* session,
+     const SampleInfo* sampleInfo,
+     const MediaProperties* properties) {
+ 
++    const uint32_t sampleInfoLength = 1;
++    return opencdm_session_decrypt_v3(session, encrypted, encryptedLength, sampleInfo, sampleInfoLength, properties);
++}
++
++OpenCDMError opencdm_session_decrypt_v3(struct OpenCDMSession* session,
++    uint8_t encrypted[],
++    const uint32_t encryptedLength,
++    const SampleInfo* sampleInfo,
++    const uint32_t sampleInfoLength,
++    const MediaProperties* properties) {
++
+     OpenCDMError result(ERROR_INVALID_SESSION);
+     if (session != nullptr) {
+         uint32_t initWithLast15 = 0;
+         result = encryptedLength > 0 ? static_cast<OpenCDMError>(session->Decrypt(
+-            encrypted, encryptedLength, sampleInfo, initWithLast15, properties, NULL, 0)) : ERROR_NONE;
++            encrypted, encryptedLength, sampleInfo, sampleInfoLength, initWithLast15, properties, NULL, 0)) : ERROR_NONE;
+     }
+ 
+     return (result);
+ }
+ 
++
+ /**
+  * \brief Get metrics associated with a DRM session.
+  *
+diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
+index 9011f80..32623fa 100644
+--- a/Source/ocdm/open_cdm.h
++++ b/Source/ocdm/open_cdm.h
+@@ -660,6 +660,13 @@ EXTERNAL OpenCDMError opencdm_session_decrypt_v2(struct OpenCDMSession* session,
+     const SampleInfo* sampleInfo,
+     const MediaProperties* streamProperties);
+ 
++EXTERNAL OpenCDMError opencdm_session_decrypt_v3(struct OpenCDMSession* session,
++    uint8_t encrypted[],
++    const uint32_t encryptedLength,
++    const SampleInfo* sampleInfo,
++    const uint32_t sampleInfoLength,
++    const MediaProperties* properties);
++
+ /**
+  * @brief Close the cached open connection if it exists.
+  *
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index f300fea..6146209 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -422,7 +422,7 @@ private:
+ 
+     public:
+         uint32_t Decrypt(uint8_t* encryptedData, uint32_t encryptedDataLength,
+-            const ::SampleInfo* sampleInfo,
++            const ::SampleInfo* sampleInfo, const uint32_t sampleInfoLength,
+             uint32_t initWithLast15,
+             const ::MediaProperties* properties,
+             const uint8_t* streamInfo /* = NULL */,
+@@ -444,33 +444,18 @@ private:
+ 
+             if (RequestProduce(Core::infinite) == Core::ERROR_NONE) {
+ 
+-                CDMi::SubSampleInfo* subSample = nullptr;
+-                uint8_t subSampleCount = 0;
+-                CDMi::EncryptionScheme encScheme = CDMi::EncryptionScheme::AesCtr_Cenc;
+-                CDMi::EncryptionPattern pattern = {0 , 0};
+-                uint8_t* ivData = nullptr;
+-                uint8_t ivDataLength = 0;
+-                uint8_t* keyId = nullptr;
+-                uint8_t keyIdLength = 0;
+ 
+                 if(sampleInfo != nullptr) {
+-                    subSample = reinterpret_cast<CDMi::SubSampleInfo*>(sampleInfo->subSample);
+-                    subSampleCount = sampleInfo->subSampleCount;
+-                    ivData = sampleInfo->iv;
+-                    ivDataLength = sampleInfo->ivLength;
+-                    keyId = sampleInfo->keyId;
+-                    keyIdLength = sampleInfo->keyIdLength;
+-                    encScheme = static_cast<CDMi::EncryptionScheme>(sampleInfo->scheme);
+-                    pattern.clear_blocks = sampleInfo->pattern.clear_blocks;
+-                    pattern.encrypted_blocks = sampleInfo->pattern.encrypted_blocks;
++                    //Here there is translation of ::SampleInfo into CDMi::SampleInfo.
++                    //A cast is used since the definitions of those structures are exactly the same.
++                    //This applies to sub-structures, data types used, enumerations, order of fields, etc.
++                    //In case this is not satisfied - cast may give unexpected results and e.g. decryption may fail with
++                    //difficult to identify reasons.
++                    //When extending any of the structures consider extending the other or introduce some kind of translation between them.
++                    const CDMi::SampleInfo* samples = reinterpret_cast<const CDMi::SampleInfo *>(sampleInfo);
++                    SetSamples(sampleInfoLength, samples);
+                 }
+ 
+-                SetIV(static_cast<uint8_t>(ivDataLength), ivData);
+-                KeyId(static_cast<uint8_t>(keyIdLength), keyId);
+-                SubSample(subSampleCount, subSample);
+-                SetEncScheme(static_cast<uint8_t>(encScheme));
+-                SetEncPattern(pattern.encrypted_blocks,pattern.clear_blocks);
+-                InitWithLast15(initWithLast15);
+                 SetStreamInfo(streamInfoLength, streamInfo);
+                 if(properties != nullptr) {
+                     SetMediaProperties(properties->height, properties->width, properties->media_type);
+@@ -677,7 +662,7 @@ inline void SetParameter(const std::string& name, const std::string& value)
+         _session->Update(pbResponse, cbResponse);
+     }
+     uint32_t Decrypt(uint8_t* encryptedData, const uint32_t encryptedDataLength,
+-        const ::SampleInfo* sampleInfo,
++        const ::SampleInfo* sampleInfo, const uint32_t sampleInfoLength,
+         uint32_t initWithLast15,
+         const ::MediaProperties* properties,
+         const uint8_t* streamInfo, const uint16_t streamInfoLength)
+@@ -694,7 +679,7 @@ inline void SetParameter(const std::string& name, const std::string& value)
+ 
+         if (decryptSession != nullptr) {
+             result = decryptSession->Decrypt(encryptedData, encryptedDataLength, 
+-                sampleInfo,
++                sampleInfo, sampleInfoLength,
+                 initWithLast15,
+                 properties,
+                 streamInfo, streamInfoLength);
