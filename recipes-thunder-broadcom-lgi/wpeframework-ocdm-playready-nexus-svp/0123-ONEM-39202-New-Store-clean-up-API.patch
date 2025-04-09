@@ -1,0 +1,45 @@
+From 7866764746a68b3137bb01c08a0740d344097028 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Fri, 11 Apr 2025 12:20:37 +0530
+Subject: [PATCH] ONEM-39202 New store clean up API
+
+Change-Id: Ibb371807cac1ba2d83734cb865e0279cb9e5c6a0
+---
+ MediaSystem.cpp | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index c914c46..c9d3394 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -1052,6 +1052,27 @@ public:
+         return CDMi_SUCCESS;
+     }
+ 
++    CDMi_RESULT CleanSecureStore(const std::string& keySystem) override
++    {
++        CDMi_RESULT cr = CDMi_SUCCESS;
++        auto it = m_keySystemCtxs.find(keySystem);
++
++        if (it != m_keySystemCtxs.end()) {
++            static DRM_WORD const callbackIntervalPercent = 100;
++            LOGGER(LINFO_,"Drm_StoreMgmt_CleanupStore");
++            DRM_RESULT dr = Drm_StoreMgmt_CleanupStore(&it->second->drmAppctx, DRM_STORE_CLEANUP_DELETE_EXPIRED_LICENSES, nullptr, callbackIntervalPercent, nullptr);
++            if (DRM_FAILED(dr)) {
++                LOGGER(LERROR_, "Error in Drm_StoreMgmt_CleanupStore,  0x%08lX", dr);
++                cr = CDMi_S_FALSE;
++            }
++        } else {
++            LOGGER(LERROR_, "No keySystemCtx found");
++            cr = CDMi_S_FALSE;
++        }
++
++        return cr;
++    }
++
+     // IMediaSystemMetrics overrides
+     // ------------------------------------------------------------------------------------------
+     CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const {
+-- 
+2.25.1
+

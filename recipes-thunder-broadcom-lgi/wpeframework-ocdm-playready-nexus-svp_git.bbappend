@@ -34,3 +34,4 @@ SRC_URI += "file://0120-ARRISAPP-594-NEXUS_MemoryBlock_DestroyToken-on-decry.pat
 SRC_URI += "file://0121-ONEM-36378-OnBindLicense.patch"
 
 SRC_URI += "file://0122-ONEM-38782-Secure-Store-Separation.patch"
+SRC_URI += "file://0123-ONEM-39202-New-Store-clean-up-API.patch"

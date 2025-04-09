@@ -1,0 +1,39 @@
+From d39e76051b3fbdb8f33ecc86dd3fd308eec3f503 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Wed, 9 Apr 2025 11:22:41 +0530
+Subject: [PATCH] ONEM-39202 New store clean up API
+
+---
+ interfaces/IDRM.h  | 2 ++
+ interfaces/IOCDM.h | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/interfaces/IDRM.h b/interfaces/IDRM.h
+index f125e9b..f0114ff 100644
+--- a/interfaces/IDRM.h
++++ b/interfaces/IDRM.h
+@@ -606,6 +606,8 @@ public:
+         uint8_t secureStoreHash[],
+         uint32_t secureStoreHashLength)
+         = 0;
++
++    virtual CDMi_RESULT CleanSecureStore(const std::string& keySystem) = 0;
+ };
+ 
+ struct IMediaSystemMetrics {
+diff --git a/interfaces/IOCDM.h b/interfaces/IOCDM.h
+index fce81f9..9dea324 100644
+--- a/interfaces/IOCDM.h
++++ b/interfaces/IOCDM.h
+@@ -261,6 +261,8 @@ struct IAccessorOCDM : virtual public Core::IUnknown {
+         uint8_t secureStoreHash[] /* @out @length:secureStoreHashLength */,
+         uint16_t secureStoreHashLength)
+         = 0;
++
++    virtual OCDM_RESULT CleanSecureStore(const std::string& keySystem) = 0;
+ };
+ 
+ class EXTERNAL KeyId {
+-- 
+2.25.1
+

@@ -14,6 +14,7 @@ SRC_URI += "file://0106-ARRISAPP-713-disable-ocmd-assert-in-Reconect.patch"
 SRC_URI += "file://0107-ONEM-31898-opencdm_dispose-only-destroy-accessor.patch"
 
 SRC_URI += "file://0108-ONEM-36378-OnBindLicense.patch"
+SRC_URI += "file://0109-ONEM-39202-New-store-clean-up-API.patch"
 
 EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
 

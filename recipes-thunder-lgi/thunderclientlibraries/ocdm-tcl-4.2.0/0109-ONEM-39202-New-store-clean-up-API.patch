@@ -1,0 +1,77 @@
+From adcf7619c0069244c92da78e083066b3e95d6ae0 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Wed, 9 Apr 2025 11:27:41 +0530
+Subject: [PATCH] ONEM-39202 New store clean up API
+
+---
+ Source/ocdm/open_cdm_ext.cpp | 16 ++++++++++++++++
+ Source/ocdm/open_cdm_ext.h   |  7 +++++++
+ Source/ocdm/open_cdm_impl.h  |  7 +++++++
+ 3 files changed, 30 insertions(+)
+
+diff --git a/Source/ocdm/open_cdm_ext.cpp b/Source/ocdm/open_cdm_ext.cpp
+index d30c037..4365425 100644
+--- a/Source/ocdm/open_cdm_ext.cpp
++++ b/Source/ocdm/open_cdm_ext.cpp
+@@ -332,6 +332,22 @@ OpenCDMError opencdm_get_secure_store_hash_ext(struct OpenCDMSystem* system,
+     return result;
+ }
+ 
++OpenCDMError opencdm_clean_secure_store(struct OpenCDMSystem* system)
++{
++    ASSERT(system != nullptr);
++    OpenCDMError result(ERROR_INVALID_ACCESSOR);
++
++    if (system != nullptr) {
++        OpenCDMAccessor* accessor = OpenCDMAccessor::Instance();
++        if(!accessor) {
++            return ERROR_INVALID_ACCESSOR;
++        }
++        std::string keySystem = system->keySystem();
++        result = (OpenCDMError)accessor->CleanSecureStore(keySystem);
++    }
++    return result;
++}
++
+ /**
+  * \brief Create DRM session (for actual decrypting of data).
+  *
+diff --git a/Source/ocdm/open_cdm_ext.h b/Source/ocdm/open_cdm_ext.h
+index fa9965c..b838491 100644
+--- a/Source/ocdm/open_cdm_ext.h
++++ b/Source/ocdm/open_cdm_ext.h
+@@ -137,6 +137,13 @@ EXTERNAL OpenCDMError opencdm_delete_key_store(struct OpenCDMSystem* system);
+  */
+ EXTERNAL OpenCDMError opencdm_delete_secure_store(struct OpenCDMSystem* system);
+ 
++/**
++ * Clean secure store
++ * \param system Extended OCDM system handle
++ * \return Zero if successful, non-zero otherwise.
++ */
++EXTERNAL OpenCDMError opencdm_clean_secure_store(struct OpenCDMSystem* system);
++
+ /**
+  * Sets DRM header.
+  * \param opencdmSession OCDM Session.
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index 2a51c30..7cb87df 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -304,6 +304,13 @@ public:
+             secureStoreHashLength);
+     }
+ 
++    Exchange::OCDM_RESULT
++    CleanSecureStore(const std::string& keySystem) override
++    {
++        ASSERT(_remote && "This method only works on IAccessorOCDM implementations.");
++        return _remote->CleanSecureStore(keySystem);
++    }
++
+     void SystemBeingDestructed(OpenCDMSystem* system);
+ 
+ private:
+-- 
+2.25.1
+
