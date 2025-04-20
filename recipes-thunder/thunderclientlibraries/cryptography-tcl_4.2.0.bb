@@ -1,7 +1,7 @@
 SUMMARY = "WPEFramework cryptography client libraries"
 LICENSE = "Apache-2.0"
 PR = "r0"
-
+do_compile[lockfiles] = "${TMPDIR}/rdkservice.lock"
 require include/thunder_clientlibraries_${PV}.inc
 
 SRC_URI += "file://0004-Cipher-CipherNetflix-methods-return-type-changes.patch \

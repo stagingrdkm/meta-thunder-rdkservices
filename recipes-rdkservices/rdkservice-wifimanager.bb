@@ -4,7 +4,7 @@ SUMMARY = "RDK services WifiManager plugin"
 
 # plugin directory in rdkservices repository
 PLUGINDIR="WifiManager"
-
+do_compile[lockfiles] = "${TMPDIR}/rdkservice.lock"
 require rdkservices-common/common_plugin.inc
 
 EXTRA_OECMAKE += " \

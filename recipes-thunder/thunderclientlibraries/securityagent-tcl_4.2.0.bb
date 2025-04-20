@@ -1,7 +1,7 @@
 SUMMARY = "WPEFramework client libraries securityagent and securityutility"
 LICENSE = "Apache-2.0"
 PR = "r0"
-
+do_compile[lockfiles] = "${TMPDIR}/rdkservice.lock"
 require include/thunder_clientlibraries_${PV}.inc
 
 # that patch is like the original one from Comcast, but link with orginal library name from repository

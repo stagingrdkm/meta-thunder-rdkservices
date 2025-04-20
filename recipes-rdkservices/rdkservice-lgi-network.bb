@@ -5,7 +5,7 @@ RPROVIDES_${PN} += "rdkservice-network"
 
 # plugin directory in rdkservices repository
 PLUGINDIR="LgiNetwork"
-
+do_compile[lockfiles] = "${TMPDIR}/rdkservice.lock"
 require rdkservices-common/common_plugin.inc
 OECMAKE_TARGET_COMPILE = "WPEFrameworkNetwork"
 
