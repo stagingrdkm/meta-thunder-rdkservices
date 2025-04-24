@@ -1,0 +1,30 @@
+Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index a76e1d1..ec3658f 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -515,12 +515,23 @@ public:
+         if (it != m_keySystemCtxs.end()) {
+             it->second->mediaKeySessionsCount--;
+             DeinitializeSystemRefCounted(keySystem);
++            //TODO: ONEM-40865 - replace above line with:
++            //ReinitializeAppCtx(it->second.get(), keySystem);
+         } else {
+             LOGGER(LERROR_, "No keySystemCtx found");
+         }
+         return CDMi_SUCCESS;
+     }
+ 
++    void ReinitializeAppCtx(KeySystemCtx* keySystemCtx, const std::string& keySystem) {
++        if (keySystemCtx->mediaKeySessionsCount == 0) {
++            DRM_RESULT dr = Drm_Reinitialize(&keySystemCtx->drmAppctx);
++            if(DRM_FAILED(dr)) {
++                LOGGER(LERROR_,  "Warning, Drm_Reinitialize returned 0x%08lX", dr);
++            }
++        }
++    }
++
+ public:
+     // Ext interface.
+     virtual uint64_t GetDrmSystemTime() const{
