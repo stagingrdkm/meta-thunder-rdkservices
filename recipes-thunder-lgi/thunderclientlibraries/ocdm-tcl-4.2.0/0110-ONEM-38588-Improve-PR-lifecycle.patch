@@ -1,0 +1,116 @@
+Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+Wed, 16 Apr 2025 19:11:32 +0000
+
+diff --git a/Source/ocdm/open_cdm.cpp b/Source/ocdm/open_cdm.cpp
+index b7234c5..5d27791 100644
+--- a/Source/ocdm/open_cdm.cpp
++++ b/Source/ocdm/open_cdm.cpp
+@@ -117,22 +117,6 @@ KeyStatus CDMState(const Exchange::ISession::KeyStatus state)
+     return KeyStatus::InternalError;
+ }
+ 
+-
+-/**
+- * Destructs an \ref OpenCDMAccessor instance.
+- * \param system \ref OpenCDMAccessor instance to desctruct.
+- * \return Zero on success, non-zero on error.
+- */
+-OpenCDMError opencdm_destruct_system(struct OpenCDMSystem* system)
+-{
+-    OpenCDMAccessor::Instance()->SystemBeingDestructed(system);
+-    assert(system != nullptr);
+-    if (system != nullptr) {
+-       delete system;
+-    }
+-    return (OpenCDMError::ERROR_NONE);
+-}
+-
+ /**
+  * \brief Checks if a DRM system is supported.
+  *
+diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
+index 51b60ab..22f5dff 100644
+--- a/Source/ocdm/open_cdm.h
++++ b/Source/ocdm/open_cdm.h
+@@ -276,11 +276,19 @@ EXTERNAL OpenCDMError opencdm_create_system_extended(const char keySystem[], str
+ 
+ /**
+  * Destructs an \ref OpenCDMAccessor instance.
+- * \param system \ref OpenCDMAccessor instance to desctruct.
++ * \param system \ref OpenCDMAccessor instance to destruct.
+  * \return Zero on success, non-zero on error.
+  */
+ EXTERNAL OpenCDMError opencdm_destruct_system(struct OpenCDMSystem* system);
+ 
++/**
++ * Destructs an \ref OpenCDMAccessor instance.
++ * \param system \ref OpenCDMAccessor instance to destruct.
++ * \param cleanOnDestroy should cleaning be performed.
++ * \return Zero on success, non-zero on error.
++ */
++EXTERNAL OpenCDMError opencdm_destruct_system_extended(struct OpenCDMSystem* system, bool cleanOnDestroy);
++
+ /**
+  * \brief Checks if a DRM system is supported.
+  *
+diff --git a/Source/ocdm/open_cdm_ext.cpp b/Source/ocdm/open_cdm_ext.cpp
+index 4365425..870c150 100644
+--- a/Source/ocdm/open_cdm_ext.cpp
++++ b/Source/ocdm/open_cdm_ext.cpp
+@@ -46,12 +46,30 @@ OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenC
+ 
+     std::string metadata;
+     OpenCDMError result = static_cast<OpenCDMError>(accessor->Metadata(std::string(keySystem), metadata));
+-    if( result == OpenCDMError::ERROR_NONE )
++    if( result == OpenCDMError::ERROR_NONE ) {
+         *system = new OpenCDMSystem(keySystem, metadata);
++        result = static_cast<OpenCDMError>(accessor->InitializeCtx((*system)->keySystem()));
++    }
++
++    return result;
++}
++
++OpenCDMError opencdm_destruct_system(struct OpenCDMSystem* system)
++{
++    return opencdm_destruct_system_extended(system, true);
++}
+ 
++OpenCDMError opencdm_destruct_system_extended(struct OpenCDMSystem* system, bool cleanOnDestroy)
++{
++    ASSERT(system != nullptr);
++    OpenCDMAccessor * accessor = OpenCDMAccessor::Instance();
++    accessor->SystemBeingDestructed(system);
++    OpenCDMError result = static_cast<OpenCDMError>(accessor->DeinitializeCtx(system->keySystem(), cleanOnDestroy));
++    delete system;
+     return result;
+ }
+ 
++
+ OpenCDMError opencdm_system_get_version(struct OpenCDMSystem* system,
+     char versionStr[])
+ {
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index 7cb87df..f300fea 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -313,6 +313,20 @@ public:
+ 
+     void SystemBeingDestructed(OpenCDMSystem* system);
+ 
++    Exchange::OCDM_RESULT
++    InitializeCtx(const std::string& keySystem) override
++    {
++        ASSERT(_remote && "This method only works on IAccessorOCDM implementations.");
++        return _remote->InitializeCtx(keySystem);
++    }
++
++    Exchange::OCDM_RESULT
++    DeinitializeCtx(const std::string& keySystem, bool cleanOnDestroy) override
++    {
++        ASSERT(_remote && "This method only works on IAccessorOCDM implementations.");
++        return _remote->DeinitializeCtx(keySystem, cleanOnDestroy);
++    }
++
+ private:
+     mutable uint32_t _refCount;
+     string _domain;
