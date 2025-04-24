@@ -79,7 +79,7 @@ index 21e8797..bbb5b20 100644
      std::vector<uint8_t> mDrmHeader;
      uint32_t m_SessionId;
 diff --git a/MediaSystem.cpp b/MediaSystem.cpp
-index edb31e1..c914c46 100644
+index edb31e1..a99415a 100644
 --- a/MediaSystem.cpp
 +++ b/MediaSystem.cpp
 @@ -71,6 +71,12 @@ using namespace WPEFramework;
@@ -642,31 +642,42 @@ index edb31e1..c914c46 100644
          return cr;
      }
  
-@@ -1001,18 +1011,20 @@ public:
+@@ -1001,19 +1011,27 @@ public:
          return CDMi_SUCCESS;
      }
  
 -    CDMi_RESULT DeleteSecureStore() override
 +    CDMi_RESULT DeleteSecureStore(const std::string& keySystem) override
      {
-+        auto it = m_keySystemCtxs.find(keySystem);
-+        ASSERT(it == m_keySystemCtxs.end());
          SafeCriticalSection lock(drmAppContextMutex_);
-+        const std::string storeLocation = getStoreLocation(keySystem);
++        CDMi_RESULT cr = CDMi_SUCCESS;
++        auto it = m_keySystemCtxs.find(keySystem);
++        if (it == m_keySystemCtxs.end()) {
++            const std::string storeLocation = getStoreLocation(keySystem);
          
-         // As a linux reference implementation, we are cheating a bit by just using
-         // stdio to delete the drm store from the filesystem. A real implementation
-         // will be more complicated.
+-        // As a linux reference implementation, we are cheating a bit by just using
+-        // stdio to delete the drm store from the filesystem. A real implementation
+-        // will be more complicated.
++            // As a linux reference implementation, we are cheating a bit by just using
++            // stdio to delete the drm store from the filesystem. A real implementation
++            // will be more complicated.
  
 -        if (remove(m_storeLocation.c_str()) != 0) {
-+        if (remove(storeLocation.c_str()) != 0) {
-             LOGGER(LINFO_, "Error removing DRM store file");
+-            LOGGER(LINFO_, "Error removing DRM store file");
++            if (remove(storeLocation.c_str()) != 0) {
++                LOGGER(LINFO_, "Error removing DRM store file");
++            }
++        } else {
++            LOGGER(LERROR_,  "Attempt of secure store removal on active key system %s", keySystem.c_str());
++            cr =  CDMi_S_FALSE;
          }
--
-         return CDMi_SUCCESS;
+ 
+-        return CDMi_SUCCESS;
++        return cr;
      }
  
-@@ -1025,12 +1037,13 @@ public:
+     CDMi_RESULT GetKeyStoreHash(
+@@ -1025,12 +1043,13 @@ public:
      }
  
      CDMi_RESULT GetSecureStoreHash(
@@ -681,7 +692,7 @@ index edb31e1..c914c46 100644
          {
              LOGGER(LERROR_, "Error: calcFileSha256 failed");
              return CDMi_S_FALSE;
-@@ -1045,28 +1058,35 @@ public:
+@@ -1045,28 +1064,35 @@ public:
          bufferLength = 0;
          return CDMi_METHOD_NOT_IMPLEMENTED;
      }
@@ -724,6 +735,3 @@ index edb31e1..c914c46 100644
      DRM_CONST_STRING m_dstrHDSPath;
      uint32_t m_persistentKeyCount;
      uint32_t m_persistentCountThreshold;
--- 
-2.25.1
-
