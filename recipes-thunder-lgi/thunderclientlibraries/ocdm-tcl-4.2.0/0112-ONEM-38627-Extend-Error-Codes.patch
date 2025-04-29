@@ -1,0 +1,37 @@
+From 2080a693eae31f4f9f40308d1e3e89528a2a6e65 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Tue, 29 Apr 2025 12:49:00 +0530
+Subject: [PATCH] [ONEM-38627] Extending the error code enums
+
+---
+ Source/ocdm/open_cdm.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
+index 51b60ab..122843d 100644
+--- a/Source/ocdm/open_cdm.h
++++ b/Source/ocdm/open_cdm.h
+@@ -181,6 +181,7 @@ typedef enum {
+     ERROR_MORE_DATA_AVAILABLE = 2,
+     ERROR_INTERFACE_NOT_IMPLEMENTED = 3,
+     ERROR_BUFFER_TOO_SMALL = 4,
++    ERROR_INIT_FAILED  = 5,
+     ERROR_INVALID_ACCESSOR = 0x80000001,
+     ERROR_KEYSYSTEM_NOT_SUPPORTED = 0x80000002,
+     ERROR_INVALID_SESSION = 0x80000003,
+@@ -189,9 +190,12 @@ typedef enum {
+     ERROR_METHOD_NOT_IMPLEMENTED = 0x80000006,
+     ERROR_FAIL = 0x80004005,
+     ERROR_INVALID_ARG = 0x80070057,
++    ERROR_LICENSE_EXPIRED = 0x8004C009,
++    ERROR_LICENSE_NOT_FOUND = 0x8004C013,
+     ERROR_SERVER_INTERNAL_ERROR = 0x8004C600,
+     ERROR_SERVER_INVALID_MESSAGE = 0x8004C601,
+     ERROR_SERVER_SERVICE_SPECIFIC = 0x8004C604,
++    ERROR_TEE_OUTPUT_PROTECTION_REQUIREMENTS_NOT_MET = 0x8004CD22,
+     ERROR_BUSY_CANNOT_INITIALIZE = 0x8004DD00
+ 
+ } OpenCDMError;
+-- 
+2.25.1
+
