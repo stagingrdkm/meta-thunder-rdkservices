@@ -64,7 +64,7 @@ dbus::dbus_status_t SystemdDBusClient::init(std::function<void()> startCallback,
     };
 
     listener = std::make_shared<DBusListener>(callWrap);
-    addSignalListener(systemdManagerDbusInterface, propertiesChangedSignal, listener);
+    addSignalListener(servicePath, systemdManagerDbusInterface, propertiesChangedSignal, listener);
     return ret;
 }
 

@@ -21,8 +21,9 @@ target_compile_definitions(${TARGET} PRIVATE MESSAGING_EXPORTS)
 
 target_link_libraries(${TARGET}
         PRIVATE
-        ${DBUS_LIBRARY}
-        ${DS_LIBRARY}
+        ${DBUS_LIBRARIES}
+        ${DS_LIBRARIES}
+        dbus-client
         )
 
 set_target_properties(${TARGET} PROPERTIES
