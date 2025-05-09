@@ -11,7 +11,6 @@ FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
 # patches and files from rdkservice-ocdm
 SRC_URI += "file://ocdm@.service"
 SRC_URI += "file://ocdm.conf"
-SRC_URI += "file://ocdm_store_check.sh"
 
 #overwrite library name
 OECMAKE_TARGET_COMPILE = "WPEFrameworkOCDM"
@@ -38,7 +37,6 @@ do_install_append() {
     install -d ${D}${sysconfdir}/tmpfiles.d
     install -m 0644 ${WORKDIR}/ocdm.conf ${D}${sysconfdir}/tmpfiles.d
     install -d ${D}${bindir}
-    install -m 0500 ${WORKDIR}/ocdm_store_check.sh ${D}${bindir}/
 }
 
 FILES_${PN} += "${sysconfdir}/tmpfiles.d/ocdm.conf"

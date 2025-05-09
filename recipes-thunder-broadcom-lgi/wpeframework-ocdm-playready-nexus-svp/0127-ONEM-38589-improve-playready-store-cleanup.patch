@@ -1,0 +1,631 @@
+Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index ccbd61d..98126f4 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -741,49 +741,17 @@ CDMi_RESULT MediaKeySession::Load(void)
+   return CDMi_S_FALSE;
+ }
+ 
+-
+-static DRM_RESULT DRM_API ReportProgress( const DRM_VOID *pvCallerData, DRM_DWORD cPercent, DRM_DWORD cLicenses)
+-{
+-    printf("%d percent progressed, %d licenses left\n", cPercent, cLicenses );
+-    return DRM_SUCCESS;
+-}
+-
+-
+ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_cbKeyMessageResponse)
+ {
+-  DRM_RESULT dr = DRM_SUCCESS, drProcessResponse;
++    SafeCriticalSection systemLock(drmAppContextMutex_);
++    DRM_RESULT dr = DRM_SUCCESS;
+     DRM_LICENSE_RESPONSE oLicenseResponse;
+ 
+     ChkArg(f_pbKeyMessageResponse != nullptr && f_cbKeyMessageResponse > 0);
+-
+-    BKNI_Memset(&oLicenseResponse, 0, sizeof(oLicenseResponse));
+-
+     ChkDR(SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()));
+ 
+-    LOGGER(LINFO_, "Processing license acquisition response...");
+-
+-   drProcessResponse = Drm_LicenseAcq_ProcessResponse(m_poAppContext,
+-                                        DRM_PROCESS_LIC_RESPONSE_SIGNATURE_NOT_REQUIRED,
+-                                        const_cast<DRM_BYTE *>(f_pbKeyMessageResponse),
+-                                        f_cbKeyMessageResponse,
+-                                        &oLicenseResponse);
+-
+-    ChkDR(drProcessResponse);
+-
+-    if (drProcessResponse != DRM_SUCCESS) {
+-         if (drProcessResponse == DRM_E_FAILED_TO_STORE_LICENSE) {
+-           DRM_RESULT dr = Drm_StoreMgmt_CleanupStore(m_poAppContext,
+-                                            DRM_STORE_CLEANUP_ALL,
+-                                            this, 20, ReportProgress);
+-
+-         if(DRM_FAILED(dr))
+-             LOGGER(LERROR_,  "Warning, Drm_StoreMgmt_CleanupStore returned 0x%08lX", dr);
+-
+-        }
+-        else
+-          LOGGER(LINFO_, "unhandled process response error");
+-
+-    }
++    dr = ProcessLicenseResponse(f_pbKeyMessageResponse, f_cbKeyMessageResponse, oLicenseResponse);
++    ChkDR(dr);
+ 
+     LOGGER(LINFO_, "Binding License...");
+     while ((dr = Drm_Reader_Bind(m_poAppContext,
+@@ -814,6 +782,7 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+     }
+     ChkDR(dr);
+ 
++    UpdateLicenseProps();
+     ChkDR( Drm_Reader_Commit( m_poAppContext, nullptr, nullptr ) );
+ 
+     m_eKeyState = KEY_READY;
+@@ -872,9 +841,12 @@ CDMi_RESULT MediaKeySession::Close(void)
+ {
+     m_eKeyState = KEY_CLOSED;
+ 
+-    CleanLicenseStore(m_poAppContext);
++    {
++        SafeCriticalSection systemLock(drmAppContextMutex_);
++        CleanLicenseStore();
+ 
+-    CleanDecryptContexts();
++        CleanDecryptContexts();
++    }
+     
+     if (pNexusMemory) {
+         NEXUS_Memory_Free(pNexusMemory);
+@@ -1213,16 +1185,19 @@ ErrorExit:
+     return rc;
+ }
+ 
+-void MediaKeySession::CleanLicenseStore(DRM_APP_CONTEXT *pDrmAppCtx){
+-    if (m_poAppContext != nullptr) {
+-        LOGGER(LINFO_, "Licenses cleanup");
++void MediaKeySession::CleanLicenseStore()
++{
++    if (m_hasInMemoryLicenses) {
++        LOGGER(LINFO_, "In memory licenses cleanup");
+         // Delete all the licenses added by this session
+-        DRM_RESULT dr = Drm_StoreMgmt_DeleteInMemoryLicenses(pDrmAppCtx, &mBatchId);
++        DRM_RESULT dr = Drm_StoreMgmt_DeleteInMemoryLicenses(m_poAppContext, &mBatchId);
+         // Since there are multiple licenses in a batch, we might have already cleared
+         // them all. Ignore DRM_E_NOMORE returned from Drm_StoreMgmt_DeleteInMemoryLicenses.
+         if (DRM_FAILED(dr) && (dr != DRM_E_NOMORE)) {
+             LOGGER(LERROR_, "Error in Drm_StoreMgmt_DeleteInMemoryLicenses 0x%08lX", dr);
+-        }
++        } else {
++            m_hasInMemoryLicenses = false;
++	}
+     }
+ }
+ 
+diff --git a/MediaSession.h b/MediaSession.h
+index 902b836..defa7f4 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -190,7 +190,7 @@ private:
+ 
+     bool LoadRevocationList(const char *revListFile);
+ 
+-    void CleanLicenseStore(DRM_APP_CONTEXT *pDrmAppCtx);
++    void CleanLicenseStore();
+     void CleanDecryptContexts();
+ 
+     static DRM_RESULT PolicyCallback(
+@@ -221,6 +221,8 @@ private:
+     CDMi_RESULT SetKeyId(DRM_APP_CONTEXT *pDrmAppCtx, const uint8_t keyLength, const uint8_t keyId[]);
+     CDMi_RESULT SelectDrmHeader(DRM_APP_CONTEXT *pDrmAppCtx, const uint32_t headerLength, const uint8_t header[]);
+     void PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize, bool flush);
++    DRM_RESULT ProcessLicenseResponse(const uint8_t* licenseData, uint32_t licenseDataSize, DRM_LICENSE_RESPONSE& oLicenseResponse);
++    void UpdateLicenseProps();
+ 
+     // IMediaSessionMetrics overrides
+     // ------------------------------------------------------------------------------------------
+@@ -257,6 +259,7 @@ private:
+ 
+     NEXUS_DmaJobHandle mDmaJob;
+     NEXUS_DmaHandle mDmaHandle;
++    bool m_hasInMemoryLicenses{false};
+ };
+ 
+ } // namespace CDMi
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 0116f28..1f3279d 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -211,17 +211,7 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
+     // how many licenses are in the response data.
+     //
+     DRM_LICENSE_RESPONSE drmLicenseResponse;
+-    // MUST zero the input DRM_LICENSE_RESPONSE struct!
+-    ZEROMEM(&drmLicenseResponse, sizeof(DRM_LICENSE_RESPONSE));
+-    DRM_RESULT err;
+-    // Non-persistent licenses (the kind in use) have no signature, so the
+-    // LIC_RESPONSE_SIGNATURE_NOT_REQUIRED flag must be used.
+-    err = Drm_LicenseAcq_ProcessResponse(
+-            m_poAppContext,
+-            DRM_PROCESS_LIC_RESPONSE_SIGNATURE_NOT_REQUIRED,
+-            &licenseData[0],
+-            (DRM_DWORD)licenseDataSize,
+-            &drmLicenseResponse);
++    DRM_RESULT err = ProcessLicenseResponse(&licenseData[0], licenseDataSize, drmLicenseResponse);
+ 
+     if((m_piCallback != nullptr) && DRM_SUCCEEDED(err)) {
+         for (uint8_t i = 0; i < drmLicenseResponse.m_cAcks; ++i) {
+@@ -282,51 +272,9 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
+         }
+     }
+ 
+-    // === Extract various ID's from drmLicenseResponse
+-    //
+-    // There are 3 ID's in the processed license response we are interested in:
+-    // BID - License batch ID. A GUID that uniquely identifies a batch of
+-    //       licenses that were processed in one challenge/response transaction.
+-    //       The BID is a nonce unique to the transaction. If the transaction
+-    //       contains a single license, this is identical to the license nonce.
+-    //       The secure stop ID is set to the BID value.
+-    // KID - Key ID. A GUID that uniquely identifies the media content key. This
+-    //       is the primary index for items in the license store. There can be
+-    //       multiple licenses with the same KID.
+-    // LID - License ID. A GUID that uniquely identifies a license. This is the
+-    //       secondary index for items in the license store.
+-    // When there are multiple licenses in the server response as in the PRK
+-    // case, there are correspondingly multiple KID/LID entries in the processed
+-    // response. There is always only a single BID per server response.
+-
+-    // BID
+-#ifdef URSR_VERSION_LESS_OR_EQUAL_20
+-    mBatchId = drmLicenseResponse.m_oBatchID; 
+-#else
+-    mBatchId = drmLicenseResponse.m_idSession;
+-#endif
+-    PrintBase64(sizeof(mBatchId.rgb), mBatchId.rgb, "BatchId/SecureStopId");
+-
+-    // Microsoft says that a batch ID of all zeros indicates some sort of error
+-    // for in-memory licenses. Hopefully this error was already caught above.
+-    const uint8_t zeros[sizeof(mBatchId.rgb)] = { 0 };
+-    if(memcmp(mBatchId.rgb, zeros, sizeof(mBatchId.rgb)) == 0){
+-        LOGGER(LERROR_, "No batch ID in processed response");
+-        return CDMi_S_FALSE;
+-    }
+     // We take the batch ID as the secure stop ID
+     memcpy(secureStopId, mBatchId.rgb, sizeof(mBatchId.rgb));
+ 
+-    // KID and LID
+-    LOGGER(LINFO_, "Found %d license%s in server response for :", nLicenses, (nLicenses > 1) ? "s" : "");
+-    for (uint32_t i=0; i < nLicenses; ++i)
+-    {
+-        const DRM_LICENSE_ACK * const licAck = &drmLicenseResponse.m_rgoAcks[i];
+-        LOGGER(LINFO_, "KID/LID[%d]:", i);
+-        PrintBase64(sizeof(licAck->m_oLID.rgb), licAck->m_oLID.rgb, "LID");
+-        PrintBase64(sizeof(licAck->m_oKID.rgb), licAck->m_oKID.rgb, "KID");
+-    }
+-
+     return CDMi_SUCCESS;
+ }
+ 
+@@ -381,6 +329,7 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+             LOGGER(LERROR_, "Error: Drm_Reader_Bind (error: 0x%08X)", static_cast<unsigned int>(err));
+             return CDMi_S_FALSE;
+         }
++        UpdateLicenseProps();
+ 
+         // Commit all secure store transactions to the DRM store file. For the
+         // Netflix use case, Drm_Reader_Commit only needs to be called after
+@@ -526,4 +475,92 @@ CDMi_RESULT MediaKeySession::SelectDrmHeader(DRM_APP_CONTEXT *pDrmAppCtx,
+ 
+     return CDMi_SUCCESS;
+ }
++
++DRM_RESULT MediaKeySession::ProcessLicenseResponse(const uint8_t* licenseData, uint32_t licenseDataSize, DRM_LICENSE_RESPONSE& oLicenseResponse)
++{
++    DRM_RESULT dr = DRM_SUCCESS;
++    BKNI_Memset(&oLicenseResponse, 0, sizeof(oLicenseResponse));
++
++    LOGGER(LINFO_, "Processing license acquisition response...");
++
++    dr = Drm_LicenseAcq_ProcessResponse(
++            m_poAppContext,
++            DRM_PROCESS_LIC_RESPONSE_SIGNATURE_NOT_REQUIRED,
++            licenseData,
++            licenseDataSize,
++            &oLicenseResponse);
++
++    LOGGER(LINFO_, "License response result: %ld", dr);
++    if (DRM_FAILED(dr) || DRM_FAILED(oLicenseResponse.m_dwResult)) {
++        if (dr == DRM_E_FAILED_TO_STORE_LICENSE) {
++            static DRM_WORD const callbackIntervalPercent = 100;
++            DRM_RESULT cleanDR = Drm_StoreMgmt_CleanupStore(m_poAppContext, DRM_STORE_CLEANUP_ALL, nullptr, callbackIntervalPercent, nullptr);
++            if(DRM_FAILED(cleanDR)) {
++                LOGGER(LERROR_,  "Warning, Cleaning licenses on license store failure returned: 0x%08lX", cleanDR);
++            }
++        }
++    } else {
++        LOGGER(LINFO_, "License response has persistent licenses: %d", oLicenseResponse.m_fHasPersistentLicenses);
++
++        // === Extract various ID's from drmLicenseResponse
++        //
++        // There are 3 ID's in the processed license response we are interested in:
++        // BID - License batch ID. A GUID that uniquely identifies a batch of
++        //       licenses that were processed in one challenge/response transaction.
++        //       The BID is a nonce unique to the transaction. If the transaction
++        //       contains a single license, this is identical to the license nonce.
++        //       The secure stop ID is set to the BID value.
++        // KID - Key ID. A GUID that uniquely identifies the media content key. This
++        //       is the primary index for items in the license store. There can be
++        //       multiple licenses with the same KID.
++        // LID - License ID. A GUID that uniquely identifies a license. This is the
++        //       secondary index for items in the license store.
++        // When there are multiple licenses in the server response as in the PRK
++        // case, there are correspondingly multiple KID/LID entries in the processed
++        // response. There is always only a single BID per server response.
++
++        // BID
++#ifdef URSR_VERSION_LESS_OR_EQUAL_20
++        mBatchId = oLicenseResponse.m_oBatchID;
++#else
++        mBatchId = oLicenseResponse.m_idSession;
++#endif
++        PrintBase64(sizeof(mBatchId.rgb), mBatchId.rgb, "BatchId/SecureStopId");
++
++        // Microsoft says that a batch ID of all zeros indicates some sort of error
++        // for in-memory licenses. Hopefully this error was already caught above.
++        const uint8_t zeros[sizeof(mBatchId.rgb)] = { 0 };
++        if(memcmp(mBatchId.rgb, zeros, sizeof(mBatchId.rgb)) == 0){
++            LOGGER(LERROR_, "No batch ID in processed response");
++            return CDMi_S_FALSE;
++        }
++
++        // KID and LID
++        const DRM_DWORD nLicenses = oLicenseResponse.m_cAcks;
++        LOGGER(LINFO_, "Found %d license%s in server response for :", nLicenses, (nLicenses > 1) ? "s" : "");
++        for (uint32_t i=0; i < nLicenses; ++i)
++        {
++            const DRM_LICENSE_ACK * const licAck = &oLicenseResponse.m_rgoAcks[i];
++            LOGGER(LINFO_, "KID/LID[%d]:", i);
++            PrintBase64(sizeof(licAck->m_oLID.rgb), licAck->m_oLID.rgb, "LID");
++            PrintBase64(sizeof(licAck->m_oKID.rgb), licAck->m_oKID.rgb, "KID");
++        }
++    }
++
++    return dr;
++}
++
++void MediaKeySession::UpdateLicenseProps()
++{
++    DRM_DWORD cannotPersist = 0;
++    //License property can be retrieved on a bound license
++    DRM_RESULT dr = Drm_License_GetProperty(m_poAppContext, DRM_LGP_CANNOT_PERSIST, nullptr, nullptr, &cannotPersist);
++    if (!DRM_FAILED(dr)) {
++        LOGGER(LINFO_, "Has can not persist licenses: %d", cannotPersist);
++        m_hasInMemoryLicenses = m_hasInMemoryLicenses || cannotPersist;
++    } else {
++        LOGGER(LINFO_, "Failed retrieving can not persist property, error == 0x%08lX", dr);
++    }
++}
++
+ }
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index ec3658f..7ff4e9d 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -190,16 +190,11 @@ public:
+     PlayReady() 
+         : m_drmOemContext(nullptr)
+         , m_nxAllocResults() 
+-        , m_drmDirectory()
+-        , m_drmStore()
+         , m_keySystemCtxs{}
+         , m_readDir()
+         , m_storeLocation()
+         , m_meteringCertificate(nullptr)
+         , m_meteringCertificateSize(0)
+-        , m_dstrHDSPath(DRM_EMPTY_DRM_STRING)
+-        , m_persistentKeyCount(0)
+-        , m_persistentCountThreshold(20)
+     {
+         NxClient_JoinSettings joinSettings;
+         NxClient_AllocSettings nxAllocSettings;
+@@ -235,7 +230,6 @@ public:
+             delete [] m_meteringCertificate;
+             m_meteringCertificate = nullptr;
+         }
+-        delete [] drmdir_;
+         ASSERT(m_keySystemCtxs.empty());
+         NxClient_Free(&m_nxAllocResults);
+         NxClient_Uninit();
+@@ -262,9 +256,11 @@ public:
+           m_storeLocation = persistentPath + "drmstore";
+         }
+ 
+-
+         LOGGER(LINFO_,  "m_readDir: %s", m_readDir.c_str());
+         LOGGER(LINFO_,  "m_storeLocation: %s", m_storeLocation.c_str());
++
++        CleanupDrmStore();
++        PrintDrmFilesInfo();
+         
+         WPEFramework::Core::SystemInfo::SetEnvironment(_T("HOME"), persistentPath);  
+ 
+@@ -407,11 +403,6 @@ public:
+     {
+     }
+ 
+-    static DRM_RESULT DRM_API ReportProgress( const DRM_VOID *pvCallerData,  DRM_DWORD cPercent, DRM_DWORD cLicenses) {
+-         printf("%d percent progressed, %d licenses left\n", cPercent, cLicenses );
+-         return DRM_SUCCESS;
+-    }
+-
+     void DeinitializeSystemRefCounted(const std::string& keySystem, bool cleanOnDestroy = true) {
+         auto it = m_keySystemCtxs.find(keySystem);
+         ASSERT(it != m_keySystemCtxs.end());
+@@ -420,28 +411,12 @@ public:
+         //if (it->second->refCount == 0) {
+             Stopwatch sw;
+             if (cleanOnDestroy) {
+-                CleanupStore(it->second.get());
++                CleanSecureStoreUnlocked(keySystem);
+             }
+             Drm_Uninitialize(&it->second->drmAppctx);
+             m_keySystemCtxs.erase(it);
+             DeinitializePlatform();
+             LOGGER(LINFO_, "Deinitialization of %s key system took %.03f", keySystem.c_str(), sw.elapsed());
+-        } else {
+-           if (m_persistentKeyCount > m_persistentCountThreshold) {
+-              m_persistentKeyCount = 0;
+-              CleanupStore(it->second.get());
+-            }
+-        }
+-    }
+-
+-    void CleanupStore(KeySystemCtx* keySystemCtx) {
+-        LOGGER(LINFO_, "CleanupStore. Nontemporary sessions count: %u", m_persistentKeyCount);
+-        DRM_RESULT dr = Drm_StoreMgmt_CleanupStore(&keySystemCtx->drmAppctx,
+-                                        DRM_STORE_CLEANUP_DELETE_REMOVAL_DATE_LICENSES,
+-                                        nullptr, 20, ReportProgress);
+-        if(DRM_FAILED(dr))
+-        {
+-            LOGGER(LERROR_,  "Warning, Drm_StoreMgmt_CleanupStore returned 0x%08lX", dr);
+         }
+     }
+ 
+@@ -451,14 +426,6 @@ public:
+             LOGGER(LINFO_, "Drm_Platform_Uninitialize");
+             m_drmOemContext = nullptr;
+         }
+-        if (drmdir_ != nullptr) {
+-            delete [] drmdir_;
+-            drmdir_ = nullptr;
+-        }
+-        if (m_dstrHDSPath.pwszString != nullptr ) {
+-            delete [] m_dstrHDSPath.pwszString;
+-            m_dstrHDSPath.pwszString = nullptr;
+-        }
+     }
+ 
+     CDMi_RESULT CreateMediaKeySession(
+@@ -478,8 +445,6 @@ public:
+ 
+         auto it = m_keySystemCtxs.find(keySystem);
+         if (it != m_keySystemCtxs.end()) {
+-            // count permanent licenses
+-            if (licenseType != Temporary) m_persistentKeyCount++;
+             CDMi::MediaKeySession* newSession= new CDMi::MediaKeySession(
+                  f_pbInitData, f_cbInitData,
+                  f_pbCDMData, f_cbCDMData,
+@@ -932,22 +897,14 @@ public:
+         DRM_SECURETIME_CLOCK_TYPE eClockType;   /* Initialized by Drm_SecureTime_GetValue */
+ 
+         DRM_DWORD dwEncryptionMode  = OEM_TEE_DECRYPTION_MODE_NOT_SECURE;
++        DRM_CONST_STRING dstrHDSPath = DRM_EMPTY_DRM_STRING;
+ 
+         LOGGER(LINFO_, "Creating System Ext, Build: %s", __TIMESTAMP__ );
+ 
+-        std::string rdir(m_readDir);
+-
+-        // Create wchar strings from the arguments.
+-        drmdir_ = createDrmWchar(rdir);
+-
+-        // Initialize Ocdm directory.
+-        g_dstrDrmPath.pwszString = drmdir_;
+-        g_dstrDrmPath.cchString = rdir.length();
+-
+         // Store store location
+         std::string storeLocation = getStoreLocation(keySystem);
+-        m_dstrHDSPath.pwszString =  createDrmWchar(storeLocation);
+-        m_dstrHDSPath.cchString = storeLocation.length();
++        dstrHDSPath.pwszString =  createDrmWchar(storeLocation);
++        dstrHDSPath.cchString = storeLocation.length();
+ 
+         auto keySystemCtx = std::make_shared<KeySystemCtx>();
+ 
+@@ -955,10 +912,12 @@ public:
+                             m_drmOemContext,
+                             keySystemCtx->opaqueBuffer.data(),
+                             keySystemCtx->opaqueBuffer.size(),
+-                            &m_dstrHDSPath);
++                            &dstrHDSPath);
+ 
+         if(DRM_FAILED(dr)) {
+             LOGGER(LERROR_, "Error in Drm_Initialize: 0x%08lX\n", dr);
++            DeleteSecureStoreUnlocked(keySystem);
++            //TODO: Set appropriate error code so that it can be recognized to initialize again
+             goto ErrorExit;
+         }
+             dr = Drm_SecureTime_GetValue(&keySystemCtx->drmAppctx, &ftSystemTime, &eClockType  );
+@@ -1055,24 +1014,7 @@ public:
+     CDMi_RESULT DeleteSecureStore(const std::string& keySystem) override
+     {
+         SafeCriticalSection lock(drmAppContextMutex_);
+-        CDMi_RESULT cr = CDMi_SUCCESS;
+-        auto it = m_keySystemCtxs.find(keySystem);
+-        if (it == m_keySystemCtxs.end()) {
+-            const std::string storeLocation = getStoreLocation(keySystem);
+-        
+-            // As a linux reference implementation, we are cheating a bit by just using
+-            // stdio to delete the drm store from the filesystem. A real implementation
+-            // will be more complicated.
+-
+-            if (remove(storeLocation.c_str()) != 0) {
+-                LOGGER(LINFO_, "Error removing DRM store file");
+-            }
+-        } else {
+-            LOGGER(LERROR_,  "Attempt of secure store removal on active key system %s", keySystem.c_str());
+-            cr =  CDMi_S_FALSE;
+-        }
+-
+-        return cr;
++        return DeleteSecureStoreUnlocked(keySystem);
+     }
+ 
+     CDMi_RESULT GetKeyStoreHash(
+@@ -1100,6 +1042,51 @@ public:
+     }
+ 
+     CDMi_RESULT CleanSecureStore(const std::string& keySystem) override
++    {
++        SafeCriticalSection lock(drmAppContextMutex_);
++        return CleanSecureStoreUnlocked(keySystem);
++    }
++
++    // IMediaSystemMetrics overrides
++    // ------------------------------------------------------------------------------------------
++    CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const {
++        bufferLength = 0;
++        return CDMi_METHOD_NOT_IMPLEMENTED;
++    }
++private:
++    const std::string getStoreLocation(const std::string& keySystem) {
++        // for each keySystem a separate store file, eg.
++        // ├── drmstore_com.netflix.playready
++        std::string dir = m_storeLocation.substr(0, m_storeLocation.find_last_of("/"));
++        std::string filename = m_storeLocation.substr(m_storeLocation.find_last_of("/") + 1);
++        std::string path = dir + "/" + filename + "_" + keySystem;
++        LOGGER(LINFO_, "PlayReady::getStoreLocation(%s): %s\n", keySystem.c_str(), path.c_str());
++        return path;
++    }
++
++    CDMi_RESULT DeleteSecureStoreUnlocked(const std::string& keySystem)
++    {
++        CDMi_RESULT cr = CDMi_SUCCESS;
++        auto it = m_keySystemCtxs.find(keySystem);
++        if (it == m_keySystemCtxs.end()) {
++            const std::string storeLocation = getStoreLocation(keySystem);
++
++            // As a linux reference implementation, we are cheating a bit by just using
++            // stdio to delete the drm store from the filesystem. A real implementation
++            // will be more complicated.
++
++            if (remove(storeLocation.c_str()) != 0) {
++                LOGGER(LINFO_, "Error removing DRM store file");
++            }
++        } else {
++            LOGGER(LERROR_,  "Attempt of secure store removal on active key system %s", keySystem.c_str());
++            cr =  CDMi_S_FALSE;
++        }
++
++        return cr;
++    }
++
++    CDMi_RESULT CleanSecureStoreUnlocked(const std::string& keySystem)
+     {
+         CDMi_RESULT cr = CDMi_SUCCESS;
+         auto it = m_keySystemCtxs.find(keySystem);
+@@ -1120,32 +1107,60 @@ public:
+         return cr;
+     }
+ 
+-    // IMediaSystemMetrics overrides
+-    // ------------------------------------------------------------------------------------------
+-    CDMi_RESULT Metrics (uint32_t& bufferLength, uint8_t buffer[]) const {
+-        bufferLength = 0;
+-        return CDMi_METHOD_NOT_IMPLEMENTED;
++    void CleanupDrmStore() {
++        if (!m_readDir.empty()) {
++            DIR* dir = opendir(m_readDir.c_str());
++            struct dirent* dir_entry{};
++
++            LOGGER(LINFO_, "Store cleanup '%s'", m_readDir.c_str());
++            if (dir) {
++                std::string filePath;
++                while ((dir_entry = readdir(dir)) != NULL) {
++                    if (strcmp(dir_entry->d_name, ".") && strcmp(dir_entry->d_name, "..")) {
++                        filePath = m_readDir;
++                        filePath += "/";
++                        filePath +=  dir_entry->d_name;
++                        LOGGER(LINFO_, " removing file '%s'", filePath.c_str());
++                        remove(filePath.c_str());
++                    }
++                }
++                closedir(dir);
++            }
++        }
+     }
+-private:
+-    const std::string getStoreLocation(const std::string& keySystem) {
+-        // for each keySystem a separate store file, eg.
+-        // ├── drmstore_com.netflix.playready
+-        std::string dir = m_storeLocation.substr(0, m_storeLocation.find_last_of("/"));
+-        std::string filename = m_storeLocation.substr(m_storeLocation.find_last_of("/") + 1);
+-        std::string path = dir + "/" + filename + "_" + keySystem;
+-        LOGGER(LINFO_, "PlayReady::getStoreLocation(%s): %s\n", keySystem.c_str(), path.c_str());
+-        return path;
++
++    void FileStat(const string& path) {
++        struct stat sb= {};
++        if (::stat(path.c_str(), &sb) == 0) {
++            auto type = (sb.st_mode & S_IFMT);
++            char const* typeStr = (type == S_IFREG) ? "regular file" : ((type == S_IFDIR) ? "directory" : "other");
++
++            LOGGER(LINFO_, "path: %s\n\t gid: %u\n\t uid: %u\n\t size: %ld\n\t type: %s\n\t mode: %o",
++                    path.c_str(), sb.st_gid, sb.st_uid, sb.st_size, typeStr, sb.st_mode);
++        } else {
++            int err = errno;
++            LOGGER(LINFO_, "stat error for path: '%s': %s", path.c_str(), strerror(err));
++        }
+     }
+ 
+-private:
+-    DRM_WCHAR* drmdir_;
++    void PrintDrmFilesInfo() {
++        string playreadyPath, playreadyKeyHistoryPath;
+ 
++        Core::SystemInfo::GetEnvironment(_T("PLAYREADYKEY_PATH"), playreadyPath);
++        Core::SystemInfo::GetEnvironment(_T("PLAYREADY_KEY_HISTORY_PATH"), playreadyKeyHistoryPath);
++        FileStat(m_readDir);
++        if (!playreadyPath.empty()) {
++            FileStat(playreadyPath);
++        }
++        if (!playreadyKeyHistoryPath.empty()) {
++            FileStat(playreadyKeyHistoryPath);
++        }
++    }
++
++private:
+     DRM_VOID *m_drmOemContext;
+     NxClient_AllocResults m_nxAllocResults;
+ 
+-    DRM_WCHAR* m_drmDirectory;
+-    DRM_CONST_STRING m_drmStore;
+-
+     // Map to keep track of app contexts,opaque buffer and revocation buffer created for particular keysystems (designators)
+     // It gets updated upon calls to Drm_Initialize / Drm_Uninitialize
+     std::unordered_map<std::string, std::shared_ptr<KeySystemCtx>> m_keySystemCtxs;
+@@ -1154,10 +1169,6 @@ private:
+     std::string m_storeLocation;
+     DRM_BYTE* m_meteringCertificate;
+     uint32_t m_meteringCertificateSize;
+-
+-    DRM_CONST_STRING m_dstrHDSPath;
+-    uint32_t m_persistentKeyCount;
+-    uint32_t m_persistentCountThreshold;
+ };
+ 
+ static SystemFactoryType<PlayReady> g_instance({"video/x-h264", "audio/mpeg"});
