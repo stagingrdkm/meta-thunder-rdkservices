@@ -1,0 +1,511 @@
+Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+
+ONEM-38810 - playready bind license callback common for both cases of Drm_Reader_Bind().
+Callback with information on real time expiration called only from extended API - SelectKeyId().
+
+---
+ MediaSession.cpp    | 168 +---------------------------------
+ MediaSession.h      |   6 ++
+ MediaSessionExt.cpp | 213 ++++++++++++++++++++++++++++++++++----------
+ 3 files changed, 175 insertions(+), 212 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 5d55b8e..49c06a1 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -72,8 +72,6 @@
+ 
+ #include "ReportPlayreadyErrors.h"
+ 
+-#include <interfaces/DRMCallbackSerialize.h>
+-
+ using SafeCriticalSection = WPEFramework::Core::SafeSyncType<WPEFramework::Core::CriticalSection>;
+ extern WPEFramework::Core::CriticalSection drmAppContextMutex_;
+ 
+@@ -349,167 +347,7 @@ ErrorExit:
+     return false;
+ }
+ 
+-// PlayReady license policy callback which should be
+-// customized for platform/environment that hosts the CDM.
+-// It is currently implemented as a place holder that
+-// does nothing.
+-DRM_RESULT MediaKeySession::PolicyCallback(
+-            const DRM_VOID *f_pvPolicyCallbackData,
+-            DRM_POLICY_CALLBACK_TYPE f_dwCallbackType,
+-            const DRM_KID *f_pKID,
+-            const DRM_LID *f_pLID,
+-            const DRM_VOID *f_pv)
+-{
+-    /*!+!hla fix this, implement for something. */
+-    DRM_RESULT dr = DRM_SUCCESS;
+-#ifdef URSR_VERSION_LESS_OR_EQUAL_20
+-    const DRM_PLAY_OPL_EX2 *oplPlay = NULL;
+-#else
+-    const DRM_PLAY_OPL_LATEST *oplPlay = NULL;
+-#endif
+-
+-    MediaKeySession *session = (MediaKeySession*)f_pv;
+-
+-    switch( f_dwCallbackType )
+-    {
+-        case DRM_PLAY_OPL_CALLBACK:
+-            printf("  Got DRM_PLAY_OPL_CALLBACK from Bind:\r\n");
+-            ChkArg( f_pvPolicyCallbackData != NULL );
+-#ifdef URSR_VERSION_LESS_OR_EQUAL_20
+-            oplPlay = (const DRM_PLAY_OPL_EX2*)f_pvPolicyCallbackData;
+-#else
+-            oplPlay = (const DRM_PLAY_OPL_LATEST*)f_pvPolicyCallbackData;
+-#endif
+-
+-            printf("    minOPL:\r\n");
+-            printf("    wCompressedDigitalVideo   = %d\r\n", oplPlay->minOPL.wCompressedDigitalVideo);
+-            printf("    wUncompressedDigitalVideo = %d\r\n", oplPlay->minOPL.wUncompressedDigitalVideo);
+-            printf("    wAnalogVideo              = %d\r\n", oplPlay->minOPL.wAnalogVideo);
+-            printf("    wCompressedDigitalAudio   = %d\r\n", oplPlay->minOPL.wCompressedDigitalAudio);
+-            printf("    wUncompressedDigitalAudio = %d\r\n", oplPlay->minOPL.wUncompressedDigitalAudio);
+-            printf("\r\n");
+-
+-            printf("    oplIdReserved:\r\n");
+-           // ChkDR( DRMTOOLS_PrintOPLOutputIDs( &oplPlay->oplIdReserved ) );
+-
+-            printf("    vopi:\r\n");
+-            //ChkDR( DRMTOOLS_PrintVideoOutputProtectionIDs( &oplPlay->vopi ) );
+-
+-            printf("    dvopi:\r\n");
+-            //ChkDR( handleDigitalVideoOutputProtectionIDs( &oplPlay->dvopi ) );
+-
+-            break;
+-
+-        case DRM_EXTENDED_RESTRICTION_QUERY_CALLBACK:
+-        {
+-            const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT *pExtCallback = (const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT*)f_pvPolicyCallbackData;
+-            DRM_DWORD i = 0;
+-
+-            printf("  Got DRM_EXTENDED_RESTRICTION_QUERY_CALLBACK from Bind:\r\n");
+-
+-            printf("    wRightID = %d\r\n", pExtCallback->wRightID);
+-            printf("    wType    = %d\r\n", pExtCallback->pRestriction->wType);
+-            printf("    wFlags   = %x\r\n", pExtCallback->pRestriction->wFlags);
+-
+-            printf("    Data     = ");
+-
+-            for( i = pExtCallback->pRestriction->ibData; (i - pExtCallback->pRestriction->ibData) < pExtCallback->pRestriction->cbData; i++ )
+-            {
+-                printf("0x%.2X ", pExtCallback->pRestriction->pbBuffer[ i ] );
+-            }
+-            printf("\r\n\r\n");
+-
+-            /* Report that restriction was not understood */
+-            dr = DRM_E_EXTENDED_RESTRICTION_NOT_UNDERSTOOD;
+-        }
+-            break;
+-        case DRM_EXTENDED_RESTRICTION_CONDITION_CALLBACK:
+-        {
+-            const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT *pExtCallback = (const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT*)f_pvPolicyCallbackData;
+-            DRM_DWORD i = 0;
+-
+-            printf("  Got DRM_EXTENDED_RESTRICTION_CONDITION_CALLBACK from Bind:\r\n");
+-
+-            printf("    wRightID = %d\r\n", pExtCallback->wRightID);
+-            printf("    wType    = %d\r\n", pExtCallback->pRestriction->wType);
+-            printf("    wFlags   = %x\r\n", pExtCallback->pRestriction->wFlags);
+-
+-            printf("    Data     = ");
+-            for( i = pExtCallback->pRestriction->ibData; (i - pExtCallback->pRestriction->ibData) < pExtCallback->pRestriction->cbData; i++ )
+-            {
+-                printf("0x%.2X ", pExtCallback->pRestriction->pbBuffer[ i ] );
+-            }
+-            printf("\r\n\r\n");
+-
+-            if (session->m_piCallback)
+-            {
+-                static const DRM_BYTE _empty_kid_lid[16] {};
+-                bool isRealTimeExpiration = false;
+-                uint64_t dwBeginDate = 0, dwEndDate = 0;
+-                DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT const *extRestriction = (DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT const *)f_pvPolicyCallbackData;
+-                if (extRestriction->pXMRLicense)
+-                {
+-                    isRealTimeExpiration = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.RealTimeExpiration.fValid;
+-                    if (isRealTimeExpiration)
+-                    {
+-                        dwBeginDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwBeginDate;
+-                        dwEndDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwEndDate;
+-                    }
+-                }
+-                else
+-                {
+-                    printf("XMR license object not available\n");
+-                }
+-                CDMi::PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer serializer {
+-                    f_pKID ? f_pKID->rgb : _empty_kid_lid,
+-                    f_pLID ? f_pLID->rgb : _empty_kid_lid,
+-                    dwBeginDate,
+-                    dwEndDate,
+-                    isRealTimeExpiration};
+-                session->m_piCallback->OnBindLicense(PRD30_EXTENDED_RESTRICTION_CONDITION, serializer.writer.data() , serializer.writer.size());
+-            }
+-        }
+-            break;
+-        case DRM_EXTENDED_RESTRICTION_ACTION_CALLBACK:
+-        {
+-            const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT *pExtCallback = (const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT*)f_pvPolicyCallbackData;
+-            DRM_DWORD i = 0;
+-
+-            printf("  Got DRM_EXTENDED_RESTRICTION_ACTION_CALLBACK from Bind:\r\n");
+-
+-            printf("    wRightID = %d\r\n", pExtCallback->wRightID);
+-            printf("    wType    = %d\r\n", pExtCallback->pRestriction->wType);
+-            printf("    wFlags   = %x\r\n", pExtCallback->pRestriction->wFlags);
+-
+-            printf("    Data     = ");
+-            for( i = pExtCallback->pRestriction->ibData; (i - pExtCallback->pRestriction->ibData) < pExtCallback->pRestriction->cbData; i++ )
+-            {
+-                printf("0x%.2X ", pExtCallback->pRestriction->pbBuffer[ i ] );
+-            }
+-            printf("\r\n\r\n");
+-        }
+-            break;
+-#ifndef URSR_VERSION_LESS_OR_EQUAL_20
+-        case DRM_ENABLE_LICENSE_REJECTION_CALLBACK:
+-        {
+-            printf("  Got DRM_ENABLE_LICENSE_REJECTION_CALLBACK from Bind:\r\n");
+-            dr = DRM_SUCCESS;
+-        }
+-            break;
+-#endif
+-        default:
+-            LOGGER_NO_THIS(LERROR_, "Callback from Bind with unknown callback type of %d.", f_dwCallbackType);
+-
+-            /* Report that this callback type is not implemented */
+-            dr = DRM_E_NOTIMPL;
+-    }
+-
+-    ErrorExit:
+-    return dr;
+-
+-}
+-
+- MediaKeySession::MediaKeySession(
++MediaKeySession::MediaKeySession(
+      const uint8_t *f_pbInitData, uint32_t f_cbInitData, 
+      const uint8_t *f_pbCDMData, uint32_t f_cbCDMData, 
+      DRM_VOID *f_pOEMContext, DRM_APP_CONTEXT * appContext,
+@@ -746,6 +584,8 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+     SafeCriticalSection systemLock(drmAppContextMutex_);
+     DRM_RESULT dr = DRM_SUCCESS;
+     DRM_LICENSE_RESPONSE oLicenseResponse;
++    PolicyCallbackUserData callbackUserData;
++    callbackUserData.mediaSession = this;
+ 
+     ChkArg(f_pbKeyMessageResponse != nullptr && f_cbKeyMessageResponse > 0);
+     ChkDR(SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()));
+@@ -758,7 +598,7 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+                         g_rgpdstrRights,
+                         DRM_NO_OF(g_rgpdstrRights),
+                         PolicyCallback,
+-                        this,
++                        static_cast<const void*>(&callbackUserData),
+                         m_oDecryptContext)) == DRM_E_BUFFERTOOSMALL) {
+         uint8_t *pbNewOpaqueBuffer = nullptr;
+         m_cbOpaqueBuffer *= 2;
+diff --git a/MediaSession.h b/MediaSession.h
+index defa7f4..188b532 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -193,6 +193,12 @@ private:
+     void CleanLicenseStore();
+     void CleanDecryptContexts();
+ 
++    struct PolicyCallbackUserData
++    {
++        MediaKeySession *mediaSession{};
++        DecryptContext *decryptContext{};
++    };
++
+     static DRM_RESULT PolicyCallback(
+             const DRM_VOID *f_pvOutputLevelsData,
+             DRM_POLICY_CALLBACK_TYPE f_dwCallbackType,
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 1f3279d..54c0eda 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -54,6 +54,8 @@
+ #include <sstream>
+ #include <byteswap.h>
+ 
++#include <interfaces/DRMCallbackSerialize.h>
++
+ #include "ReportPlayreadyErrors.h"
+ 
+ using SafeCriticalSection = WPEFramework::Core::SafeSyncType<WPEFramework::Core::CriticalSection>;
+@@ -121,67 +123,178 @@ void UpdateSession(const MediaKeySession::DecryptContext* decryptContext)
+     } 
+ }
+ 
+-DRM_RESULT opencdm_output_levels_callback(
+-    const DRM_VOID *outputLevels, 
+-    DRM_POLICY_CALLBACK_TYPE callbackType,    
+-    const DRM_KID */*f_pKID*/,
+-    const DRM_LID */*f_pLID*/,
+-    const DRM_VOID *data) {
+-    // We only care about the play callback.
+-    if (callbackType != DRM_PLAY_OPL_CALLBACK){
+-        return DRM_SUCCESS;
+-    } 
++void PrintExtendedRestriction(const DRM_VOID *callbackData)
++{
++    if (callbackData != nullptr)
++    {
++        const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT *extRestriction = (const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT*)callbackData;
++        LOGGER_NO_THIS(LINFO_, "    wRightID = %d", extRestriction->wRightID);
++        LOGGER_NO_THIS(LINFO_, "    wType    = %d", extRestriction->pRestriction->wType);
++        LOGGER_NO_THIS(LINFO_, "    wFlags   = %x", extRestriction->pRestriction->wFlags);
++        std::string hexString;
++        WPEFramework::Core::ToHexString(&extRestriction->pRestriction->pbBuffer[extRestriction->pRestriction->ibData],
++                extRestriction->pRestriction->cbData, hexString);
++        LOGGER_NO_THIS(LINFO_, "    Data     = %s", hexString.c_str());
++    }
++}
+ 
+-    MediaKeySession::DecryptContext * const decryptContext = const_cast<MediaKeySession::DecryptContext *>(static_cast<const MediaKeySession::DecryptContext*>(data));
++DRM_RESULT MediaKeySession::PolicyCallback(
++            const DRM_VOID *f_pvPolicyCallbackData,
++            DRM_POLICY_CALLBACK_TYPE f_dwCallbackType,
++            const DRM_KID *f_pKID,
++            const DRM_LID *f_pLID,
++            const DRM_VOID *f_pv)
++{
++    DRM_RESULT dr = DRM_SUCCESS;
++    PolicyCallbackUserData *userData = (PolicyCallbackUserData*)f_pv;
++    std::string kidBase64, lidBase64;
++
++    if (f_pKID)
++    {
++        WPEFramework::Core::ToString(f_pKID->rgb, sizeof(f_pKID->rgb), true, kidBase64);
++    }
++    if (f_pLID)
++    {
++        WPEFramework::Core::ToString(f_pLID->rgb, sizeof(f_pLID->rgb), true, lidBase64);
++    }
++
++    switch( f_dwCallbackType )
++    {
++        case DRM_PLAY_OPL_CALLBACK:
++        {
++            LOGGER_NO_THIS(LINFO_, "  Got DRM_PLAY_OPL_CALLBACK (KID=%s / LID=%s)", kidBase64.c_str(), lidBase64.c_str());
+ #ifdef URSR_VERSION_LESS_OR_EQUAL_20
+-    const DRM_PLAY_OPL_EX2 * const opl = static_cast<const DRM_PLAY_OPL_EX2 *>(outputLevels);
++            const DRM_PLAY_OPL_EX2 * const opl = static_cast<const DRM_PLAY_OPL_EX2 *>(f_pvPolicyCallbackData);
+ #else
+-    const DRM_PLAY_OPL_LATEST * const opl = static_cast<const DRM_PLAY_OPL_LATEST *>(outputLevels);
+-    ASSERT(opl->dwVersion == VER_DRM_PLAY_OPL_LATEST);
++            const DRM_PLAY_OPL_LATEST * const opl = static_cast<const DRM_PLAY_OPL_LATEST *>(f_pvPolicyCallbackData);
+ #endif
+-
+-    decryptContext->outputProtection.setOutputLevels(opl->minOPL);
++            ChkArg(opl != NULL);
++
++            LOGGER_NO_THIS(LINFO_, "    minOPL:");
++            LOGGER_NO_THIS(LINFO_, "    wCompressedDigitalVideo   = %d", opl->minOPL.wCompressedDigitalVideo);
++            LOGGER_NO_THIS(LINFO_, "    wUncompressedDigitalVideo = %d", opl->minOPL.wUncompressedDigitalVideo);
++            LOGGER_NO_THIS(LINFO_, "    wAnalogVideo              = %d", opl->minOPL.wAnalogVideo);
++            LOGGER_NO_THIS(LINFO_, "    wCompressedDigitalAudio   = %d", opl->minOPL.wCompressedDigitalAudio);
++            LOGGER_NO_THIS(LINFO_, "    wUncompressedDigitalAudio = %d", opl->minOPL.wUncompressedDigitalAudio);
++
++            //printf("    oplIdReserved:\r\n");
++            //ChkDR( DRMTOOLS_PrintOPLOutputIDs( &opl->oplIdReserved ) );
++            //printf("    vopi:\r\n");
++            //ChkDR( DRMTOOLS_PrintVideoOutputProtectionIDs( &opl->vopi ) );
++            //printf("    dvopi:\r\n");
++            //ChkDR( handleDigitalVideoOutputProtectionIDs( &opl->dvopi ) );
++
++            if (userData && userData->decryptContext)
++            {
++                userData->decryptContext->outputProtection.setOutputLevels(opl->minOPL);
+ 
+     // MaxRes Decode
+ #ifdef URSR_VERSION_LESS_OR_EQUAL_20
+-    const DRM_VIDEO_OUTPUT_PROTECTION_IDS_EX &dvopi = opl->dvopi;
++                const DRM_VIDEO_OUTPUT_PROTECTION_IDS_EX &dvopi = opl->dvopi;
+ #else
+-    const DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_IDS_LATEST &dvopi = opl->dvopi;
++                const DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_IDS_LATEST &dvopi = opl->dvopi;
+ #endif
+-    for (size_t i = 0; i < dvopi.cEntries; ++i)
+-    {
++                for (size_t i = 0; i < dvopi.cEntries; ++i)
++                {
+ #ifdef URSR_VERSION_LESS_OR_EQUAL_20
+-        const DRM_OUTPUT_PROTECTION_EX &dope = dvopi.rgVop[i];
++                    const DRM_OUTPUT_PROTECTION_EX &dope = dvopi.rgVop[i];
+ #else
+-        ASSERT(dvopi.dwVersion == VER_DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_IDS_LATEST);
+-        const DRM_ANALOG_VIDEO_OUTPUT_PROTECTION_LATEST &dope = dvopi.rgVop[i];
++                    ASSERT(dvopi.dwVersion == VER_DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_IDS_LATEST);
++                    const DRM_ANALOG_VIDEO_OUTPUT_PROTECTION_LATEST &dope = dvopi.rgVop[i];
+ #endif
+-        if (DRM_IDENTICAL_GUIDS(&dope.guidId, &g_guidMaxResDecode))
+-        {
++                    if (DRM_IDENTICAL_GUIDS(&dope.guidId, &g_guidMaxResDecode))
++                    {
+ #ifndef URSR_VERSION_LESS_OR_EQUAL_20
+-            ASSERT(dope.dwVersion == VER_DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_LATEST);
++                        ASSERT(dope.dwVersion == VER_DRM_DIGITAL_VIDEO_OUTPUT_PROTECTION_LATEST);
++#endif
++                        uint32_t mrdWidth, mrdHeight;
++                        const int inc = sizeof(uint32_t);
++                        ASSERT(dope.cbConfigData >= 2*inc);
++                        std::copy(&dope.rgbConfigData[0],   &dope.rgbConfigData[0]   + inc, reinterpret_cast<uint8_t*>(&mrdWidth));
++                        std::copy(&dope.rgbConfigData[inc], &dope.rgbConfigData[inc] + inc, reinterpret_cast<uint8_t*>(&mrdHeight));
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++                        mrdWidth  = bswap_32(mrdWidth);
++                        mrdHeight = bswap_32(mrdHeight);
+ #endif
+-            uint32_t mrdWidth, mrdHeight;
+-            const int inc = sizeof(uint32_t);
+-            ASSERT(dope.cbConfigData >= 2*inc);
+-            std::copy(&dope.rgbConfigData[0],   &dope.rgbConfigData[0]   + inc, reinterpret_cast<uint8_t*>(&mrdWidth));
+-            std::copy(&dope.rgbConfigData[inc], &dope.rgbConfigData[inc] + inc, reinterpret_cast<uint8_t*>(&mrdHeight));
+-            #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+-                mrdWidth  = bswap_32(mrdWidth);
+-                mrdHeight = bswap_32(mrdHeight);
+-            #endif
+-            decryptContext->outputProtection.setMaxResDecode(mrdWidth, mrdHeight);
+-            printf("%s MaxResDecode: width : %d\theight: %d\n", __FUNCTION__,
+-                decryptContext->outputProtection.maxResDecodeWidth, 
+-                decryptContext->outputProtection.maxResDecodeHeight);
++                        userData->decryptContext->outputProtection.setMaxResDecode(mrdWidth, mrdHeight);
++                        LOGGER_NO_THIS(LINFO_, "MaxResDecode: width : %d\theight: %d",
++                                userData->decryptContext->outputProtection.maxResDecodeWidth,
++                                userData->decryptContext->outputProtection.maxResDecodeHeight);
++                        break;
++                    }
++                    else if (DRM_IDENTICAL_GUIDS(&dope.guidId, &g_guidHDCPTypeRestriction))
++                    {
++                        uint32_t hdcpType = 0;
++                        const int inc = sizeof(uint32_t);
++                        ASSERT(dope.cbConfigData >= inc);
++                        std::copy(&dope.rgbConfigData[0],   &dope.rgbConfigData[0]   + inc, reinterpret_cast<uint8_t*>(&hdcpType));
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++                        hdcpType  = bswap_32(hdcpType);
++#endif
++                        LOGGER_NO_THIS(LINFO_, "HDCP Type restriction: %d", hdcpType);
++                    }
++                }
++            }
+             break;
+         }
++        case DRM_EXTENDED_RESTRICTION_QUERY_CALLBACK:
++            LOGGER_NO_THIS(LINFO_, "  Got DRM_EXTENDED_RESTRICTION_QUERY_CALLBACK (KID=%s / LID=%s)", kidBase64.c_str(), lidBase64.c_str());
++            PrintExtendedRestriction(f_pvPolicyCallbackData);
++            /* Report that restriction was not understood */
++            dr = DRM_E_EXTENDED_RESTRICTION_NOT_UNDERSTOOD;
++            break;
++        case DRM_EXTENDED_RESTRICTION_CONDITION_CALLBACK:
++        {
++            LOGGER_NO_THIS(LINFO_, "  Got DRM_EXTENDED_RESTRICTION_CONDITION_CALLBACK (KID=%s / LID=%s)", kidBase64.c_str(), lidBase64.c_str());
++            PrintExtendedRestriction(f_pvPolicyCallbackData);
++
++            if (userData && userData->mediaSession && userData->mediaSession->m_piCallback)
++            {
++                static const DRM_BYTE _empty_kid_lid[16] {};
++                bool isRealTimeExpiration = false;
++                uint64_t dwBeginDate = 0, dwEndDate = 0;
++                const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT *extRestriction = (const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT*)f_pvPolicyCallbackData;
++                if (extRestriction->pXMRLicense)
++                {
++                    isRealTimeExpiration = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.RealTimeExpiration.fValid;
++                    if (isRealTimeExpiration)
++                    {
++                        dwBeginDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwBeginDate;
++                        dwEndDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwEndDate;
++                    }
++                }
++                else
++                {
++                    LOGGER_NO_THIS(LINFO_, "XMR license object not available");
++                }
++                CDMi::PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer serializer {
++                    f_pKID ? f_pKID->rgb : _empty_kid_lid,
++                    f_pLID ? f_pLID->rgb : _empty_kid_lid,
++                    dwBeginDate,
++                    dwEndDate,
++                    isRealTimeExpiration};
++                userData->mediaSession->m_piCallback->OnBindLicense(PRD30_EXTENDED_RESTRICTION_CONDITION, serializer.writer.data(), serializer.writer.size());
++            }
++            break;
++        }
++        case DRM_EXTENDED_RESTRICTION_ACTION_CALLBACK:
++            LOGGER_NO_THIS(LINFO_, "  Got DRM_EXTENDED_RESTRICTION_ACTION_CALLBACK (KID=%s / LID=%s)", kidBase64.c_str(), lidBase64.c_str());
++            PrintExtendedRestriction(f_pvPolicyCallbackData);
++            break;
++#ifndef URSR_VERSION_LESS_OR_EQUAL_20
++        case DRM_ENABLE_LICENSE_REJECTION_CALLBACK:
++            LOGGER_NO_THIS(LINFO_, "  Got DRM_ENABLE_LICENSE_REJECTION_CALLBACK (KID=%s / LID=%s)", kidBase64.c_str(), lidBase64.c_str());
++            break;
++#endif
++        default:
++            LOGGER_NO_THIS(LINFO_, "Callback from Bind with unknown callback type of %d.", f_dwCallbackType);
++
++            /* Report that this callback type is not implemented */
++            dr = DRM_E_NOTIMPL;
+     }
+-    
+-    UpdateSession(decryptContext);
+ 
+-    // All done.
+-    return DRM_SUCCESS;
++    ErrorExit:
++    return dr;
+ }
+ 
+ uint32_t MediaKeySession::GetSessionIdExt() const
+@@ -307,22 +420,25 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+     }
+     else {
+         if (SelectDrmHeader(m_poAppContext, mDrmHeader.size(), &mDrmHeader[0]) != CDMi_SUCCESS){
+-        return CDMi_S_FALSE;
++            return CDMi_S_FALSE;
+         }
+ 
+         if (SetKeyId(m_poAppContext, sizeof(keyParam), keyParam) != CDMi_SUCCESS){
+             return CDMi_S_FALSE;
+         }
+ 
+-        std::shared_ptr<DecryptContext> newDecryptContext(new DecryptContext(m_piCallback));
++        std::shared_ptr<DecryptContext> newDecryptContext = std::make_shared<DecryptContext>(m_piCallback);
++        PolicyCallbackUserData callbackUserData;
++        callbackUserData.mediaSession = this;
++        callbackUserData.decryptContext = newDecryptContext.get();
+ 
+         LOGGER(LINFO_, "Drm_Reader_Bind");
+         err = Drm_Reader_Bind(
+                 m_poAppContext,
+                 g_rgpdstrRightsExt,
+                 DRM_NO_OF(g_rgpdstrRightsExt),
+-                &opencdm_output_levels_callback, 
+-                static_cast<const void*>(newDecryptContext.get()),
++                PolicyCallback,
++                static_cast<const void*>(&callbackUserData),
+                 &(newDecryptContext->drmDecryptContext));
+         if (DRM_FAILED(err))
+         {
+@@ -335,12 +451,13 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+         // Netflix use case, Drm_Reader_Commit only needs to be called after
+         // Drm_Reader_Bind.
+         LOGGER(LINFO_,"Drm_Reader_Commit");
+-        err = Drm_Reader_Commit(m_poAppContext, &opencdm_output_levels_callback, static_cast<const void*>(newDecryptContext.get()));
++        err = Drm_Reader_Commit(m_poAppContext, NULL, NULL);
+         if (DRM_FAILED(err))
+         {
+             LOGGER(LERROR_, "Error: Drm_Reader_Commit (error: 0x%08X)", static_cast<unsigned int>(err));
+             return CDMi_S_FALSE;
+         }
++        UpdateSession(newDecryptContext.get());
+ 
+         // Save the new decryption context to our member map, and make it the
+         // active one.
+-- 
+2.30.0
+

@@ -40,13 +40,13 @@ index 150f30e..684595c 100644
 +            if (session->m_piCallback)
 +            {
 +                static const DRM_BYTE _empty_kid_lid[16] {};
-+                bool fValid = false;
++                bool isRealTimeExpiration = false;
 +                uint64_t dwBeginDate = 0, dwEndDate = 0;
 +                DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT const *extRestriction = (DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT const *)f_pvPolicyCallbackData;
 +                if (extRestriction->pXMRLicense)
 +                {
-+                    fValid = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.RealTimeExpiration.fValid;
-+                    if (fValid)
++                    isRealTimeExpiration = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.RealTimeExpiration.fValid;
++                    if (isRealTimeExpiration)
 +                    {
 +                        dwBeginDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwBeginDate;
 +                        dwEndDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwEndDate;
@@ -61,7 +61,7 @@ index 150f30e..684595c 100644
 +                    f_pLID ? f_pLID->rgb : _empty_kid_lid,
 +                    dwBeginDate,
 +                    dwEndDate,
-+                    fValid};
++                    isRealTimeExpiration};
 +                session->m_piCallback->OnBindLicense(PRD30_EXTENDED_RESTRICTION_CONDITION, serializer.writer.data() , serializer.writer.size());
 +            }
          }

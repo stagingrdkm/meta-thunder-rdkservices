@@ -13,20 +13,45 @@ diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
 index 52a1991..51b60ab 100644
 --- a/Source/ocdm/open_cdm.h
 +++ b/Source/ocdm/open_cdm.h
+@@ -204,6 +204,24 @@ typedef enum {
+     OPENCDM_BOOL_TRUE = 1
+ } OpenCDMBool;
+ 
++/**
++ * Bind callback type
++ */
++typedef enum {
++    PRD30_EXTENDED_RESTRICTION_CONDITION
++} OpenCDMBindCallbackType;
++
++/**
++ * Bind callback data structure
++ */
++typedef struct {
++    uint8_t kid[16];
++    uint8_t lid[16];
++    uint64_t dwBeginDate;
++    uint64_t dwEndDate;
++    bool isRealTimeExpiration;
++} ExtendedRestrictionConditionData;
++
+ /**
+  * Registered callbacks with OCDM sessions.
+  */
 @@ -246,6 +246,17 @@ typedef struct {
      * \param userData Pointer passed along when \ref opencdm_construct_session was issued.
      */
      void (*keys_updated_callback)(const struct OpenCDMSession* session, void* userData);
 +
 +    /**
-+     * TODO
++     * Callback fired after binding license, carrying license validity information
 +     *
-+    * \param session The session the notification applies to.
-+    * \param userData Pointer passed along when \ref opencdm_construct_session was issued.
-+     *\param callbackType description
-+     *\param callbackData description
++     *\param session The session the notification applies to.
++     *\param userData Pointer passed along when \ref opencdm_construct_session was issued.
++     *\param callbackType - type of the callback - one of OpenCDMBindCallbackType
++     *\param callbackData depending on the callback type - currently ExtendedRestrictionConditionData
 +     */
-+    void (*bind_license_callback)(const OpenCDMSession* session, void* userData, uint32_t callbackType, const void *callbackData);
++    void (*bind_license_callback)(const OpenCDMSession* session, void* userData, OpenCDMBindCallbackType callbackType, const void *callbackData);
 +
  } OpenCDMSessionCallbacks;
  
@@ -55,18 +80,21 @@ index 1daaab8..2a51c30 100644
          BEGIN_INTERFACE_MAP(Sink)
          INTERFACE_ENTRY(Exchange::ISession::ICallback)
          END_INTERFACE_MAP
-@@ -838,6 +844,22 @@ protected:
+@@ -838,6 +844,25 @@ protected:
              _callback->keys_updated_callback(this, _userData);
          }
      }
 +
-+    void OnBindLicense(uint32_t callbackType, const uint8_t *licenseMessage, const uint8_t licenseMessageLength) {
++    void OnBindLicense(uint32_t callbackType, const uint8_t *licenseMessage, const uint8_t licenseMessageLength)
++    {
 +        if ((_callback != nullptr) && (_callback->bind_license_callback)) {
 +            switch (callbackType) {
-+                case PRD30_EXTENDED_RESTRICTION_CONDITION:
++                case CDMi::BindCallbackType::PRD30_EXTENDED_RESTRICTION_CONDITION:
 +                    {
 +                        CDMi::PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Deserializer deserializer {licenseMessage, licenseMessageLength};
-+                        _callback->bind_license_callback(this, _userData, callbackType, static_cast<void*>(&deserializer.obj));
++                        ExtendedRestrictionConditionData *callbackData = reinterpret_cast<ExtendedRestrictionConditionData*>(&deserializer.obj);
++                        _callback->bind_license_callback(this, _userData, OpenCDMBindCallbackType::PRD30_EXTENDED_RESTRICTION_CONDITION,
++                                static_cast<void*>(callbackData));
 +                    }
 +                    break;
 +                default:
@@ -80,4 +108,3 @@ index 1daaab8..2a51c30 100644
      void* GetSVPContext() const
 -- 
 2.25.1
-

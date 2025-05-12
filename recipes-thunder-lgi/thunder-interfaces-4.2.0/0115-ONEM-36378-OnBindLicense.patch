@@ -6,7 +6,7 @@ Subject: [PATCH] ONEM-36378 OnBindLicense callback and serialization code for
 
 ---
  interfaces/CMakeLists.txt         |  3 +
- interfaces/DRMCallbackData.h      | 23 ++++++++
+ interfaces/DRMCallbackData.h      | 20 ++++++++
  interfaces/DRMCallbackSerialize.h | 95 +++++++++++++++++++++++++++++++
  interfaces/IDRM.h                 | 88 ++++++++++++++++++++++++++++
  interfaces/IOCDM.h                |  3 +
@@ -33,14 +33,12 @@ new file mode 100644
 index 0000000..17fdf8c
 --- /dev/null
 +++ b/interfaces/DRMCallbackData.h
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,20 @@
 +#pragma once
 +
 +#include <stdint.h>
 +
-+#ifdef __cplusplus
-+extern "C" {
-+#endif
++namespace CDMi {
 +
 +enum BindCallbackType : uint32_t {
 +    PRD30_EXTENDED_RESTRICTION_CONDITION
@@ -51,13 +49,11 @@ index 0000000..17fdf8c
 +    uint8_t lid[16];
 +    uint64_t dwBeginDate;
 +    uint64_t dwEndDate;
-+    bool fValid;
++    bool isRealTimeExpiration;
 +};
 +
-+#ifdef __cplusplus
-+} // extern "C"
-+#endif
-\ No newline at end of file
++} // namespace CDMi
++
 diff --git a/interfaces/DRMCallbackSerialize.h b/interfaces/DRMCallbackSerialize.h
 new file mode 100644
 index 0000000..6303aba
@@ -142,9 +138,9 @@ index 0000000..6303aba
 +    {
 +        BufferWriter<sizeof(PRD30_EXTENDED_RESTRICTION_CONDITION_DATA)> writer;
 +
-+        PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer(const uint8_t *kid, const uint8_t *lid, uint64_t dwBeginDate, uint64_t dwEndDate, bool fValid)
++        PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer(const uint8_t *kid, const uint8_t *lid, uint64_t dwBeginDate, uint64_t dwEndDate, bool isRealTimeExpiration)
 +        {
-+            serializeArgs(writer, std::make_pair(kid, 16), std::make_pair(lid, 16), dwBeginDate, dwEndDate, fValid);
++            serializeArgs(writer, std::make_pair(kid, 16), std::make_pair(lid, 16), dwBeginDate, dwEndDate, isRealTimeExpiration);
 +        }
 +    };
 +
@@ -155,7 +151,7 @@ index 0000000..6303aba
 +        PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Deserializer(const uint8_t *data, size_t sz)
 +        {
 +            BufferReader reader {data, sz};
-+            deserializeArgs(reader, std::make_pair(obj.kid, 16), std::make_pair(obj.lid, 16), &obj.dwBeginDate, &obj.dwEndDate, &obj.fValid);
++            deserializeArgs(reader, std::make_pair(obj.kid, 16), std::make_pair(obj.lid, 16), &obj.dwBeginDate, &obj.dwEndDate, &obj.isRealTimeExpiration);
 +        }
 +    };
 +}

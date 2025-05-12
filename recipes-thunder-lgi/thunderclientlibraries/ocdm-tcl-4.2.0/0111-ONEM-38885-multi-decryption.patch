@@ -590,7 +590,7 @@ diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
 index 9011f80..32623fa 100644
 --- a/Source/ocdm/open_cdm.h
 +++ b/Source/ocdm/open_cdm.h
-@@ -660,6 +660,13 @@ EXTERNAL OpenCDMError opencdm_session_decrypt_v2(struct OpenCDMSession* session,
+@@ -678,6 +678,13 @@ EXTERNAL OpenCDMError opencdm_session_decrypt_v2(struct OpenCDMSession* session,
      const SampleInfo* sampleInfo,
      const MediaProperties* streamProperties);
  
