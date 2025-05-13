@@ -1,0 +1,136 @@
+From 07bd8db1cbf1572a44400747ac85c10058e414d3 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Fri, 16 May 2025 18:47:11 +0530
+Subject: [PATCH] [ONEM-38591] Improve license type handling
+
+Change-Id: I75a497c02ee7f7fa73e572796591c9ed911ae048
+---
+ MediaSession.cpp    | 36 ++++++++++++++++++++++++++++++++----
+ MediaSession.h      |  5 ++++-
+ MediaSessionExt.cpp |  4 ++++
+ MediaSystem.cpp     |  2 +-
+ 4 files changed, 41 insertions(+), 6 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 49c06a1..d0b36be 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -351,7 +351,7 @@ MediaKeySession::MediaKeySession(
+      const uint8_t *f_pbInitData, uint32_t f_cbInitData, 
+      const uint8_t *f_pbCDMData, uint32_t f_cbCDMData, 
+      DRM_VOID *f_pOEMContext, DRM_APP_CONTEXT * appContext,
+-     const std::string& keySystem)
++     const std::string& keySystem, int32_t licenseType)
+         : m_poAppContext(appContext)
+         , m_oDecryptContext(nullptr)
+         , m_pbOpaqueBuffer(nullptr)
+@@ -371,9 +371,10 @@ MediaKeySession::MediaKeySession(
+         , mNexusMemorySize(512 * 1024)
+         , mDmaJob(nullptr)
+         , mDmaHandle(nullptr)
+-        , m_keySystem(keySystem) {
++        , m_keySystem(keySystem)
++        , m_licenseType(licenseType) {
+ 
+-    LOGGER(LINFO_, "Contruction MediaKeySession, Build: %s", __TIMESTAMP__ );
++    LOGGER(LINFO_, "Construction of MediaKeySession, LicenseType: %d, Build: %s", licenseType, __TIMESTAMP__ );
+     m_oDecryptContext = new DRM_DECRYPT_CONTEXT;
+     memset(m_oDecryptContext, 0, sizeof(DRM_DECRYPT_CONTEXT));
+ 
+@@ -1037,7 +1038,34 @@ void MediaKeySession::CleanLicenseStore()
+             LOGGER(LERROR_, "Error in Drm_StoreMgmt_DeleteInMemoryLicenses 0x%08lX", dr);
+         } else {
+             m_hasInMemoryLicenses = false;
+-	}
++        }
++    } else if ((m_licenseType == Temporary) && m_hasPersistentLicenses && (!m_kids.empty())) {
++        DRM_DWORD removedCount{};
++        DRM_DWORD licensesRemoved{};
++        m_hasPersistentLicenses = false;
++        LOGGER(LINFO_,"Persistent licenses cleanup");
++        for (auto const& kid: m_kids) {
++            DRM_WCHAR wEncodedKid[CCH_BASE64_EQUIV(DRM_ID_SIZE)] = {0};
++            DRM_DWORD cchEncodedKidSize = CCH_BASE64_EQUIV(DRM_ID_SIZE);
++            DRM_RESULT dr = DRM_B64_EncodeW(kid.data(), sizeof(DRM_KID), wEncodedKid, &cchEncodedKidSize, 0);
++            if (!DRM_FAILED(dr)) {
++
++                PrintBase64(DRM_ID_SIZE, kid.data(), "KID");
++                DRM_CONST_STRING cstrKid = DRM_EMPTY_DRM_STRING;
++                cstrKid.pwszString = wEncodedKid;
++                cstrKid.cchString = cchEncodedKidSize;
++
++                dr = Drm_StoreMgmt_DeleteLicenses(m_poAppContext, &cstrKid, nullptr, &removedCount);
++                if DRM_FAILED(dr) {
++                    LOGGER(LERROR_, "Error in Drm_StoreMgmt_DeleteLicenses 0x%08lX", dr);
++                } else {
++                    licensesRemoved += removedCount;
++                }
++            } else {
++                LOGGER(LERROR_, "Error: Error base64-encoding KID (error: 0x%08X)", dr);
++            }
++        }
++        LOGGER(LINFO_, "Number of licenses removed :%d",licensesRemoved);
+     }
+ }
+ 
+diff --git a/MediaSession.h b/MediaSession.h
+index 188b532..2f0bca2 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -141,7 +141,7 @@ public:
+         const uint8_t *f_pbInitData, uint32_t f_cbInitData, 
+         const uint8_t *f_pbCDMData, uint32_t f_cbCDMData, 
+         DRM_VOID *f_pOEMContext, DRM_APP_CONTEXT * poAppContext,
+-        const std::string& keySystem);
++        const std::string& keySystem, int32_t licenseType);
+    
+     ~MediaKeySession();
+     bool playreadyGenerateKeyRequest();
+@@ -266,6 +266,9 @@ private:
+     NEXUS_DmaJobHandle mDmaJob;
+     NEXUS_DmaHandle mDmaHandle;
+     bool m_hasInMemoryLicenses{false};
++    bool m_hasPersistentLicenses{false};
++    std::vector<std::vector<uint8_t>> m_kids;
++    int32_t m_licenseType;
+ };
+ 
+ } // namespace CDMi
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 54c0eda..43e9cd9 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -618,6 +618,9 @@ DRM_RESULT MediaKeySession::ProcessLicenseResponse(const uint8_t* licenseData, u
+         }
+     } else {
+         LOGGER(LINFO_, "License response has persistent licenses: %d", oLicenseResponse.m_fHasPersistentLicenses);
++        if (oLicenseResponse.m_fHasPersistentLicenses) {
++            m_hasPersistentLicenses = true;
++        }
+ 
+         // === Extract various ID's from drmLicenseResponse
+         //
+@@ -661,6 +664,7 @@ DRM_RESULT MediaKeySession::ProcessLicenseResponse(const uint8_t* licenseData, u
+             LOGGER(LINFO_, "KID/LID[%d]:", i);
+             PrintBase64(sizeof(licAck->m_oLID.rgb), licAck->m_oLID.rgb, "LID");
+             PrintBase64(sizeof(licAck->m_oKID.rgb), licAck->m_oKID.rgb, "KID");
++            m_kids.emplace_back(oLicenseResponse.m_rgoAcks[i].m_oKID.rgb, oLicenseResponse.m_rgoAcks[i].m_oKID.rgb + DRM_ID_SIZE);
+         }
+     }
+ 
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 7ff4e9d..5a424c4 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -449,7 +449,7 @@ public:
+                  f_pbInitData, f_cbInitData,
+                  f_pbCDMData, f_cbCDMData,
+                  m_drmOemContext, &it->second->drmAppctx,
+-                 keySystem
++                 keySystem, licenseType
+                  );
+              *f_ppiMediaKeySession = newSession;
+              it->second->mediaKeySessionsCount++;
+-- 
+2.25.1
+
