@@ -1,0 +1,78 @@
+From 3071648ae20ff8641c4eaf87cd80977de8f151f2 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Mon, 23 Jun 2025 10:30:40 +0530
+Subject: [PATCH] [ONEM-41322] Retrieve license URL alongside challenge data
+
+Change-Id: Icf7c00795ff1165202678493a9f16c011af4d6d1
+---
+ MediaSession.h      |  2 +-
+ MediaSessionExt.cpp | 19 +++++++++++++++----
+ 2 files changed, 16 insertions(+), 5 deletions(-)
+
+diff --git a/MediaSession.h b/MediaSession.h
+index fe9dcd1..8d145c8 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -180,7 +180,7 @@ public:
+ 
+     virtual uint32_t GetSessionIdExt(void) const override;
+     virtual CDMi_RESULT SetDrmHeader(const uint8_t drmHeader[], uint32_t drmHeaderLength) override;
+-    virtual CDMi_RESULT GetChallengeDataExt(uint8_t* challenge, uint32_t& challengeSize, uint32_t isLDL) override;
++    virtual CDMi_RESULT GetChallengeDataExt(uint8_t* challenge, uint32_t& challengeSize, uint32_t isLDL, uint8_t* url, uint32_t& urlSize) override;
+     virtual CDMi_RESULT CancelChallengeDataExt() override;
+     virtual CDMi_RESULT StoreLicenseData(const uint8_t licenseData[], uint32_t licenseDataSize, uint8_t* secureStopId) override;
+     virtual CDMi_RESULT SelectKeyId(const uint8_t keyLength, const uint8_t keyId[]) override;
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 4daeebc..fdba944 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -493,7 +493,7 @@ CDMi_RESULT MediaKeySession::CleanDecryptContext()
+     return CDMi_SUCCESS;
+ }
+ 
+-CDMi_RESULT MediaKeySession::GetChallengeDataExt(uint8_t * challenge, uint32_t & challengeSize, uint32_t /* isLDL */)
++CDMi_RESULT MediaKeySession::GetChallengeDataExt(uint8_t * challenge, uint32_t & challengeSize, uint32_t /* isLDL */,  uint8_t* url , uint32_t& urlSize)
+ {
+     SafeCriticalSection systemLock(drmAppContextMutex_);
+ 
+@@ -518,6 +518,17 @@ CDMi_RESULT MediaKeySession::GetChallengeDataExt(uint8_t * challenge, uint32_t &
+     if (challengeSize == 0) {
+         passedChallenge = nullptr;
+     }
++    // This is to cover the case when the caller is only interested in the "challenge"
++    // and passes "url size" as zero. In such cases, passing a valid pointer to "url size"
++    // with value zero results in an unwanted error from the DRM API.
++    uint32_t *pPassedUrlSize = &urlSize;
++    if (challengeSize !=0 && urlSize == 0) {
++        pPassedUrlSize = nullptr;
++    }
++    DRM_CHAR* passedUrl = nullptr;
++    if (urlSize != 0) {
++        passedUrl = reinterpret_cast<DRM_CHAR*>(url);
++    }
+ 
+     // Find the size of the challenge.
+     err = Drm_LicenseAcq_GenerateChallenge(m_poAppContext,
+@@ -526,8 +537,8 @@ CDMi_RESULT MediaKeySession::GetChallengeDataExt(uint8_t * challenge, uint32_t &
+                                             nullptr,
+                                             nullptr,
+                                             0,
+-                                            nullptr,
+-                                            nullptr,
++                                            passedUrl,
++                                            pPassedUrlSize,
+                                             nullptr,
+                                             nullptr,
+                                             passedChallenge, 
+@@ -539,7 +550,7 @@ CDMi_RESULT MediaKeySession::GetChallengeDataExt(uint8_t * challenge, uint32_t &
+         return CDMi_S_FALSE;
+     }
+ 
+-    if ((passedChallenge != nullptr) && (err == DRM_E_BUFFERTOOSMALL)){
++    if ((passedChallenge != nullptr || passedUrl != nullptr) && (err == DRM_E_BUFFERTOOSMALL)){
+         LOGGER(LERROR_, "Error: Drm_LicenseAcq_GenerateChallenge (error: 0x%08X)", static_cast<unsigned int>(err));
+         return CDMi_OUT_OF_MEMORY ;
+     }
+-- 
+2.25.1
+

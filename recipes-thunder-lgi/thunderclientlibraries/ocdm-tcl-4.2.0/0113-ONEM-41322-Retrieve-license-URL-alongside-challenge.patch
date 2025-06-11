@@ -1,0 +1,71 @@
+From e4461b06a725d1c81e17fa1144f645000508c6c0 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Mon, 23 Jun 2025 10:26:47 +0530
+Subject: [PATCH] [ONEM-41322] Retrieve license URL alongside challenge data
+
+---
+ Source/ocdm/open_cdm_ext.cpp | 8 ++++++--
+ Source/ocdm/open_cdm_ext.h   | 2 +-
+ Source/ocdm/open_cdm_impl.h  | 4 ++--
+ 3 files changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/Source/ocdm/open_cdm_ext.cpp b/Source/ocdm/open_cdm_ext.cpp
+index 870c150..8f84844 100644
+--- a/Source/ocdm/open_cdm_ext.cpp
++++ b/Source/ocdm/open_cdm_ext.cpp
+@@ -235,16 +235,20 @@ opencdm_session_set_drm_header(struct OpenCDMSession* opencdmSession,
+ OpenCDMError
+ opencdm_session_get_challenge_data(struct OpenCDMSession* mOpenCDMSession,
+     uint8_t* challenge, uint32_t* challengeSize,
+-    uint32_t isLDL)
++    uint32_t isLDL, uint8_t* url, uint32_t* urlSize)
+ {
+     ASSERT(mOpenCDMSession != nullptr);
+     ASSERT((*challengeSize) < 0xFFFF);
+     uint16_t realLength = static_cast<uint16_t>(*challengeSize);
+ 
+-    OpenCDMError result = static_cast<OpenCDMError>(mOpenCDMSession->GetChallengeDataExt(challenge, realLength, isLDL));
++    uint16_t urlBufferSize = static_cast<uint16_t>(urlSize != nullptr ? *urlSize : 0);
++    OpenCDMError result = static_cast<OpenCDMError>(mOpenCDMSession->GetChallengeDataExt(challenge, realLength, isLDL, url, urlBufferSize));
+ 
+     *challengeSize = realLength;
+ 
++    if (urlSize != nullptr) {
++        *urlSize = urlBufferSize;
++    }
+     return (result);
+ }
+ 
+diff --git a/Source/ocdm/open_cdm_ext.h b/Source/ocdm/open_cdm_ext.h
+index b838491..c1feedd 100644
+--- a/Source/ocdm/open_cdm_ext.h
++++ b/Source/ocdm/open_cdm_ext.h
+@@ -174,7 +174,7 @@ EXTERNAL OpenCDMError opencdm_session_set_drm_header(struct OpenCDMSession* open
+  */
+ EXTERNAL OpenCDMError opencdm_session_get_challenge_data(struct OpenCDMSession* mOpenCDMSession,
+     uint8_t* challenge, uint32_t* challengeSize,
+-    uint32_t isLDL);
++    uint32_t isLDL, uint8_t* url = NULL, uint32_t* urlSize = NULL);
+ 
+ /**
+  * Cancel Challenge data in progress
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index fe9dbcd..af7e23b 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -707,10 +707,10 @@ inline void SetParameter(const std::string& name, const std::string& value)
+ 
+     Exchange::OCDM_RESULT GetChallengeDataExt(uint8_t* challenge,
+         uint16_t& challengeSize,
+-        uint32_t isLDL)
++        uint32_t isLDL, uint8_t* url, uint16_t& urlSize)
+     {
+         ASSERT(_sessionExt && "This method only works on Exchange::ISessionExt implementations.");
+-        return _sessionExt->GetChallengeDataExt(challenge, challengeSize, isLDL);
++        return _sessionExt->GetChallengeDataExt(challenge, challengeSize, isLDL, url, urlSize);
+     }
+ 
+     Exchange::OCDM_RESULT CancelChallengeDataExt()
+-- 
+2.25.1
+
