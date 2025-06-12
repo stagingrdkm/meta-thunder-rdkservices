@@ -1,0 +1,102 @@
+From e52f57adf660a318cac68906d1f579f68b38c37a Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Wed, 25 Jun 2025 17:18:01 +0530
+Subject: [PATCH] ARRISEOS-47697 memory leak when using extended API
+
+Change-Id: Ie7fa4a6f4bd467b1c5033aa6dd59c7fec627317f
+---
+ MediaSession.cpp | 42 ++++++++++++++++++++++--------------------
+ 1 file changed, 22 insertions(+), 20 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 38b68ae..b2b4f71 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -383,8 +383,6 @@ MediaKeySession::MediaKeySession(
+         , m_licenseType(licenseType) {
+ 
+     LOGGER(LINFO_, "Construction of MediaKeySession, LicenseType: %d, Build: %s", licenseType, __TIMESTAMP__ );
+-    m_oDecryptContext = new DRM_DECRYPT_CONTEXT;
+-    memset(m_oDecryptContext, 0, sizeof(DRM_DECRYPT_CONTEXT));
+ 
+     DRM_RESULT dr = DRM_SUCCESS;
+     DRM_ID oSessionID;
+@@ -597,6 +595,16 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+     DRM_LICENSE_RESPONSE oLicenseResponse;
+     PolicyCallbackUserData callbackUserData;
+     callbackUserData.mediaSession = this;
++    std::shared_ptr<DecryptContext> newDecryptContext;
++    const char* singleKeyId = "single-session-key";
++    static const std::vector<uint8_t> singleSessionKeyIdVec(singleKeyId, singleKeyId + std::strlen(singleKeyId));
++    std::pair<DecryptContextMap::iterator, bool> mapInsertResult;
++    DecryptContextMap::iterator index = mDecryptContextMap.find(singleSessionKeyIdVec);
++    if (index != mDecryptContextMap.end()) {
++        LOGGER(LERROR_, "DecryptContext for the key already exists.");
++        dr = DRM_E_FAIL;
++        goto ErrorExit;
++    }
+ 
+     ChkArg(f_pbKeyMessageResponse != nullptr && f_cbKeyMessageResponse > 0);
+     ChkDR(SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()));
+@@ -604,13 +612,14 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+     dr = ProcessLicenseResponse(f_pbKeyMessageResponse, f_cbKeyMessageResponse, oLicenseResponse);
+     ChkDR(dr);
+ 
++    newDecryptContext = std::make_shared<DecryptContext>(m_piCallback);
+     LOGGER(LINFO_, "Binding License...");
+     while ((dr = Drm_Reader_Bind(m_poAppContext,
+                         g_rgpdstrRights,
+                         DRM_NO_OF(g_rgpdstrRights),
+                         PolicyCallback,
+                         static_cast<const void*>(&callbackUserData),
+-                        m_oDecryptContext)) == DRM_E_BUFFERTOOSMALL) {
++                        &(newDecryptContext->drmDecryptContext))) == DRM_E_BUFFERTOOSMALL) {
+         uint8_t *pbNewOpaqueBuffer = nullptr;
+         m_cbOpaqueBuffer *= 2;
+ 
+@@ -636,6 +645,8 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+     UpdateLicenseProps();
+     ChkDR( Drm_Reader_Commit( m_poAppContext, nullptr, nullptr ) );
+ 
++    mapInsertResult = mDecryptContextMap.insert(std::make_pair(singleSessionKeyIdVec, newDecryptContext));
++    m_oDecryptContext = &(mapInsertResult.first->second->drmDecryptContext);
+     m_eKeyState = KEY_READY;
+     LOGGER(LINFO_, "Key processed, now ready for content decryption");
+ 
+@@ -1082,25 +1093,16 @@ void MediaKeySession::CleanLicenseStore()
+ 
+ void MediaKeySession::CleanDecryptContexts()
+ {
+-    if (mDecryptContextMap.size() > 0){
+-        m_oDecryptContext = nullptr;
+-        // Close all decryptors that were created on this session
+-        for (DecryptContextMap::iterator it = mDecryptContextMap.begin(); it != mDecryptContextMap.end(); ++it)
+-        {
+-            PrintBase64(DRM_ID_SIZE, &it->first[0], "Drm_Reader_Close for keyId");
+-            if(it->second){
+-                Drm_Reader_Close(&(it->second->drmDecryptContext));
+-            }
++    m_oDecryptContext = nullptr;
++    // Close all decryptors that were created on this session
++    for (DecryptContextMap::iterator it = mDecryptContextMap.begin(); it != mDecryptContextMap.end(); ++it)
++    {
++        PrintBase64(DRM_ID_SIZE, &it->first[0], "Drm_Reader_Close for keyId");
++        if(it->second){
++            Drm_Reader_Close(&(it->second->drmDecryptContext));
+         }
+-        mDecryptContextMap.clear();
+-    }
+-
+-    if (m_oDecryptContext != nullptr) {
+-        LOGGER(LINFO_, "Closing active decrypt context");
+-        Drm_Reader_Close(m_oDecryptContext);
+-        delete m_oDecryptContext;
+-        m_oDecryptContext = nullptr;
+     }
++    mDecryptContextMap.clear();
+ }
+ 
+ CDMi_RESULT MediaKeySession::Metrics(uint32_t& bufferLength, uint8_t buffer[]) const {
+-- 
+2.34.1
+

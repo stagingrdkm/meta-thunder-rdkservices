@@ -45,3 +45,4 @@ SRC_URI += "file://0130-ARRISEOS-47926-Passing-empty-init-data-to-session-constr
 SRC_URI += "file://0131-ONEM-40994-Improve-PR-logging.patch"
 SRC_URI += "file://0132-ONEM-41322-Retrieve-license-URL-alongside-challenge.patch"
 SRC_URI += "file://0133-ONEM-41323-Use-extended-error-codes.patch"
+SRC_URI += "file://0134-ARRISEOS-47697-memory-leak-when-using-extended-API.patch"
