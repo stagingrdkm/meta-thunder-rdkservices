@@ -1,0 +1,44 @@
+Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+
+ARRISEOS-47926 - in case of passing empty init data the checked condition for f_pbInitData to be nullptr
+was not fulfilled although it was passed that way on OCDM client side.
+As a result rest of constructor was not executed.
+
+---
+ MediaSession.cpp | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index d0b36be..c9978b7 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -382,20 +382,22 @@ MediaKeySession::MediaKeySession(
+     DRM_ID oSessionID;
+     DRM_DWORD cchEncodedSessionID = sizeof(m_rgchSessionID);
+     std::string playreadyInitData;
++    const char *passedInitData{nullptr};
+ 
++    if (f_cbInitData != 0) {
++        passedInitData = reinterpret_cast<const char *>(f_pbInitData);
++    }
+     // The current state MUST be KEY_CLOSED otherwise error out.
+     ChkBOOL(m_eKeyState == KEY_CLOSED, DRM_E_INVALIDARG);
+-
+-    ChkArg((f_pbInitData == nullptr) == (f_cbInitData == 0));
+     
+     if( NEXUS_Memory_Allocate(mNexusMemorySize, nullptr, &pNexusMemory) != 0 ) {
+         LOGGER(LERROR_, "NexusMemory, could not allocate memory %d", mNexusMemorySize);
+         goto ErrorExit;
+     }
+ 
+-    if (f_pbInitData != nullptr) {
++    if (passedInitData != nullptr) {
+ 
+-        std::string initData(reinterpret_cast<const char *>(f_pbInitData), f_cbInitData);
++        std::string initData(passedInitData, f_cbInitData);
+         if (!parsePlayreadyInitializationData(initData, &playreadyInitData)) {
+             playreadyInitData = initData;
+         }
+-- 
+2.30.0
+
