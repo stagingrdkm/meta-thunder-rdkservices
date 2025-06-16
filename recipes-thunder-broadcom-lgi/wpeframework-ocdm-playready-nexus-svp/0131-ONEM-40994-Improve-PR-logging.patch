@@ -1,0 +1,144 @@
+From adeb1ead039a3e76b87c3bd88a39a6301abf5cef Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Tue, 17 Jun 2025 20:24:24 +0530
+Subject: [PATCH] ONEM-40994 Improve PR logging
+
+Change-Id: I5bdfbda66f28be35ee7e899fefc6ed4b24e2441f
+---
+ MediaSession.cpp        | 16 ++++++++++++----
+ MediaSession.h          |  8 +-------
+ MediaSessionExt.cpp     |  6 +++---
+ ReportPlayreadyErrors.h |  8 ++++++--
+ 4 files changed, 22 insertions(+), 16 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index d0b36be..fd65b75 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -231,6 +231,14 @@ bool parsePlayreadyInitializationData(const std::string& initData, std::string*
+     return false;
+ }
+ 
++void MediaKeySession::PrintBase64(const int32_t length, const uint8_t* data, const char id[])
++{
++    std::string base64, hex;
++    WPEFramework::Core::ToString(data, length, true, base64);
++    WPEFramework::Core::ToHexString(data, length, hex);
++    LOGGER(LINFO_, "%s: %s\t[%s]", id, base64.c_str(), hex.c_str());
++}
++
+ void MediaKeySession::PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize, bool flush)
+ {
+     NEXUS_Error rc;
+@@ -244,7 +252,7 @@ void MediaKeySession::PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize,
+         if (mDmaHandle == NULL) {
+             mDmaHandle = NEXUS_Dma_Open(NEXUS_ANY_ID, NULL);
+             if (mDmaHandle == NULL) {
+-                fprintf(stderr, "%s: Failed to NEXUS_Dma_Open !!!\n", __FUNCTION__);
++                LOGGER(LERROR_, "Failed to NEXUS_Dma_Open !!!");
+                 return;
+             }
+         }
+@@ -252,7 +260,7 @@ void MediaKeySession::PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize,
+         mDmaJob = NEXUS_DmaJob_Create(mDmaHandle, &dmaJobSettings);
+ 
+         if (mDmaJob == NULL) {
+-            fprintf(stderr, "%s: Failed to NEXUS_DmaJob_Create !!!\n", __FUNCTION__);
++            LOGGER(LERROR_, "Failed to NEXUS_DmaJob_Create !!!");
+             return;
+         }
+     }
+@@ -273,7 +281,7 @@ void MediaKeySession::PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize,
+             NEXUS_DmaJobStatus status;
+             rc = NEXUS_DmaJob_GetStatus(mDmaJob, &status);
+             if (rc != NEXUS_SUCCESS) {
+-                fprintf(stderr, "%s: DmaJob_GetStatus err=%d\n", __FUNCTION__, rc);
++                LOGGER(LERROR_, "DmaJob_GetStatus err=%d", rc);
+                 return;
+             }
+             if (status.currentState == NEXUS_DmaJobState_eComplete ) {
+@@ -283,7 +291,7 @@ void MediaKeySession::PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize,
+         }
+     }
+     else if (rc != NEXUS_SUCCESS) {
+-        fprintf(stderr, "%s: error in dma transfer, err:%d\n", __FUNCTION__, rc);
++        LOGGER(LERROR_, "error in dma transfer, err:%d", rc);
+         return;
+     }
+ 
+diff --git a/MediaSession.h b/MediaSession.h
+index 2f0bca2..fe9dcd1 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -207,13 +207,7 @@ private:
+             const DRM_VOID *f_pv);
+ 
+     int InitSecureClock(DRM_APP_CONTEXT *pDrmAppCtx);
+-    inline void PrintBase64(const int32_t length, const uint8_t* data, const char id[])
+-    {
+-        std::string base64, hex;
+-        WPEFramework::Core::ToString(data, length, true, base64);
+-        WPEFramework::Core::ToHexString(data, length, hex);
+-        LOGGER(LINFO_, "%s: %s\t[%s]", id, base64.c_str(), hex.c_str());
+-    }
++    void PrintBase64(const int32_t length, const uint8_t* data, const char id[]);
+     inline void ToggleKeyIdFormat(const uint8_t keyLength, uint8_t keyId[])
+     {
+         ASSERT(keyLength > 8);
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 43e9cd9..4daeebc 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -177,11 +177,11 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+             LOGGER_NO_THIS(LINFO_, "    wCompressedDigitalAudio   = %d", opl->minOPL.wCompressedDigitalAudio);
+             LOGGER_NO_THIS(LINFO_, "    wUncompressedDigitalAudio = %d", opl->minOPL.wUncompressedDigitalAudio);
+ 
+-            //printf("    oplIdReserved:\r\n");
++            //LOGGER_NO_THIS(LINFO_, "    oplIdReserved:");
+             //ChkDR( DRMTOOLS_PrintOPLOutputIDs( &opl->oplIdReserved ) );
+-            //printf("    vopi:\r\n");
++            //LOGGER_NO_THIS(LINFO_, "    vopi:");
+             //ChkDR( DRMTOOLS_PrintVideoOutputProtectionIDs( &opl->vopi ) );
+-            //printf("    dvopi:\r\n");
++            //LOGGER_NO_THIS(LINFO_, "    dvopi:");
+             //ChkDR( handleDigitalVideoOutputProtectionIDs( &opl->dvopi ) );
+ 
+             if (userData && userData->decryptContext)
+diff --git a/ReportPlayreadyErrors.h b/ReportPlayreadyErrors.h
+index ae8e1c2..35e5a37 100644
+--- a/ReportPlayreadyErrors.h
++++ b/ReportPlayreadyErrors.h
+@@ -1,6 +1,9 @@
+ #ifdef HAVE_LIBODHERR_ODHERR_H
+ 
+ #include <rdk/libodherr/odherr.hpp>
++#include <string.h>
++#include <sys/syscall.h>
++#include <unistd.h>
+ 
+ #ifdef ExamineDRValue
+ #undef ExamineDRValue
+@@ -19,9 +22,10 @@ do {
+ #undef LOGGER_NO_THIS
+ #endif
+ 
++#define __FILENAME__ (std::strrchr(__FILE__, '/') ? std::strrchr(__FILE__, '/') + 1 : __FILE__)
+ #define LOGGER(lvl, fmt , ... )                                                                                     \
+     do {                                                                                                            \
+-        fprintf(stdout, "[%s:%d](%s){object=%p} " fmt "\n", __FILE__, __LINE__, __FUNCTION__, this, ##__VA_ARGS__); \
++        fprintf(stdout, "[%s:%d](%s)[tid=%ld]{object=%p} " fmt "\n", __FILENAME__, __LINE__, __FUNCTION__, syscall(SYS_gettid), this, ##__VA_ARGS__); \
+         fflush(stdout);                                                                                             \
+         if (lvl == LERROR_) {                                                                                       \
+             char *msg = odh_error_report_sprintf(fmt, ##__VA_ARGS__);                                               \
+@@ -32,7 +36,7 @@ do {
+ 
+ #define LOGGER_NO_THIS(lvl, fmt, ...)                                                                               \
+     do {                                                                                                            \
+-        fprintf(stdout, "[%s:%d](%s) " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);                  \
++        fprintf(stdout, "[%s:%d](%s)[tid=%ld] " fmt "\n", __FILENAME__, __LINE__, __FUNCTION__, syscall(SYS_gettid), ##__VA_ARGS__);                  \
+         fflush(stdout);                                                                                             \
+         if (lvl == LERROR_) {                                                                                       \
+             char *msg = odh_error_report_sprintf(fmt, ##__VA_ARGS__);                                               \
+-- 
+2.34.1
+
