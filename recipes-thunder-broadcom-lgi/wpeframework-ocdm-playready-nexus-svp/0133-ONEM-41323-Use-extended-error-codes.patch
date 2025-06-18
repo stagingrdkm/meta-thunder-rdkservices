@@ -1,0 +1,244 @@
+From 0f1d2bb9b620736696739d8c43e00fa6ab5bc965 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Wed, 25 Jun 2025 09:53:42 +0530
+Subject: [PATCH] [ONEM-41323] Use extended error codes
+
+Change-Id: Ie6eca271064469cdafa4eea0cd1d1d2beb242169
+---
+ MediaSession.cpp    |  1 +
+ MediaSession.h      |  1 +
+ MediaSessionExt.cpp | 77 ++++++++++++++++++++++++++++++++++-----------
+ MediaSystem.cpp     | 10 ++----
+ 4 files changed, 64 insertions(+), 25 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 9e7e36d..38b68ae 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -885,6 +885,7 @@ ErrorExit:
+             }
+             pOpaqueData = nullptr;
+         }
++        cr = MapDrmErrorToCDMiResult(dr);
+         LOGGER(LERROR_, "Decryption failed (error: 0x%08X)", static_cast<uint32_t>(dr));
+         if (m_piCallback) {
+             // Error code should normally be passed in first param but its type is too small (int16_t)
+diff --git a/MediaSession.h b/MediaSession.h
+index 8d145c8..03e71e5 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -264,5 +264,6 @@ private:
+     std::vector<std::vector<uint8_t>> m_kids;
+     int32_t m_licenseType;
+ };
++CDMi_RESULT MapDrmErrorToCDMiResult(DRM_RESULT drmResult, CDMi_RESULT defaultError = CDMi_S_FALSE);
+ 
+ } // namespace CDMi
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index fdba944..a62370f 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -345,17 +345,17 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
+         // FIXME NRDLIB-4481: This will need to be implemented when we start
+         // using batch license requests.
+         LOGGER(LERROR_, "Drm_LicenseAcq_ProcessResponse too many licenses in response.");
+-        return CDMi_S_FALSE;
++        return MapDrmErrorToCDMiResult(err);
+     }
+     else if (DRM_FAILED(err)) {
+         LOGGER(LERROR_, "Drm_LicenseAcq_ProcessResponse failed (error: 0x%08X)", static_cast<unsigned int>(err));
+-        return CDMi_S_FALSE;
++        return MapDrmErrorToCDMiResult(err);
+     }
+ 
+     // Next, examine the returned drmLicenseResponse struct for a top-level error.
+     if (DRM_FAILED(drmLicenseResponse.m_dwResult)) {
+         LOGGER(LERROR_, "Error in DRM_LICENSE_RESPONSE");
+-        return CDMi_S_FALSE;
++        return MapDrmErrorToCDMiResult(drmLicenseResponse.m_dwResult);
+     }
+ 
+     // Finally, ensure that each license in the response was processed
+@@ -374,14 +374,14 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
+                 if (DRM_FAILED(err))
+                 {
+                     LOGGER(LERROR_, "Error: Drm_Reinitialize returned (error: 0x%08X)", static_cast<unsigned int>(err));
+-                    return CDMi_S_FALSE;
++                    return MapDrmErrorToCDMiResult(err);
+                 }
+ 
+             }
+             else {
+                 LOGGER(LERROR_, "Error 0x%08lX found in license %d", (unsigned long)drmLicenseResponse.m_rgoAcks[i].m_dwResult, i);
+             }
+-            return CDMi_S_FALSE;
++            return MapDrmErrorToCDMiResult(drmLicenseResponse.m_rgoAcks[i].m_dwResult);
+         }
+     }
+ 
+@@ -419,12 +419,14 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+         UpdateSession(index->second.get());
+     }
+     else {
+-        if (SelectDrmHeader(m_poAppContext, mDrmHeader.size(), &mDrmHeader[0]) != CDMi_SUCCESS){
+-            return CDMi_S_FALSE;
++        result = SelectDrmHeader(m_poAppContext, mDrmHeader.size(), &mDrmHeader[0]);
++        if (result != CDMi_SUCCESS){
++            return result;
+         }
+ 
+-        if (SetKeyId(m_poAppContext, sizeof(keyParam), keyParam) != CDMi_SUCCESS){
+-            return CDMi_S_FALSE;
++        result = SetKeyId(m_poAppContext, sizeof(keyParam), keyParam);
++        if (result != CDMi_SUCCESS){
++            return result;
+         }
+ 
+         std::shared_ptr<DecryptContext> newDecryptContext = std::make_shared<DecryptContext>(m_piCallback);
+@@ -443,7 +445,7 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+         if (DRM_FAILED(err))
+         {
+             LOGGER(LERROR_, "Error: Drm_Reader_Bind (error: 0x%08X)", static_cast<unsigned int>(err));
+-            return CDMi_S_FALSE;
++            return MapDrmErrorToCDMiResult(err);
+         }
+         UpdateLicenseProps();
+ 
+@@ -455,7 +457,7 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+         if (DRM_FAILED(err))
+         {
+             LOGGER(LERROR_, "Error: Drm_Reader_Commit (error: 0x%08X)", static_cast<unsigned int>(err));
+-            return CDMi_S_FALSE;
++            return MapDrmErrorToCDMiResult(err);
+         }
+         UpdateSession(newDecryptContext.get());
+ 
+@@ -509,8 +511,9 @@ CDMi_RESULT MediaKeySession::GetChallengeDataExt(uint8_t * challenge, uint32_t &
+     ASSERT(m_poAppContext != nullptr);
+ 
+     // Set this session's DMR header in the PR3 app context.
+-     if (SelectDrmHeader(m_poAppContext, mDrmHeader.size(), &mDrmHeader[0]) != CDMi_SUCCESS){
+-        return CDMi_S_FALSE;
++    CDMi_RESULT result = SelectDrmHeader(m_poAppContext, mDrmHeader.size(), &mDrmHeader[0]);
++    if (result != CDMi_SUCCESS){
++        return result;
+     }
+ 
+     // PlayReady doesn't like valid pointer + size 0
+@@ -547,12 +550,12 @@ CDMi_RESULT MediaKeySession::GetChallengeDataExt(uint8_t * challenge, uint32_t &
+ 
+     if ((err != DRM_E_BUFFERTOOSMALL) && (DRM_FAILED(err))){
+         LOGGER(LERROR_, "Error: Drm_LicenseAcq_GenerateChallenge (error: 0x%08X)", static_cast<unsigned int>(err));
+-        return CDMi_S_FALSE;
++        return MapDrmErrorToCDMiResult(err);
+     }
+ 
+     if ((passedChallenge != nullptr || passedUrl != nullptr) && (err == DRM_E_BUFFERTOOSMALL)){
+         LOGGER(LERROR_, "Error: Drm_LicenseAcq_GenerateChallenge (error: 0x%08X)", static_cast<unsigned int>(err));
+-        return CDMi_OUT_OF_MEMORY ;
++        return MapDrmErrorToCDMiResult(err);
+     }
+ 
+     return CDMi_SUCCESS;
+@@ -567,7 +570,7 @@ CDMi_RESULT MediaKeySession::SetKeyId(DRM_APP_CONTEXT *pDrmAppCtx, const uint8_t
+     DRM_RESULT err = DRM_B64_EncodeW(&keyId[0], sizeof(DRM_KID), rgwchEncodedKid, &cchEncodedKid, 0);
+     if (DRM_FAILED(err)) {
+         LOGGER(LERROR_, "Error: Error base64-encoding KID (error: 0x%08X)", static_cast<unsigned int>(err));
+-        return CDMi_S_FALSE;
++        return MapDrmErrorToCDMiResult(err);
+     }
+ 
+     PrintBase64(DRM_ID_SIZE, keyId, "keyId");
+@@ -580,7 +583,7 @@ CDMi_RESULT MediaKeySession::SetKeyId(DRM_APP_CONTEXT *pDrmAppCtx, const uint8_t
+             sizeof(rgwchEncodedKid));
+     if (DRM_FAILED(err)) {
+         LOGGER(LERROR_, "Error in Drm_Content_SetProperty DRM_CSP_SELECT_KID (error: 0x%08X)", static_cast<unsigned int>(err));
+-        return CDMi_S_FALSE;
++        return MapDrmErrorToCDMiResult(err);
+     }
+     
+     return CDMi_SUCCESS;
+@@ -598,7 +601,7 @@ CDMi_RESULT MediaKeySession::SelectDrmHeader(DRM_APP_CONTEXT *pDrmAppCtx,
+             headerLength);
+     if (DRM_FAILED(err)) {
+         LOGGER(LERROR_, "Error: Drm_Content_SetProperty DRM_CSP_AUTODETECT_HEADER (error: 0x%08X)", static_cast<unsigned int>(err));
+-        return CDMi_S_FALSE;
++        return MapDrmErrorToCDMiResult(err);
+     }
+ 
+     return CDMi_SUCCESS;
+@@ -695,4 +698,42 @@ void MediaKeySession::UpdateLicenseProps()
+     }
+ }
+ 
++CDMi_RESULT MapDrmErrorToCDMiResult(DRM_RESULT dr, CDMi_RESULT defaultError)
++{
++    CDMi_RESULT result = defaultError;
++    switch (dr) {
++        case DRM_E_BRCM_PLATFORM_ALREADY_INITIALIZED:
++            result = CDMi_BUSY_CANNOT_INITIALIZE;
++            break;
++        case DRM_E_BUFFERTOOSMALL:
++            result = CDMi_OUT_OF_MEMORY;
++            break;
++        case DRM_E_INVALIDARG:
++            result = CDMi_INVALID_ARG;
++            break;
++        case DRM_E_LICENSE_EXPIRED:
++        case DRM_E_LICENSE_REALTIME_EXPIRED:
++            result = CDMi_LICENSE_EXPIRED;
++            break;
++        case DRM_E_LICENSE_NOT_FOUND:
++            result = CDMi_LICENSE_NOT_FOUND;
++            break;
++        case DRM_E_TEE_OUTPUT_PROTECTION_REQUIREMENTS_NOT_MET:
++            result = CDMi_TEE_OUTPUT_PROTECTION_REQUIREMENTS_NOT_MET;
++            break;
++        case DRM_E_SERVER_INTERNAL_ERROR:
++            result = CDMi_SERVER_INTERNAL_ERROR;
++            break;
++        case DRM_E_SERVER_INVALID_MESSAGE:
++            result = CDMi_SERVER_INVALID_MESSAGE;
++            break;
++        case DRM_E_SERVER_SERVICE_SPECIFIC:
++            result = CDMi_SERVER_SERVICE_SPECIFIC;
++            break;
++        default:
++            result = defaultError;
++    }
++    return result;
+ }
++
++}
+\ No newline at end of file
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 5a424c4..12e2db2 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -388,12 +388,8 @@ public:
+     ErrorExit:
+         if (DRM_FAILED(dr))
+         {
+-            if (dr == DRM_E_BRCM_PLATFORM_ALREADY_INITIALIZED) {
+-                cr = CDMi_BUSY_CANNOT_INITIALIZE;
+-            } else {
+-                cr = CDMi_S_FALSE;
+-                LOGGER(LERROR_, "Playready System Initialize failed (error: 0x%08X)", static_cast<unsigned int>(dr));
+-            }
++            cr = MapDrmErrorToCDMiResult(dr, CDMi_INIT_FAILED);
++            LOGGER(LERROR_, "Playready System Initialize failed (error: 0x%08X)", static_cast<unsigned int>(dr));
+         }
+ 
+         return cr;
+@@ -997,7 +993,7 @@ public:
+ 
+     ErrorExit:
+         if (DRM_FAILED(dr)) {
+-            cr =  CDMi_S_FALSE;
++            cr =  MapDrmErrorToCDMiResult(dr, CDMi_INIT_FAILED);
+             LOGGER(LERROR_,  "Error in creating system ext,  0x%08lX", dr);
+         }
+ 
+-- 
+2.25.1
+

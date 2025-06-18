@@ -1,0 +1,38 @@
+From 5f2bc20c031199d454f0833fbe530e076ba18044 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Tue, 24 Jun 2025 16:52:29 +0530
+Subject: [PATCH] [ONEM-41323] Use extended error codes
+
+---
+ Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp | 2 +-
+ Source/ocdm/open_cdm_impl.h                           | 1 -
+ 2 files changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+index 9536dfe..dbdd4c3 100644
+--- a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
++++ b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+@@ -339,7 +339,7 @@ OpenCDMError opencdm_gstreamer_session_multi_decrypt(struct OpenCDMSession* sess
+                     result = ERROR_UNKNOWN;
+                 }
+             } else {
+-                TRACE_L1("Decryption failed: %d", result);
++                TRACE_L1("Decryption failed: (0x%08x)", result);
+             }
+         }
+ 
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index af7e23b..be9b20f 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -686,7 +686,6 @@ inline void SetParameter(const std::string& name, const std::string& value)
+             if(result)
+             {
+                 TRACE_L1("Decrypt() failed with return code: %x", result);
+-                result = OpenCDMError::ERROR_UNKNOWN;
+             }
+         }
+         return (result);
+-- 
+2.25.1
+
