@@ -215,7 +215,7 @@ diff --git a/MediaSystem.cpp b/MediaSystem.cpp
 index 5a424c4..12e2db2 100644
 --- a/MediaSystem.cpp
 +++ b/MediaSystem.cpp
-@@ -388,12 +388,8 @@ public:
+@@ -383,12 +383,8 @@ public:
      ErrorExit:
          if (DRM_FAILED(dr))
          {
@@ -230,7 +230,7 @@ index 5a424c4..12e2db2 100644
          }
  
          return cr;
-@@ -997,7 +993,7 @@ public:
+@@ -983,7 +979,7 @@ public:
  
      ErrorExit:
          if (DRM_FAILED(dr)) {

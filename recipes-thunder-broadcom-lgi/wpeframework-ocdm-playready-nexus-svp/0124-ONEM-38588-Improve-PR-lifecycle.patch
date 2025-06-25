@@ -13,7 +13,7 @@ index 6b7fd41..a76e1d1 100644
  };
  
  namespace {
-@@ -281,12 +282,50 @@ public:
+@@ -281,12 +282,45 @@ public:
          }
      }
  
@@ -21,8 +21,6 @@ index 6b7fd41..a76e1d1 100644
 +    CDMi_RESULT InitializeCtx(const std::string& keySystem) override
 +    {
 +        LOGGER(LINFO_, "Key system: %s", keySystem.c_str());
-+        CDMi_RESULT cr = CDMi_SUCCESS;
-+        /* TODO: Enable with ONEM-40865
 +        SafeCriticalSection systemLock(drmAppContextMutex_);
 +        CDMi_RESULT cr = InitializeSystemRefCounted(keySystem);
 +        if (cr == CDMi_SUCCESS) {
@@ -30,7 +28,7 @@ index 6b7fd41..a76e1d1 100644
 +            ASSERT(it != m_keySystemCtxs.end());
 +            it->second->refCount++;
 +            LOGGER(LINFO_, "Key system: %s, ref count: %d\n", keySystem.c_str(), it->second->refCount);
-+        }*/
++        }
 +        return cr;
 +    }
 +
@@ -39,7 +37,6 @@ index 6b7fd41..a76e1d1 100644
 +    {
 +        LOGGER(LINFO_, "Key system: %s, clean on destroy: %d", keySystem.c_str(), cleanOnDestroy);
 +        CDMi_RESULT cr = CDMi_SUCCESS;
-+        /* TODO: Enable with ONEM-40865
 +        SafeCriticalSection systemLock(drmAppContextMutex_);
 +        auto it = m_keySystemCtxs.find(keySystem);
 +        if (it != m_keySystemCtxs.end()) {
@@ -49,7 +46,7 @@ index 6b7fd41..a76e1d1 100644
 +        } else {
 +            LOGGER(LERROR_, "No key system context for %s", keySystem.c_str());
 +            cr = CDMi_S_FALSE;
-+        } */
++        }
 +        return cr;
 +    }
 +
@@ -58,9 +55,8 @@ index 6b7fd41..a76e1d1 100644
          int count = 0;
          auto it = m_keySystemCtxs.find(keySystem);
          if (it != m_keySystemCtxs.end()) {
-             count = it->second->mediaKeySessionsCount;
-+            //TODO: ONEM-40865 - replace above with:
-+            //count = it->second->refCount;
+-            count = it->second->mediaKeySessionsCount;
++            count = it->second->refCount;
          }
          if (count == 0) {
              Stopwatch sw;
@@ -74,7 +70,7 @@ index 6b7fd41..a76e1d1 100644
          }
  
          return cr;
-@@ -376,30 +412,31 @@ public:
+@@ -376,30 +412,29 @@ public:
           return DRM_SUCCESS;
      }
  
@@ -82,9 +78,8 @@ index 6b7fd41..a76e1d1 100644
 +    void DeinitializeSystemRefCounted(const std::string& keySystem, bool cleanOnDestroy = true) {
          auto it = m_keySystemCtxs.find(keySystem);
          ASSERT(it != m_keySystemCtxs.end());
-         if (it->second->mediaKeySessionsCount == 0) {
-+        //TODO: ONEM-40865 - replace above if with:
-+        //if (it->second->refCount == 0) {
+-        if (it->second->mediaKeySessionsCount == 0) {
++        if (it->second->refCount == 0) {
              Stopwatch sw;
 -            CleanupStore(keySystem);
 +            if (cleanOnDestroy) {
@@ -117,15 +112,15 @@ index 6b7fd41..a76e1d1 100644
                                          DRM_STORE_CLEANUP_DELETE_REMOVAL_DATE_LICENSES,
                                          nullptr, 20, ReportProgress);
          if(DRM_FAILED(dr))
-@@ -433,24 +470,30 @@ public:
+@@ -433,24 +470,26 @@ public:
          IMediaKeySession **f_ppiMediaKeySession) {
          SafeCriticalSection systemLock(drmAppContextMutex_);
  
-+        //TODO: ONEM-40865 To be removed
-         CDMi_RESULT cr = InitializeSystemRefCounted(keySystem);
-         if (cr != CDMi_SUCCESS) {
-             return cr;
-         }
++        CDMi_RESULT cr = CDMi_SUCCESS;
+-        CDMi_RESULT cr = InitializeSystemRefCounted(keySystem);
+-        if (cr != CDMi_SUCCESS) {
+-            return cr;
+-        }
 -       // count permanent licenses
 -       if (licenseType != Temporary) m_persistentKeyCount++;
 -       auto it = m_keySystemCtxs.find(keySystem);

@@ -354,7 +354,7 @@ index ec3658f..7ff4e9d 100644
          
          WPEFramework::Core::SystemInfo::SetEnvironment(_T("HOME"), persistentPath);  
  
-@@ -407,11 +403,6 @@ public:
+@@ -402,11 +398,6 @@ public:
      {
      }
  
@@ -366,8 +366,8 @@ index ec3658f..7ff4e9d 100644
      void DeinitializeSystemRefCounted(const std::string& keySystem, bool cleanOnDestroy = true) {
          auto it = m_keySystemCtxs.find(keySystem);
          ASSERT(it != m_keySystemCtxs.end());
-@@ -420,28 +411,12 @@ public:
-         //if (it->second->refCount == 0) {
+@@ -413,28 +402,12 @@ public:
+         if (it->second->refCount == 0) {
              Stopwatch sw;
              if (cleanOnDestroy) {
 -                CleanupStore(it->second.get());
@@ -396,7 +396,7 @@ index ec3658f..7ff4e9d 100644
          }
      }
  
-@@ -451,14 +426,6 @@ public:
+@@ -444,14 +419,6 @@ public:
              LOGGER(LINFO_, "Drm_Platform_Uninitialize");
              m_drmOemContext = nullptr;
          }
@@ -411,7 +411,7 @@ index ec3658f..7ff4e9d 100644
      }
  
      CDMi_RESULT CreateMediaKeySession(
-@@ -478,8 +445,6 @@ public:
+@@ -467,8 +434,6 @@ public:
  
          auto it = m_keySystemCtxs.find(keySystem);
          if (it != m_keySystemCtxs.end()) {
@@ -420,7 +420,7 @@ index ec3658f..7ff4e9d 100644
              CDMi::MediaKeySession* newSession= new CDMi::MediaKeySession(
                   f_pbInitData, f_cbInitData,
                   f_pbCDMData, f_cbCDMData,
-@@ -932,22 +897,14 @@ public:
+@@ -919,22 +884,14 @@ public:
          DRM_SECURETIME_CLOCK_TYPE eClockType;   /* Initialized by Drm_SecureTime_GetValue */
  
          DRM_DWORD dwEncryptionMode  = OEM_TEE_DECRYPTION_MODE_NOT_SECURE;
@@ -446,7 +446,7 @@ index ec3658f..7ff4e9d 100644
  
          auto keySystemCtx = std::make_shared<KeySystemCtx>();
  
-@@ -955,10 +912,12 @@ public:
+@@ -942,10 +899,11 @@ public:
                              m_drmOemContext,
                              keySystemCtx->opaqueBuffer.data(),
                              keySystemCtx->opaqueBuffer.size(),
@@ -456,11 +456,10 @@ index ec3658f..7ff4e9d 100644
          if(DRM_FAILED(dr)) {
              LOGGER(LERROR_, "Error in Drm_Initialize: 0x%08lX\n", dr);
 +            DeleteSecureStoreUnlocked(keySystem);
-+            //TODO: Set appropriate error code so that it can be recognized to initialize again
              goto ErrorExit;
          }
              dr = Drm_SecureTime_GetValue(&keySystemCtx->drmAppctx, &ftSystemTime, &eClockType  );
-@@ -1055,24 +1014,7 @@ public:
+@@ -1042,24 +1000,7 @@ public:
      CDMi_RESULT DeleteSecureStore(const std::string& keySystem) override
      {
          SafeCriticalSection lock(drmAppContextMutex_);
@@ -486,7 +485,7 @@ index ec3658f..7ff4e9d 100644
      }
  
      CDMi_RESULT GetKeyStoreHash(
-@@ -1100,6 +1042,51 @@ public:
+@@ -1087,6 +1028,51 @@ public:
      }
  
      CDMi_RESULT CleanSecureStore(const std::string& keySystem) override
@@ -538,7 +537,7 @@ index ec3658f..7ff4e9d 100644
      {
          CDMi_RESULT cr = CDMi_SUCCESS;
          auto it = m_keySystemCtxs.find(keySystem);
-@@ -1120,32 +1107,60 @@ public:
+@@ -1107,32 +1093,60 @@ public:
          return cr;
      }
  
@@ -618,7 +617,7 @@ index ec3658f..7ff4e9d 100644
      // Map to keep track of app contexts,opaque buffer and revocation buffer created for particular keysystems (designators)
      // It gets updated upon calls to Drm_Initialize / Drm_Uninitialize
      std::unordered_map<std::string, std::shared_ptr<KeySystemCtx>> m_keySystemCtxs;
-@@ -1154,10 +1169,6 @@ private:
+@@ -1141,10 +1155,6 @@ private:
      std::string m_storeLocation;
      DRM_BYTE* m_meteringCertificate;
      uint32_t m_meteringCertificateSize;
