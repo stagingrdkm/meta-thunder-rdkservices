@@ -1,0 +1,61 @@
+From 7ab4eda04021187a26d3de3a97afabf7c9f210c0 Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Fri, 27 Jun 2025 15:10:47 +0530
+Subject: [PATCH] ONEM-41325 Bind callback extensions
+
+---
+ Source/ocdm/open_cdm.h      | 9 +++++----
+ Source/ocdm/open_cdm_impl.h | 8 ++++----
+ 2 files changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
+index 04305de..ebe1747 100644
+--- a/Source/ocdm/open_cdm.h
++++ b/Source/ocdm/open_cdm.h
+@@ -212,7 +212,7 @@ typedef enum {
+  * Bind callback type
+  */
+ typedef enum {
+-    PRD30_EXTENDED_RESTRICTION_CONDITION
++    PRD30_BIND_CALLBACK
+ } OpenCDMBindCallbackType;
+ 
+ /**
+@@ -221,10 +221,11 @@ typedef enum {
+ typedef struct {
+     uint8_t kid[16];
+     uint8_t lid[16];
+-    uint64_t dwBeginDate;
+-    uint64_t dwEndDate;
++    uint64_t expirationBeginDate;
++    uint64_t expirationEndDate;
+     bool isRealTimeExpiration;
+-} ExtendedRestrictionConditionData;
++    uint16_t uncompressedContentOplLevel;
++} BindCallbackData;
+ 
+ /**
+  * Registered callbacks with OCDM sessions.
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index be9b20f..48fa7eb 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -854,11 +854,11 @@ protected:
+     {
+         if ((_callback != nullptr) && (_callback->bind_license_callback)) {
+             switch (callbackType) {
+-                case CDMi::BindCallbackType::PRD30_EXTENDED_RESTRICTION_CONDITION:
++                case CDMi::BindCallbackType::PRD30_BIND_CALLBACK:
+                     {
+-                        CDMi::PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Deserializer deserializer {licenseMessage, licenseMessageLength};
+-                        ExtendedRestrictionConditionData *callbackData = reinterpret_cast<ExtendedRestrictionConditionData*>(&deserializer.obj);
+-                        _callback->bind_license_callback(this, _userData, OpenCDMBindCallbackType::PRD30_EXTENDED_RESTRICTION_CONDITION,
++                        CDMi::PRD30_BIND_CALLBACK_DATA_Deserializer deserializer {licenseMessage, licenseMessageLength};
++                        BindCallbackData *callbackData = reinterpret_cast<BindCallbackData*>(&deserializer.obj);
++                        _callback->bind_license_callback(this, _userData, OpenCDMBindCallbackType::PRD30_BIND_CALLBACK,
+                                 static_cast<void*>(callbackData));
+                     }
+                     break;
+-- 
+2.34.1
+

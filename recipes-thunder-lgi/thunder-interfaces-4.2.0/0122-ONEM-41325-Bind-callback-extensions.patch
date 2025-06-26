@@ -1,0 +1,115 @@
+From 953b21901f3418101082136cf2b28e3b1f876840 Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Fri, 27 Jun 2025 15:02:59 +0530
+Subject: [PATCH] ONEM-41325 Bind callback extensions
+
+---
+ interfaces/DRMCallbackData.h      |  9 +++++----
+ interfaces/DRMCallbackSerialize.h | 25 +++++++++++++++++--------
+ interfaces/IDRM.h                 |  5 +++++
+ 3 files changed, 27 insertions(+), 12 deletions(-)
+
+diff --git a/interfaces/DRMCallbackData.h b/interfaces/DRMCallbackData.h
+index e08ef20..5585fc4 100644
+--- a/interfaces/DRMCallbackData.h
++++ b/interfaces/DRMCallbackData.h
+@@ -5,15 +5,16 @@
+ namespace CDMi {
+ 
+ enum BindCallbackType : uint32_t {
+-    PRD30_EXTENDED_RESTRICTION_CONDITION
++    PRD30_BIND_CALLBACK
+ };
+ 
+-struct PRD30_EXTENDED_RESTRICTION_CONDITION_DATA {
++struct PRD30_BIND_CALLBACK_DATA {
+     uint8_t kid[16];
+     uint8_t lid[16];
+-    uint64_t dwBeginDate;
+-    uint64_t dwEndDate;
++    uint64_t expirationBeginDate;
++    uint64_t expirationEndDate;
+     bool isRealTimeExpiration;
++    uint16_t uncompressedContentOplLevel;
+ };
+ 
+ } // namespace CDMi
+diff --git a/interfaces/DRMCallbackSerialize.h b/interfaces/DRMCallbackSerialize.h
+index b8ce452..8e2c75a 100644
+--- a/interfaces/DRMCallbackSerialize.h
++++ b/interfaces/DRMCallbackSerialize.h
+@@ -19,6 +19,11 @@ namespace {
+         return writer.Write8(val);
+     }
+ 
++    template<typename WriterT>
++    bool serialize(WriterT &writer, const uint16_t& val) {
++        return writer.Write2(val);
++    }
++
+     template<typename WriterT>
+     bool serialize(WriterT &writer, const bool& val) {
+         return writer.WriteBool(val);;
+@@ -40,6 +45,10 @@ namespace {
+         return reader.Read8(val);
+     }
+ 
++    bool deserialize(BufferReader &reader, uint16_t* val) {
++        return reader.Read2(val);
++    }
++
+     bool deserialize(BufferReader &reader, bool* val) {
+         uint8_t v;
+         bool ret = reader.Read1(&v);
+@@ -72,24 +81,24 @@ namespace {
+ 
+ namespace CDMi {
+ 
+-    struct PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer
++    struct PRD30_BIND_CALLBACK_DATA_Serializer
+     {
+-        BufferWriter<sizeof(PRD30_EXTENDED_RESTRICTION_CONDITION_DATA)> writer;
++        BufferWriter<sizeof(PRD30_BIND_CALLBACK_DATA)> writer;
+ 
+-        PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer(const uint8_t *kid, const uint8_t *lid, uint64_t dwBeginDate, uint64_t dwEndDate, bool isRealTimeExpiration)
++        PRD30_BIND_CALLBACK_DATA_Serializer(const uint8_t *kid, const uint8_t *lid, uint64_t expirationBeginDate, uint64_t expirationEndDate, bool isRealTimeExpiration, uint16_t uncompressedContentOplLevel)
+         {
+-            serializeArgs(writer, std::make_pair(kid, 16), std::make_pair(lid, 16), dwBeginDate, dwEndDate, isRealTimeExpiration);
++            serializeArgs(writer, std::make_pair(kid, 16), std::make_pair(lid, 16), expirationBeginDate, expirationEndDate, isRealTimeExpiration, uncompressedContentOplLevel);
+         }
+     };
+ 
+-    struct PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Deserializer
++    struct PRD30_BIND_CALLBACK_DATA_Deserializer
+     {
+-        PRD30_EXTENDED_RESTRICTION_CONDITION_DATA obj;
++        PRD30_BIND_CALLBACK_DATA obj;
+ 
+-        PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Deserializer(const uint8_t *data, size_t sz)
++        PRD30_BIND_CALLBACK_DATA_Deserializer(const uint8_t *data, size_t sz)
+         {
+             BufferReader reader {data, sz};
+-            deserializeArgs(reader, std::make_pair(obj.kid, 16), std::make_pair(obj.lid, 16), &obj.dwBeginDate, &obj.dwEndDate, &obj.isRealTimeExpiration);
++            deserializeArgs(reader, std::make_pair(obj.kid, 16), std::make_pair(obj.lid, 16), &obj.expirationBeginDate, &obj.expirationEndDate, &obj.isRealTimeExpiration, &obj.uncompressedContentOplLevel);
+         }
+     };
+ }
+diff --git a/interfaces/IDRM.h b/interfaces/IDRM.h
+index 62a6394..769e733 100644
+--- a/interfaces/IDRM.h
++++ b/interfaces/IDRM.h
+@@ -232,6 +232,11 @@ public:
+         return WriteInt(v);
+     }
+ 
++    inline bool Write2(uint16_t v) WARNING_RESULT_NOT_USED
++    {
++        return WriteInt(v);
++    }
++
+     inline const uint8_t *data() { return buf_; }
+     inline size_t size() const { return SZ; }
+ 
+-- 
+2.34.1
+

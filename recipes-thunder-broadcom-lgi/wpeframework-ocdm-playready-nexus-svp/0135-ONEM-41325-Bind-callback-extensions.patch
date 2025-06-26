@@ -1,0 +1,98 @@
+From 0a47fba026f27330397b3db38b664ee565eedbd6 Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Mon, 30 Jun 2025 14:01:09 +0530
+Subject: [PATCH] ONEM-41325 Bind callback extensions
+
+Change-Id: Ifa85046aa6938e038cc25708f6bf25986a97b042
+---
+ MediaSession.h      |  7 ++++++-
+ MediaSessionExt.cpp | 37 ++++++++++++++++++++++---------------
+ 2 files changed, 28 insertions(+), 16 deletions(-)
+
+diff --git a/MediaSession.h b/MediaSession.h
+index 03e71e5..3ec0d87 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -129,7 +129,12 @@ public:
+     struct DecryptContext
+     {
+         DRM_DECRYPT_CONTEXT drmDecryptContext;
+-        OutputProtection outputProtection;
++        OutputProtection outputProtection{};
++        DRM_KID f_pKID{};
++        DRM_LID f_pLID{};
++        uint64_t expirationBeginDate{};
++        uint64_t expirationEndDate{};
++        bool isRealTimeExpiration{};
+         IMediaKeySessionCallback* callback;
+         DecryptContext(IMediaKeySessionCallback* mcallback);
+     };
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index a62370f..3cf08e4 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -248,32 +248,28 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+             LOGGER_NO_THIS(LINFO_, "  Got DRM_EXTENDED_RESTRICTION_CONDITION_CALLBACK (KID=%s / LID=%s)", kidBase64.c_str(), lidBase64.c_str());
+             PrintExtendedRestriction(f_pvPolicyCallbackData);
+ 
+-            if (userData && userData->mediaSession && userData->mediaSession->m_piCallback)
++            if (userData && userData->decryptContext)
+             {
+-                static const DRM_BYTE _empty_kid_lid[16] {};
+-                bool isRealTimeExpiration = false;
+-                uint64_t dwBeginDate = 0, dwEndDate = 0;
+                 const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT *extRestriction = (const DRM_EXTENDED_RESTRICTION_CALLBACK_STRUCT*)f_pvPolicyCallbackData;
+                 if (extRestriction->pXMRLicense)
+                 {
+-                    isRealTimeExpiration = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.RealTimeExpiration.fValid;
+-                    if (isRealTimeExpiration)
++                    userData->decryptContext->isRealTimeExpiration = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.RealTimeExpiration.fValid;
++                    if (userData->decryptContext->isRealTimeExpiration)
+                     {
+-                        dwBeginDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwBeginDate;
+-                        dwEndDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwEndDate;
++                        userData->decryptContext->expirationBeginDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwBeginDate;
++                        userData->decryptContext->expirationEndDate = extRestriction->pXMRLicense->OuterContainer.GlobalPolicyContainer.Expiration.dwEndDate;
+                     }
+                 }
+                 else
+                 {
+                     LOGGER_NO_THIS(LINFO_, "XMR license object not available");
+                 }
+-                CDMi::PRD30_EXTENDED_RESTRICTION_CONDITION_DATA_Serializer serializer {
+-                    f_pKID ? f_pKID->rgb : _empty_kid_lid,
+-                    f_pLID ? f_pLID->rgb : _empty_kid_lid,
+-                    dwBeginDate,
+-                    dwEndDate,
+-                    isRealTimeExpiration};
+-                userData->mediaSession->m_piCallback->OnBindLicense(PRD30_EXTENDED_RESTRICTION_CONDITION, serializer.writer.data(), serializer.writer.size());
++                if (f_pKID) {
++                    userData->decryptContext->f_pKID = *f_pKID;
++                }
++                if (f_pLID) {
++                    userData->decryptContext->f_pLID = *f_pLID;
++                }
+             }
+             break;
+         }
+@@ -460,6 +456,17 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+             return MapDrmErrorToCDMiResult(err);
+         }
+         UpdateSession(newDecryptContext.get());
++        if(m_piCallback != nullptr)
++        {
++            CDMi::PRD30_BIND_CALLBACK_DATA_Serializer serializer {
++                    reinterpret_cast<const uint8_t*>(newDecryptContext->f_pKID.rgb),
++                    reinterpret_cast<const uint8_t*>(newDecryptContext->f_pLID.rgb),
++                    newDecryptContext->expirationBeginDate,
++                    newDecryptContext->expirationEndDate,
++                    newDecryptContext->isRealTimeExpiration,
++                    std::max(newDecryptContext->outputProtection.uncompressedDigitalVideoLevel, newDecryptContext->outputProtection.uncompressedDigitalAudioLevel)};
++            m_piCallback->OnBindLicense(PRD30_BIND_CALLBACK, serializer.writer.data(), serializer.writer.size());
++        }
+ 
+         // Save the new decryption context to our member map, and make it the
+         // active one.
+-- 
+2.34.1
+

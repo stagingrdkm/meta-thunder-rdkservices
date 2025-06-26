@@ -20,6 +20,7 @@ SRC_URI += "file://0111-ONEM-38885-multi-decryption.patch"
 SRC_URI += "file://0112-ONEM-38627-Extend-Error-Codes.patch"
 SRC_URI += "file://0113-ONEM-41322-Retrieve-license-URL-alongside-challenge.patch"
 SRC_URI += "file://0114-ONEM-41323-Use-extended-error-codes.patch"
+SRC_URI += "file://0115-ONEM-41325-Bind-callback-extensions.patch"
 
 EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
 
