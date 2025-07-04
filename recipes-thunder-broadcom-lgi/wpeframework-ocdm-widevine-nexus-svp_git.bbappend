@@ -44,3 +44,6 @@ SRC_URI += "file://FindNXCLIENT.cmake;subdir=OCDM-Widevine-Nexus-SVP/cmake"
 SRC_URI += "file://ONEM-38782-Secure-store-separation.patch"
 SRC_URI += "file://ONEM-38885-multi-decryption.patch"
 
+SRC_URI += "file://SWRDKV-4884_widevine_istorage_on_persisent_path.0702.patch"
+SRC_URI += "file://ONEM-41930-persistent-path-widevine.patch"
+SRC_URI += "file://ONEM-41930-SessionType-Mapping-WPE-Widevine-SVP.patch"

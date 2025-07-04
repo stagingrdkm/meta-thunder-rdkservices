@@ -1,0 +1,36 @@
+2025.09.12 Hridhya Narayanan (hnarayanan.ext@libertyglobal.com)
+[ONEM-41930] Mapping sessionType enum between WPE and widevine cdm
+
+Index: OCDM-Widevine-Nexus-SVP/MediaSession.cpp
+===================================================================
+--- OCDM-Widevine-Nexus-SVP.orig/MediaSession.cpp
++++ OCDM-Widevine-Nexus-SVP/MediaSession.cpp
+@@ -86,7 +86,6 @@ MediaKeySession::MediaKeySession(widevin
+     , m_CDMData("")
+     , m_initData("")
+     , m_initDataType(widevine::Cdm::kCenc)
+-    , m_licenseType((widevine::Cdm::SessionType)licenseType)
+     , m_sessionId("")
+     , m_TokenHandle(nullptr)
+     , m_pNexusMemory(nullptr)
+@@ -113,6 +112,20 @@ MediaKeySession::MediaKeySession(widevin
+         }
+     }
+ #endif
++
++  //mapping licenseType to widevine::Cdm::SessionType
++  switch((LicenseType)licenseType) {
++  case PersistentUsageRecord:
++    m_licenseType = widevine::Cdm::kPersistentUsageRecord;
++    break;
++  case PersistentLicense:
++    m_licenseType = widevine::Cdm::kPersistentLicense;
++    break;
++  default:
++    m_licenseType = widevine::Cdm::kTemporary;
++    break;
++  }
++
+   m_cdm->createSession(m_licenseType, &m_sessionId);
+
+   ::memset(m_IV, 0 , sizeof(m_IV));

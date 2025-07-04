@@ -11,4 +11,4 @@ PACKAGECONFIG[opencdmi_prnx_svp]  = "-DPLUGIN_OPENCDMI_PLAYREADY_NEXUS_SVP=ON -D
 PACKAGECONFIG[opencdmi_vgrdm] = "-DPLUGIN_OPENCDMI_PLAYREADY_VGDRM=ON,,"
 PACKAGECONFIG[opencdmi_wv]    = "-DPLUGIN_OPENCDMI_WIDEVINE=ON,,,wpeframework-ocdm-widevine"
 PACKAGECONFIG[opencdmi_wv2]   = "-DPLUGIN_OPENCDMI_WIDEVINE2=ON,,,wpeframework-ocdm-widevine2"
-PACKAGECONFIG[opencdmi_wv_svp]    = "-DPLUGIN_OPENCDMI_WIDEVINE=ON,,,wpeframework-ocdm-widevine-nexus-svp"
+PACKAGECONFIG[opencdmi_wv_svp]    = "-DPLUGIN_OPENCDMI_WIDEVINE=ON -DPLUGIN_OPENCDMI_WIDEVINE_STORAGE_LOCATION=/mnt/drm_storage/wpeframework/OCDM/wv.storage/,,,wpeframework-ocdm-widevine-nexus-svp"

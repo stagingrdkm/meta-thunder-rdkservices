@@ -1,0 +1,57 @@
+2025.09.12 Hridhya Narayanan (hnarayanan.ext@libertyglobal.com)
+[ONEM-41930] Added implementation for widevine persistent path
+
+Index: OCDM-Widevine-Nexus-SVP/MediaSystem.cpp
+===================================================================
+--- OCDM-Widevine-Nexus-SVP.orig/MediaSystem.cpp
++++ OCDM-Widevine-Nexus-SVP/MediaSystem.cpp
+@@ -82,6 +82,7 @@ private:
+             , Device()
+             , BuildInfo()
+             , CertScope()
++	    , StorageLocation()
+         {
+             Add(_T("certificate"), &Certificate);
+             Add(_T("product"), &Product);
+@@ -90,6 +91,7 @@ private:
+             Add(_T("device"), &Device);
+             Add(_T("buildinfo"), &BuildInfo);
+             Add(_T("certscope"), &CertScope);
++	    Add(_T("storagelocation"), &StorageLocation);
+         }
+         ~Config()
+         {
+@@ -102,6 +104,7 @@ private:
+         Core::JSON::String Device;
+         Core::JSON::String BuildInfo;
+         Core::JSON::String CertScope;
++	Core::JSON::String StorageLocation;
+     };
+
+ public:
+@@ -145,12 +148,20 @@ public:
+         Config config;
+         config.FromString(configline);
+
+-        { // Set a base path for IStorage such as cert.bin and usgtable.bin
++        {   // Set a base path for IStorage such as cert.bin and usgtable.bin
++	    TRACE_L1("configline: %s\n", configline.c_str());
++
+             string basePath;
+-            if( shell->PersistentPath().back() == '/' ) {
+-                basePath = string(shell->PersistentPath() + "wv.storage");
+-            } else {
+-                basePath = string(shell->PersistentPath() + "/wv.storage");
++
++	    if (config.StorageLocation.IsSet() == true) {
++                basePath = config.StorageLocation.Value();
++	    } else {
++		string persistentPath = shell->PersistentPath();
++                if (!persistentPath.empty() && persistentPath.back() == '/' ) {
++                     basePath = persistentPath + "wv.storage";
++                } else {
++                     basePath = persistentPath + "/wv.storage";
++		}
+             }
+
+             TRACE_L1("BasePath %s\n", basePath.c_str());
