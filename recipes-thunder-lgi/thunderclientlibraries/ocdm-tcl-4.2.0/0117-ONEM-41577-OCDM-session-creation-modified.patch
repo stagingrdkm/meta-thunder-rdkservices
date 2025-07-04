@@ -1,0 +1,47 @@
+From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+
+ONEM-41577 - session creation is modified - in case creation of remote session fails
+function opencdm_construct_session() returns error - otherwise calls to functions related to 
+OCDM session are failing since remote session is nullptr.
+
+---
+ Source/ocdm/open_cdm_ext.cpp | 10 +++++++---
+ Source/ocdm/open_cdm_impl.h  |  1 +
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/Source/ocdm/open_cdm_ext.cpp b/Source/ocdm/open_cdm_ext.cpp
+index 65c125f..895a5bf 100644
+--- a/Source/ocdm/open_cdm_ext.cpp
++++ b/Source/ocdm/open_cdm_ext.cpp
+@@ -424,9 +424,13 @@ opencdm_construct_session(struct OpenCDMSystem* system,
+     if ((system != nullptr) && (session != nullptr)) {
+         TRACE_L1("Creating a Session for %s", system->keySystem().c_str());
+ 
+-        *session = new OpenCDMSession(system, std::string(initDataType),
+-                                   initData, initDataLength, CDMData,
+-                                   CDMDataLength, licenseType, callbacks, userData);
++        try {
++            *session = new OpenCDMSession(system, std::string(initDataType),
++                                       initData, initDataLength, CDMData,
++                                       CDMDataLength, licenseType, callbacks, userData);
++        } catch (std::exception const& ex) {
++            *session = nullptr;
++        }
+         result = (*session != nullptr ? OpenCDMError::ERROR_NONE
+                                       : OpenCDMError::ERROR_INVALID_SESSION);
+         TRACE_L1("Created a Session, result %p, %d", *session, result);
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index 6c05baf..6f7617c 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -688,6 +688,7 @@ PUSH_WARNING(DISABLE_WARNING_THIS_IN_MEMBER_INITIALIZER_LIST)
+ 
+         if (realSession == nullptr) {
+             TRACE_L1("Creating a Session failed. %d", __LINE__);
++            throw std::runtime_error("Failed creating remote session");
+         } else {
+             Session(realSession);
+             realSession->Release();
+-- 
+2.30.0
+
