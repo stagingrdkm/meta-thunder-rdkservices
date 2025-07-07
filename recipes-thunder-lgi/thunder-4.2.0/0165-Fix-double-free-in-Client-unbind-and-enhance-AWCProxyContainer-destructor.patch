@@ -1,0 +1,34 @@
+From e4d1cb1d1bd51f55b41b3f03dcf73fcc6062ac7e Mon Sep 17 00:00:00 2001
+From: krishnan-nair-infosys <knair.ext@libertyglobal.com>
+Date: Mon, 7 Jul 2025 13:33:45 +0200
+Subject: [PATCH] Fix double-free in Client::unbind and enhance
+ AWCProxyContainer destructor
+
+---
+ .../AWCImplementation/AWCProxyContainer.cpp         | 13 +++++++++++--
+ .../AWCImplementation/dbus/Client.cpp               |  8 ++++++--
+ 2 files changed, 17 insertions(+), 4 deletions(-)
+
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
+===================================================================
+--- git.orig/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
++++ git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
+@@ -91,9 +91,15 @@ AWCProxyContainer::~AWCProxyContainer()
+ 
+     if(IsRunning()) Stop(2000);
+     CHECK(client_);
+-    client_->unbind(dbusInterface_);
+-    static_cast<AWCContainerAdministrator&>(
+-        AWCContainerAdministrator::Instance()).RemoveContainer(this);
++    if (client_) {
++        TRACE_L1("Unbinding dbusInterface_");
++        client_->unbind(dbusInterface_);
++        TRACE_L1("Unbind complete");
++    } else {
++        TRACE_L1("Skipping unbind: client_=%p, dbusInterface_=%p", client_, dbusInterface_);
++    }
++
++    TRACE_L1("Container removed");
+ }
+ 
+ uint32_t AWCProxyContainer::Pid() const
