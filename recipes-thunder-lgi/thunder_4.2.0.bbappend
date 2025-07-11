@@ -98,6 +98,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://ARRISAPP-1204-independent-notification-thread-for-websocket-connection.patch \
             file://ONEM-39636-setup-RIALTO_SOCKET_PATH.patch \
             file://ARRISEOS-47853-setup-of-group-read-permissions.patch \
+            file://ARRISEOS-48078-Check-IWorkerPool-Instance-to-prevent-crash.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:

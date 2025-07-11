@@ -1,0 +1,31 @@
+From 05e3542067398291b2b45c586109c7af572b5089 Mon Sep 17 00:00:00 2001
+From: Marcin Mielczarczyk <marcin.mielczarczyk@redembedded.com>
+Date: Fri, 11 Jul 2025 10:23:15 +0200
+Subject: [PATCH] ARRISEOS-48078: Check IWorkerPool instance if not NULL
+
+Check IWorkerPool instance if not NULL to prevent crash.
+---
+ Source/core/WorkerPool.h | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/Source/core/WorkerPool.h b/Source/core/WorkerPool.h
+index db0d4e0d..34191da3 100644
+--- a/Source/core/WorkerPool.h
++++ b/Source/core/WorkerPool.h
+@@ -86,8 +86,11 @@ namespace Core {
+                 Core::ProxyType<IDispatch> job(ThreadPool::JobType<IMPLEMENTATION>::Revoke());
+ 
+                 if (job.IsValid() == true) {
+-                    Core::IWorkerPool::Instance().Revoke(job);
+-                    ThreadPool::JobType<IMPLEMENTATION>::Revoked();
++                    if (Core::IWorkerPool::IsAvailable())
++                    {
++                        Core::IWorkerPool::Instance().Revoke(job);
++                        ThreadPool::JobType<IMPLEMENTATION>::Revoked();
++                    }
+                 }
+             }
+         };
+-- 
+2.30.0
+
