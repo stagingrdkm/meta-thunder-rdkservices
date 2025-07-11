@@ -75,10 +75,10 @@ index a62370f..3cf08e4 100644
              }
              break;
          }
-@@ -460,6 +456,17 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
-             return MapDrmErrorToCDMiResult(err);
-         }
-         UpdateSession(newDecryptContext.get());
+@@ -442,6 +438,17 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+                 PolicyCallback,
+                 static_cast<const void*>(&callbackUserData),
+                 &(newDecryptContext->drmDecryptContext));
 +        if(m_piCallback != nullptr)
 +        {
 +            CDMi::PRD30_BIND_CALLBACK_DATA_Serializer serializer {
@@ -90,9 +90,9 @@ index a62370f..3cf08e4 100644
 +                    std::max(newDecryptContext->outputProtection.uncompressedDigitalVideoLevel, newDecryptContext->outputProtection.uncompressedDigitalAudioLevel)};
 +            m_piCallback->OnBindLicense(PRD30_BIND_CALLBACK, serializer.writer.data(), serializer.writer.size());
 +        }
- 
-         // Save the new decryption context to our member map, and make it the
-         // active one.
+         if (DRM_FAILED(err))
+         {
+             LOGGER(LERROR_, "Error: Drm_Reader_Bind (error: 0x%08X)", static_cast<unsigned int>(err));
 -- 
 2.34.1
 
