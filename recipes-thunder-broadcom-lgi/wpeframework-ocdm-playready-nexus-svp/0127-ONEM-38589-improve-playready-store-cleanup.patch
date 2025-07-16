@@ -1,5 +1,9 @@
 Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
 
+ONEM-38589 - playready license store cleanup improved
+ARRISAPP-1359 - netflix license store not removed on logout
+
+
 diff --git a/MediaSession.cpp b/MediaSession.cpp
 index ccbd61d..98126f4 100644
 --- a/MediaSession.cpp
@@ -485,7 +489,7 @@ index ec3658f..7ff4e9d 100644
      }
  
      CDMi_RESULT GetKeyStoreHash(
-@@ -1087,6 +1028,51 @@ public:
+@@ -1087,6 +1028,44 @@ public:
      }
  
      CDMi_RESULT CleanSecureStore(const std::string& keySystem) override
@@ -513,31 +517,24 @@ index ec3658f..7ff4e9d 100644
 +
 +    CDMi_RESULT DeleteSecureStoreUnlocked(const std::string& keySystem)
 +    {
-+        CDMi_RESULT cr = CDMi_SUCCESS;
-+        auto it = m_keySystemCtxs.find(keySystem);
-+        if (it == m_keySystemCtxs.end()) {
-+            const std::string storeLocation = getStoreLocation(keySystem);
++        const std::string storeLocation = getStoreLocation(keySystem);
 +
-+            // As a linux reference implementation, we are cheating a bit by just using
-+            // stdio to delete the drm store from the filesystem. A real implementation
-+            // will be more complicated.
++        // As a linux reference implementation, we are cheating a bit by just using
++        // stdio to delete the drm store from the filesystem. A real implementation
++        // will be more complicated.
 +
-+            if (remove(storeLocation.c_str()) != 0) {
-+                LOGGER(LINFO_, "Error removing DRM store file");
-+            }
-+        } else {
-+            LOGGER(LERROR_,  "Attempt of secure store removal on active key system %s", keySystem.c_str());
-+            cr =  CDMi_S_FALSE;
++        if (remove(storeLocation.c_str()) != 0) {
++            LOGGER(LINFO_, "Error removing DRM store file");
 +        }
 +
-+        return cr;
++        return CDMi_SUCCESS;
 +    }
 +
 +    CDMi_RESULT CleanSecureStoreUnlocked(const std::string& keySystem)
      {
          CDMi_RESULT cr = CDMi_SUCCESS;
          auto it = m_keySystemCtxs.find(keySystem);
-@@ -1107,32 +1093,60 @@ public:
+@@ -1107,32 +1086,60 @@ public:
          return cr;
      }
  
@@ -617,7 +614,7 @@ index ec3658f..7ff4e9d 100644
      // Map to keep track of app contexts,opaque buffer and revocation buffer created for particular keysystems (designators)
      // It gets updated upon calls to Drm_Initialize / Drm_Uninitialize
      std::unordered_map<std::string, std::shared_ptr<KeySystemCtx>> m_keySystemCtxs;
-@@ -1141,10 +1155,6 @@ private:
+@@ -1141,10 +1148,6 @@ private:
      std::string m_storeLocation;
      DRM_BYTE* m_meteringCertificate;
      uint32_t m_meteringCertificateSize;
