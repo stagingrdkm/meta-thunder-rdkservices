@@ -47,3 +47,4 @@ SRC_URI += "file://0132-ONEM-41322-Retrieve-license-URL-alongside-challenge.patc
 SRC_URI += "file://0133-ONEM-41323-Use-extended-error-codes.patch"
 SRC_URI += "file://0134-ARRISEOS-47697-memory-leak-when-using-extended-API.patch"
 SRC_URI += "file://0135-ONEM-41325-Bind-callback-extensions.patch"
+SRC_URI += "file://0136-ARRISEOS-48187-session-id-initialization-fixed.patch"

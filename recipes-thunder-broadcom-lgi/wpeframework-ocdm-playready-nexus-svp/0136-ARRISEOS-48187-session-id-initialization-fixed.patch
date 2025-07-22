@@ -1,0 +1,50 @@
+From 0b3b3f0e5145e2e1856ac223f1a8bc3d20225c98 Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Tue, 22 Jul 2025 19:10:38 +0530
+Subject: [PATCH] ARRISEOS-48187 session id initialization fixed
+
+Change-Id: Ic3389f26952dce670aa10aca4b345780f1f3e1f7
+---
+ MediaSession.cpp | 24 +++++++++++-------------
+ 1 file changed, 11 insertions(+), 13 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index b2b4f71..0544bf5 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -412,21 +412,19 @@ MediaKeySession::MediaKeySession(
+ 
+         ChkDR(SelectDrmHeader(m_poAppContext, mDrmHeader.size(), mDrmHeader.data()));
+ 
+-        // Generate a random media session ID.
+-        ChkDR(Oem_Random_GetBytes(m_poAppContext, (DRM_BYTE *)&oSessionID, sizeof(oSessionID)));
+-        ZEROMEM(m_rgchSessionID, sizeof(m_rgchSessionID));
+-        // Store the generated media session ID in base64 encoded form.
+-        ChkDR(DRM_B64_EncodeA((DRM_BYTE *)&oSessionID,
+-                              sizeof(oSessionID),
+-                              m_rgchSessionID,
+-                              &cchEncodedSessionID,
+-                              0));
+-
+-        LOGGER(LINFO_, "Session ID generated: %s", m_rgchSessionID);
+-
+         m_eKeyState = KEY_INIT;
+     }
+-    LOGGER(LINFO_, "Session Initialized");
++    // Generate a random media session ID.
++    ChkDR(Oem_Random_GetBytes(m_poAppContext, (DRM_BYTE *)&oSessionID, sizeof(oSessionID)));
++    ZEROMEM(m_rgchSessionID, sizeof(m_rgchSessionID));
++    // Store the generated media session ID in base64 encoded form.
++    ChkDR(DRM_B64_EncodeA((DRM_BYTE *)&oSessionID,
++                            sizeof(oSessionID),
++                            m_rgchSessionID,
++                            &cchEncodedSessionID,
++                            0));
++
++    LOGGER(LINFO_, "Session Initialized, ID: %s", m_rgchSessionID);
+ ErrorExit:
+     if (DRM_FAILED(dr))
+     {
+-- 
+2.34.1
+
