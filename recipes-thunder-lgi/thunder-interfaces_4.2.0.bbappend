@@ -27,6 +27,7 @@ SRC_URI += "file://0119-ONEM-38885-multi-decryption.patch"
 SRC_URI += "file://0120-ONEM-38627-Extend-Error-Codes.patch"
 SRC_URI += "file://0121-ONEM-41322-Retrieve-license-URL-alongside-challenge.patch"
 SRC_URI += "file://0122-ONEM-41325-Bind-callback-extensions.patch"
+SRC_URI += "file://0123-ONEM-40864-Deinitialize-DRM-on-client-crash.patch"
 
 require thunder-interfaces-4.2.0/interfaces.inc
 

@@ -23,6 +23,7 @@ SRC_URI += "file://0114-ONEM-41323-Use-extended-error-codes.patch"
 SRC_URI += "file://0115-ONEM-41325-Bind-callback-extensions.patch"
 SRC_URI += "file://0116-ONEM-41577-backport-from-rdkcentral.patch"
 SRC_URI += "file://0117-ONEM-41577-OCDM-session-creation-modified.patch"
+SRC_URI += "file://0118-ONEM-40864-Deinitialize-DRM-on-client-crash.patch"
 
 EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
 

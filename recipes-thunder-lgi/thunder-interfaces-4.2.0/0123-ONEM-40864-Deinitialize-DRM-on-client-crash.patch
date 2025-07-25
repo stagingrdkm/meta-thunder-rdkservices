@@ -1,0 +1,63 @@
+From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+
+ONEM-40864 - Deinitialize DRM on client crash
+
+---
+ interfaces/IOCDM.h | 12 +++++++++++--
+ interfaces/Ids.h   |  1 +
+ 2 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/interfaces/IOCDM.h b/interfaces/IOCDM.h
+index 803ec23..36a4113 100644
+--- a/interfaces/IOCDM.h
++++ b/interfaces/IOCDM.h
+@@ -186,6 +186,14 @@ struct ISessionExt : virtual public Core::IUnknown {
+     virtual OCDM_RESULT CleanDecryptContext() = 0;
+ };
+ 
++struct IOCDMContext : virtual public Core::IUnknown {
++    enum { ID = ID_OCDM_CONTEXT };
++
++    //The function is defined just to make IOCDMContext object properly passed through IPC
++    // from server to the client with thunder mechanisms.
++    virtual void dummy() = 0;
++};
++
+ struct IAccessorOCDM : virtual public Core::IUnknown {
+ 
+     enum { ID = ID_ACCESSOROCDM };
+@@ -205,6 +212,10 @@ struct IAccessorOCDM : virtual public Core::IUnknown {
+         uint8_t buffer[] /* @out @length:bufferSize */) const
+         = 0;
+ 
++    // Create OCDMContext
++    virtual OCDM_RESULT
++    CreateContext(const string& keySystem, bool cleanOnDestroy, IOCDMContext*& context /* @out */) = 0;
++
+     // Create a MediaKeySession using the supplied init data and CDM data.
+     virtual OCDM_RESULT
+     CreateSession(const string& keySystem, const int32_t licenseType,
+@@ -267,8 +278,6 @@ struct IAccessorOCDM : virtual public Core::IUnknown {
+         = 0;
+ 
+     virtual OCDM_RESULT CleanSecureStore(const std::string& keySystem) = 0;
+-    virtual OCDM_RESULT InitializeCtx(const std::string& keySystem) = 0;
+-    virtual OCDM_RESULT DeinitializeCtx(const std::string& keySystem, bool cleanOnDestroy) = 0;
+ };
+ 
+ class EXTERNAL KeyId {
+diff --git a/interfaces/Ids.h b/interfaces/Ids.h
+index fd192dd..c95b7c1 100644
+--- a/interfaces/Ids.h
++++ b/interfaces/Ids.h
+@@ -278,6 +278,7 @@ namespace Exchange {
+         ID_SESSION                                   = ID_ACCESSOROCDM + 2,
+         ID_SESSION_CALLBACK                          = ID_ACCESSOROCDM + 3,
+         ID_SESSION_EXTENSION                         = ID_ACCESSOROCDM + 4,
++        ID_OCDM_CONTEXT                              = ID_ACCESSOROCDM + 5,
+ 
+         //Butler
+         ID_BUTLER                                    = 0x00000410,
+-- 
+2.30.0
+
