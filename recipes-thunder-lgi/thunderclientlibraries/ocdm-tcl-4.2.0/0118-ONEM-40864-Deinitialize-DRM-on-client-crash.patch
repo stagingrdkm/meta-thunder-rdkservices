@@ -3,59 +3,66 @@ From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
 ONEM-40864 - Deinitialize DRM on client crash
 
 ---
- Source/ocdm/open_cdm.h       | 15 +++------
- Source/ocdm/open_cdm_ext.cpp | 35 +++++++++++++--------
- Source/ocdm/open_cdm_impl.h  | 61 +++++++++++++++++-------------------
- 3 files changed, 54 insertions(+), 57 deletions(-)
+ Source/ocdm/open_cdm.h       | 15 +++++----
+ Source/ocdm/open_cdm_ext.cpp | 40 +++++++++++++++--------
+ Source/ocdm/open_cdm_impl.h  | 62 +++++++++++++++++-------------------
+ 3 files changed, 64 insertions(+), 53 deletions(-)
 
 diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
-index ebe1747..18a3dc5 100644
+index ebe1747..541612f 100644
 --- a/Source/ocdm/open_cdm.h
 +++ b/Source/ocdm/open_cdm.h
-@@ -293,25 +293,18 @@ EXTERNAL struct OpenCDMSystem* opencdm_create_system(const char keySystem[]);
-  * \brief Creates DRM system.
-  *
-  * \param system Output parameter that will contain pointer to instance of \ref OpenCDMSystem.
-+ * \param cleanOnDestroy should cleaning on destroy OpenCDMSystem be performed.
-  * \return Zero on success, non-zero on error.
-  */
--EXTERNAL OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenCDMSystem** system);
-+EXTERNAL OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenCDMSystem** system, bool cleanOnDestroy = true);
+@@ -298,19 +298,20 @@ EXTERNAL struct OpenCDMSystem* opencdm_create_system(const char keySystem[]);
+ EXTERNAL OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenCDMSystem** system);
  
  /**
 - * Destructs an \ref OpenCDMAccessor instance.
 - * \param system \ref OpenCDMAccessor instance to destruct.
++ * \brief Creates DRM system.
++ *
++ * \param system Output parameter that will contain pointer to instance of \ref OpenCDMSystem.
++ * \param cleanOnDestroy should cleaning on destroy OpenCDMSystem be performed.
+  * \return Zero on success, non-zero on error.
+  */
+-EXTERNAL OpenCDMError opencdm_destruct_system(struct OpenCDMSystem* system);
++EXTERNAL OpenCDMError opencdm_create_system_extended_v2(const char keySystem[], struct OpenCDMSystem** system, bool cleanOnDestroy);
+ 
+ /**
+- * Destructs an \ref OpenCDMAccessor instance.
+- * \param system \ref OpenCDMAccessor instance to destruct.
+- * \param cleanOnDestroy should cleaning be performed.
 + * Destructs an \ref OpenCDMSystem instance.
 + * \param system \ref OpenCDMSystem instance to destruct.
   * \return Zero on success, non-zero on error.
   */
- EXTERNAL OpenCDMError opencdm_destruct_system(struct OpenCDMSystem* system);
- 
--/**
-- * Destructs an \ref OpenCDMAccessor instance.
-- * \param system \ref OpenCDMAccessor instance to destruct.
-- * \param cleanOnDestroy should cleaning be performed.
-- * \return Zero on success, non-zero on error.
-- */
 -EXTERNAL OpenCDMError opencdm_destruct_system_extended(struct OpenCDMSystem* system, bool cleanOnDestroy);
--
++EXTERNAL OpenCDMError opencdm_destruct_system(struct OpenCDMSystem* system);
+ 
  /**
   * \brief Checks if a DRM system is supported.
-  *
 diff --git a/Source/ocdm/open_cdm_ext.cpp b/Source/ocdm/open_cdm_ext.cpp
-index f376db4..1a4bde6 100644
+index f376db4..6f9db4b 100644
 --- a/Source/ocdm/open_cdm_ext.cpp
 +++ b/Source/ocdm/open_cdm_ext.cpp
-@@ -36,7 +36,7 @@ DEPRECATED struct OpenCDMSystem* opencdm_create_system(const char keySystem[])
+@@ -32,11 +32,16 @@
+ DEPRECATED struct OpenCDMSystem* opencdm_create_system(const char keySystem[])
+ {
+     struct OpenCDMSystem* result = nullptr;
+-    opencdm_create_system_extended(keySystem, &result);
++    opencdm_create_system_extended_v2(keySystem, &result, true);
      return result;
  }
  
--OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenCDMSystem** system)
-+OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenCDMSystem** system, bool cleanOnDestroy)
+ OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenCDMSystem** system)
++{
++    return opencdm_create_system_extended_v2(keySystem, system, true);
++}
++
++OpenCDMError opencdm_create_system_extended_v2(const char keySystem[], struct OpenCDMSystem** system, bool cleanOnDestroy)
  {
      OpenCDMError result(OpenCDMError::ERROR_INVALID_ARG);
      ASSERT(system != nullptr);
-@@ -51,8 +51,18 @@ OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenC
+@@ -51,8 +56,18 @@ OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenC
              result = static_cast<OpenCDMError>(OpenCDMAccessor::Instance()->Metadata(std::string(keySystem), metadata));
  
              if (result == OpenCDMError::ERROR_NONE) {
@@ -76,7 +83,7 @@ index f376db4..1a4bde6 100644
              }
          }
      }
-@@ -61,19 +71,18 @@ OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenC
+@@ -61,19 +76,18 @@ OpenCDMError opencdm_create_system_extended(const char keySystem[], struct OpenC
  
  OpenCDMError opencdm_destruct_system(struct OpenCDMSystem* system)
  {
@@ -106,7 +113,7 @@ index f376db4..1a4bde6 100644
  OpenCDMError opencdm_system_get_version(struct OpenCDMSystem* system,
      char versionStr[])
 diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
-index 6f7617c..7577bac 100644
+index 6f7617c..5db2a27 100644
 --- a/Source/ocdm/open_cdm_impl.h
 +++ b/Source/ocdm/open_cdm_impl.h
 @@ -37,15 +37,26 @@ using namespace WPEFramework;
@@ -140,7 +147,7 @@ index 6f7617c..7577bac 100644
   private:
      std::string _keySystem;
      std::string _metadata;
-@@ -192,6 +202,20 @@ public:
+@@ -192,6 +203,20 @@ public:
          return (result);
      }
  
@@ -161,7 +168,7 @@ index 6f7617c..7577bac 100644
      // Create a MediaKeySession using the supplied init data and CDM data.
      virtual Exchange::OCDM_RESULT
      CreateSession(const string& keySystem, const int32_t licenseType,
-@@ -450,35 +474,6 @@ public:
+@@ -450,35 +475,6 @@ public:
      }
  
      void SystemBeingDestructed(OpenCDMSystem* system);
