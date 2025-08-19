@@ -1,0 +1,59 @@
+From 48d009b971055b465da3ad022575ce1df8dfdccf Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Wed, 20 Aug 2025 15:05:11 +0000
+Subject: [PATCH] ONEM-41412 thunder leaking sockets
+
+It was observed that when calling WebKit
+plugin URL endpoint with curl, the socket
+on wpeframework side stays in CLOSE_WAIT state
+indefinetely, which may lead to running
+out of file descriptors and crash. The reason
+seems to be that on Thunder side, the socket
+was never closed.
+
+reproduction/test scenario:
+
+while true; do
+curl http://127.0.0.1:9998/Service/WebKitBrowser/URL -d '{"url":"https://widgets.metrological.com/lightning/liberty/017b288dfb351c11eb33754fc76c12fc#boot"}'
+netstat -tnp 2>&1 | grep :9998 | grep CLOSE_WAIT | wc -l
+done
+---
+ Source/WPEFramework/PluginServer.h | 6 ++++++
+ Source/core/SocketPort.cpp         | 4 +++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
+index 199b8199..a2092350 100644
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -3278,6 +3278,12 @@ POP_WARNING()
+                         _service.Release();
+                     }
+ 
++                    if (!IsSuspended()) {
++                        // need to close our side as well, to avoid sockets
++                        // staying indefinetely in CLOSE_WAIT
++                        Close(0);
++                    }
++
+                     State(CLOSED, false);
+                     _parent.Closed(Id());
+                     _parent.Dispatcher().TriggerCleanup();
+diff --git a/Source/core/SocketPort.cpp b/Source/core/SocketPort.cpp
+index 149a97c6..21b9f4d7 100644
+--- a/Source/core/SocketPort.cpp
++++ b/Source/core/SocketPort.cpp
+@@ -1201,7 +1201,9 @@ namespace WPEFramework {
+ 
+                 if (l_Size == 0) {
+                     if ((m_State & SocketPort::LINK) != 0) {
+-                        m_State = ((m_State & (~SocketPort::OPEN)) | SocketPort::EXCEPTION);
++                        // peer has performed an orderly shutdown
++                        m_State &= (~SocketPort::OPEN);
++                        StateChange();
+                     }
+                 }
+                 else if (l_Size != static_cast<uint32_t>(SOCKET_ERROR)) {
+-- 
+2.30.0
+
