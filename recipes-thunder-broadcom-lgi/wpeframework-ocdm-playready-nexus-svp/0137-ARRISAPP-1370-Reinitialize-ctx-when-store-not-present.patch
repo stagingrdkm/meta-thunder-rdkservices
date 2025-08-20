@@ -1,0 +1,111 @@
+Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+
+ARRISAPP-1370 - when MediaKeySession is created and license store file is missing - playready ctx is
+reinitialized - so that license store file gets created.
+
+Change-Id: I4198eec12693e03d11b597f0ccaf0be2d89e15c1
+---
+ MediaSystem.cpp | 56 ++++++++++++++++++++++++++++++++++++++-----------
+ 1 file changed, 44 insertions(+), 12 deletions(-)
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index b152b5f..4a9a241 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -409,6 +409,25 @@ public:
+         }
+     }
+ 
++    CDMi_RESULT ReinitializeSystem(const std::string& keySystem)
++    {
++        LOGGER(LINFO_, "Re-init of %s", keySystem.c_str());
++
++        auto it = m_keySystemCtxs.find(keySystem);
++        ASSERT(it != m_keySystemCtxs.end());
++        auto oldRefCount = it->second->refCount;
++        Drm_Uninitialize(&it->second->drmAppctx);
++        m_keySystemCtxs.erase(it);
++
++        CDMi_RESULT cr = CreateSystemExt(keySystem);
++
++        it = m_keySystemCtxs.find(keySystem);
++        ASSERT(it != m_keySystemCtxs.end());
++        it->second->refCount = oldRefCount;
++
++        return cr;
++    }
++
+     void DeinitializePlatform() {
+         if (m_keySystemCtxs.size() == 0) {
+             Drm_Platform_Uninitialize(m_drmOemContext);
+@@ -430,14 +449,27 @@ public:
+ 
+         auto it = m_keySystemCtxs.find(keySystem);
+         if (it != m_keySystemCtxs.end()) {
+-            CDMi::MediaKeySession* newSession= new CDMi::MediaKeySession(
+-                 f_pbInitData, f_cbInitData,
+-                 f_pbCDMData, f_cbCDMData,
+-                 m_drmOemContext, &it->second->drmAppctx,
+-                 keySystem, licenseType
+-                 );
+-             *f_ppiMediaKeySession = newSession;
+-             it->second->mediaKeySessionsCount++;
++            Core::File licenseStoreFile(getStoreLocation(keySystem));
++            if(licenseStoreFile.Exists() == false){
++                LOGGER(LINFO_, "License store file not present %s", keySystem.c_str());
++                if (it->second->mediaKeySessionsCount == 0) {
++                    cr = ReinitializeSystem(keySystem);
++                    it = m_keySystemCtxs.find(keySystem);
++                    ASSERT(it != m_keySystemCtxs.end());
++                } else {
++                    LOGGER(LERROR_, "System not re-inited - active media sessions present, %s", keySystem.c_str());
++                }
++            }
++            if (cr == CDMi_SUCCESS) {
++                CDMi::MediaKeySession* newSession= new CDMi::MediaKeySession(
++                     f_pbInitData, f_cbInitData,
++                     f_pbCDMData, f_cbCDMData,
++                     m_drmOemContext, &it->second->drmAppctx,
++                     keySystem, licenseType
++                     );
++                *f_ppiMediaKeySession = newSession;
++                it->second->mediaKeySessionsCount++;
++            }
+         } else {
+             LOGGER(LERROR_, "Attempt of creating session without active system %s", keySystem.c_str());
+             cr = CDMi_S_FALSE;
+@@ -882,13 +914,12 @@ public:
+         DRM_DWORD dwEncryptionMode  = OEM_TEE_DECRYPTION_MODE_NOT_SECURE;
+         DRM_CONST_STRING dstrHDSPath = DRM_EMPTY_DRM_STRING;
+ 
+-        LOGGER(LINFO_, "Creating System Ext, Build: %s", __TIMESTAMP__ );
+-
+-        // Store store location
+         std::string storeLocation = getStoreLocation(keySystem);
+         dstrHDSPath.pwszString =  createDrmWchar(storeLocation);
+         dstrHDSPath.cchString = storeLocation.length();
+ 
++        LOGGER(LINFO_, "Creating System Ext, store location: %s", storeLocation.c_str());
++
+         auto keySystemCtx = std::make_shared<KeySystemCtx>();
+ 
+         dr  = Drm_Initialize(&keySystemCtx->drmAppctx,
+@@ -996,6 +1027,7 @@ public:
+     CDMi_RESULT DeleteSecureStore(const std::string& keySystem) override
+     {
+         SafeCriticalSection lock(drmAppContextMutex_);
++        LOGGER(LINFO_, "Delete secure store of %s", keySystem.c_str());
+         return DeleteSecureStoreUnlocked(keySystem);
+     }
+ 
+@@ -1042,7 +1074,6 @@ private:
+         std::string dir = m_storeLocation.substr(0, m_storeLocation.find_last_of("/"));
+         std::string filename = m_storeLocation.substr(m_storeLocation.find_last_of("/") + 1);
+         std::string path = dir + "/" + filename + "_" + keySystem;
+-        LOGGER(LINFO_, "PlayReady::getStoreLocation(%s): %s\n", keySystem.c_str(), path.c_str());
+         return path;
+     }
+ 
+-- 
+2.30.0
+
