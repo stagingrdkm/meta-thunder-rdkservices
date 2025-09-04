@@ -1,0 +1,135 @@
+Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+
+ARRISEOS-48273 - In case of broadcom gstreamer adapter OCDM server returns just
+an address to the decrypted content. When the size of data to be decrypted is
+smaller than the size of memory address - proper amount of bytes is read - if
+only the buffer is big enough.
+Additionally only bytes written by the OCDM server as decrypted content are
+read - instead of always reading the amount of bytes that was written to be
+decrypted.
+
+diff --git a/Source/ocdm/open_cdm.cpp b/Source/ocdm/open_cdm.cpp
+index 3e0eff6..aee301a 100644
+--- a/Source/ocdm/open_cdm.cpp
++++ b/Source/ocdm/open_cdm.cpp
+@@ -559,7 +559,7 @@ OpenCDMError opencdm_session_decrypt(struct OpenCDMSession* session,
+ 
+         const uint32_t sampleInfoLength = 1;
+         result = encryptedLength > 0 ? static_cast<OpenCDMError>(session->Decrypt(
+-            encrypted, encryptedLength, const_cast<const SampleInfo*>(&sampleInfo), sampleInfoLength, initWithLast15,
++            encrypted, encryptedLength, encryptedLength, const_cast<const SampleInfo*>(&sampleInfo), sampleInfoLength, initWithLast15,
+             nullptr, streamInfo, streamInfoLength)) : ERROR_NONE;
+     }
+ 
+@@ -574,12 +574,13 @@ OpenCDMError opencdm_session_decrypt_v2(struct OpenCDMSession* session,
+     const MediaProperties* properties) {
+ 
+     const uint32_t sampleInfoLength = 1;
+-    return opencdm_session_decrypt_v3(session, encrypted, encryptedLength, sampleInfo, sampleInfoLength, properties);
++    return opencdm_session_decrypt_v3(session, encrypted, encryptedLength, encryptedLength, sampleInfo, sampleInfoLength, properties);
+ }
+ 
+ OpenCDMError opencdm_session_decrypt_v3(struct OpenCDMSession* session,
+     uint8_t encrypted[],
+     const uint32_t encryptedLength,
++    const uint32_t encryptedBufferLength,
+     const SampleInfo* sampleInfo,
+     const uint32_t sampleInfoLength,
+     const MediaProperties* properties) {
+@@ -588,7 +589,7 @@ OpenCDMError opencdm_session_decrypt_v3(struct OpenCDMSession* session,
+     if (session != nullptr) {
+         uint32_t initWithLast15 = 0;
+         result = encryptedLength > 0 ? static_cast<OpenCDMError>(session->Decrypt(
+-            encrypted, encryptedLength, sampleInfo, sampleInfoLength, initWithLast15, properties, NULL, 0)) : ERROR_NONE;
++            encrypted, encryptedLength, encryptedBufferLength, sampleInfo, sampleInfoLength, initWithLast15, properties, NULL, 0)) : ERROR_NONE;
+     }
+ 
+     return (result);
+diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
+index ebe1747..ac38e3e 100644
+--- a/Source/ocdm/open_cdm.h
++++ b/Source/ocdm/open_cdm.h
+@@ -686,6 +686,7 @@ EXTERNAL OpenCDMError opencdm_session_decrypt_v2(struct OpenCDMSession* session,
+ EXTERNAL OpenCDMError opencdm_session_decrypt_v3(struct OpenCDMSession* session,
+     uint8_t encrypted[],
+     const uint32_t encryptedLength,
++    const uint32_t encryptedBufferLength,
+     const SampleInfo* sampleInfo,
+     const uint32_t sampleInfoLength,
+     const MediaProperties* properties);
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index 48fa7eb..187dd25 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -421,7 +421,8 @@ private:
+         }
+ 
+     public:
+-        uint32_t Decrypt(uint8_t* encryptedData, uint32_t encryptedDataLength,
++        uint32_t Decrypt(uint8_t* encryptedData, const uint32_t encryptedDataLength,
++            const uint32_t encryptedDataBufferLength,
+             const ::SampleInfo* sampleInfo, const uint32_t sampleInfoLength,
+             uint32_t initWithLast15,
+             const ::MediaProperties* properties,
+@@ -470,8 +471,15 @@ private:
+                 // Producer, can run again.
+                 if (RequestProduce(Core::infinite) == Core::ERROR_NONE) {
+ 
++                    uint32_t toReadSize = BytesWritten();
++                    if (toReadSize > encryptedDataLength) {
++                        //TODO in case the size of the buffer is not big enough to hold everything server wrote
++                        // decrypted data may contain just part of the "decrypted content".
++                        toReadSize = std::min(toReadSize, encryptedDataBufferLength);
++                        Size(toReadSize);
++                    }
+                     // For nowe we just copy the clear data..
+-                    Read(encryptedDataLength, encryptedData);
++                    Read(toReadSize, encryptedData);
+ 
+                     // Get the status of the last decrypt.
+                     ret = Status();
+@@ -662,6 +670,7 @@ inline void SetParameter(const std::string& name, const std::string& value)
+         _session->Update(pbResponse, cbResponse);
+     }
+     uint32_t Decrypt(uint8_t* encryptedData, const uint32_t encryptedDataLength,
++        const uint32_t encryptedDataBufferLength,
+         const ::SampleInfo* sampleInfo, const uint32_t sampleInfoLength,
+         uint32_t initWithLast15,
+         const ::MediaProperties* properties,
+@@ -678,7 +687,8 @@ inline void SetParameter(const std::string& name, const std::string& value)
+         DataExchange* decryptSession = _decryptSession;
+ 
+         if (decryptSession != nullptr) {
+-            result = decryptSession->Decrypt(encryptedData, encryptedDataLength, 
++            result = decryptSession->Decrypt(encryptedData, encryptedDataLength,
++                encryptedDataBufferLength,
+                 sampleInfo, sampleInfoLength,
+                 initWithLast15,
+                 properties,
+diff --git a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+index dbdd4c3..d5ae01c 100644
+--- a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
++++ b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+@@ -185,10 +185,11 @@ OpenCDMError opencdm_gstreamer_session_multi_decrypt(struct OpenCDMSession* sess
+     OpenCDMError result{ERROR_NONE};
+     if (session != nullptr) {
+ 
+-        auto bufferLength = std::accumulate(
+-                vbuff.cbegin(), vbuff.cend(), 0UL, [](unsigned long acc, GstBuffer* const& buff) -> unsigned long {
++        std::uint32_t bufferLength = std::accumulate(
++                vbuff.cbegin(), vbuff.cend(), 0UL, [](std::uint32_t acc, GstBuffer* const& buff) {
+                     return acc + gst_buffer_get_size(buff);
+                 });
++        bufferLength = std::max(bufferLength, sizeof(std::uint32_t *));
+         uint8_t* encryptedData = static_cast<uint8_t*>(malloc(bufferLength));
+         uint8_t* encryptedDataIter = encryptedData;
+         assert(encryptedData);
+@@ -296,7 +297,7 @@ OpenCDMError opencdm_gstreamer_session_multi_decrypt(struct OpenCDMSession* sess
+ 
+         uint32_t bytesToDecrypt = encryptedDataIter-encryptedData;
+         if (bytesToDecrypt) {
+-            result = opencdm_session_decrypt_v3(session, encryptedData, bytesToDecrypt, vSampleInfo.data(), vSampleInfo.size(), nullptr);
++            result = opencdm_session_decrypt_v3(session, encryptedData, bytesToDecrypt, bufferLength, vSampleInfo.data(), vSampleInfo.size(), nullptr);
+ 
+             if (result == ERROR_NONE) {
+                 uint32_t *tokenHandle = reinterpret_cast<uint32_t *>(encryptedData);

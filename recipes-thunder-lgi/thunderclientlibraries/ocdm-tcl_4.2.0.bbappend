@@ -18,6 +18,7 @@ SRC_URI += "file://0109-ONEM-39202-New-store-clean-up-API.patch"
 SRC_URI += "file://0110-ONEM-38588-Improve-PR-lifecycle.patch"
 SRC_URI += "file://0111-ONEM-38885-multi-decryption.patch"
 SRC_URI += "file://0112-ONEM-38627-Extend-Error-Codes.patch"
+SRC_URI += "file://0119-ARRISEOS-48273-Decryption-of-small-chunks-corrected.patch"
 
 EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
 
