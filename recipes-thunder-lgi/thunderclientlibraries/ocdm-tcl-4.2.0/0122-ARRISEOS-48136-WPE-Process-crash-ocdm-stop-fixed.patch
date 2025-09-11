@@ -1,0 +1,143 @@
+From 43139d0106ad7da83d80f7878910e91b640093c3 Mon Sep 17 00:00:00 2001
+From: Santhosh-Kumar-infosys <sakumar.ext@libertyglobal.com>
+Date: Wed, 24 Sep 2025 12:06:59 +0530
+Subject: [PATCH] [ARRISEOS-48136] [OCDM] WPE Process crash observed when doing
+ systemctl stop
+
+---
+ Source/ocdm/open_cdm_impl.h | 95 +++++++++++++++++++++----------------
+ 1 file changed, 55 insertions(+), 40 deletions(-)
+
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index 49cffcd..a191f46 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -32,6 +32,9 @@
+ #include "gst_svp_meta.h"
+ #endif
+ 
++#define MAX_DECRYPT_PRODUCER_BUFFER_RETRY 5
++#define REQUEST_PRODUCE_TIMEOUT 5000
++
+ using namespace WPEFramework;
+ 
+ extern Core::CriticalSection _systemLock;
+@@ -578,6 +581,8 @@ private:
+             const uint16_t streamInfoLength /* = 0 */)
+         {
+             int ret = 0;
++            int retryEncrypt = 0;
++            int retryDecrypt = 0;
+ 
+             // This works, because we know that the Audio and the Video streams are
+             // fed from
+@@ -591,49 +596,54 @@ private:
+ 
+             _busy = true;
+ 
+-            if (RequestProduce(Core::infinite) == Core::ERROR_NONE) {
+-
+-
+-                if(sampleInfo != nullptr) {
+-                    //Here there is translation of ::SampleInfo into CDMi::SampleInfo.
+-                    //A cast is used since the definitions of those structures are exactly the same.
+-                    //This applies to sub-structures, data types used, enumerations, order of fields, etc.
+-                    //In case this is not satisfied - cast may give unexpected results and e.g. decryption may fail with
+-                    //difficult to identify reasons.
+-                    //When extending any of the structures consider extending the other or introduce some kind of translation between them.
+-                    const CDMi::SampleInfo* samples = reinterpret_cast<const CDMi::SampleInfo *>(sampleInfo);
+-                    SetSamples(sampleInfoLength, samples);
+-                }
+-
+-                SetStreamInfo(streamInfoLength, streamInfo);
+-                if(properties != nullptr) {
+-                    SetMediaProperties(properties->height, properties->width, properties->media_type);
+-                }
+-
+-                Write(encryptedDataLength, encryptedData);
+-
+-                // This will trigger the OpenCDMIServer to decrypt this memory...
+-                Produced();
+-
+-                // Now we should wait till it is decrypted, that happens if the
+-                // Producer, can run again.
+-                if (RequestProduce(Core::infinite) == Core::ERROR_NONE) {
+-
+-                    uint32_t toReadSize = BytesWritten();
+-                    if (toReadSize > encryptedDataLength) {
+-                        //TODO in case the size of the buffer is not big enough to hold everything server wrote
+-                        // decrypted data may contain just part of the "decrypted content".
+-                        toReadSize = std::min(toReadSize, encryptedDataBufferLength);
+-                        Size(toReadSize);
++            for (retryEncrypt=0; retryEncrypt < MAX_DECRYPT_PRODUCER_BUFFER_RETRY; retryEncrypt++) {
++                if (RequestProduce(REQUEST_PRODUCE_TIMEOUT) == Core::ERROR_NONE) {
++
++                    if(sampleInfo != nullptr) {
++                        //Here there is translation of ::SampleInfo into CDMi::SampleInfo.
++                        //A cast is used since the definitions of those structures are exactly the same.
++                        //This applies to sub-structures, data types used, enumerations, order of fields, etc.
++                        //In case this is not satisfied - cast may give unexpected results and e.g. decryption may fail with
++                        //difficult to identify reasons.
++                        //When extending any of the structures consider extending the other or introduce some kind of translation between them.
++                        const CDMi::SampleInfo* samples = reinterpret_cast<const CDMi::SampleInfo *>(sampleInfo);
++                        SetSamples(sampleInfoLength, samples);
+                     }
+-                    // For nowe we just copy the clear data..
+-                    Read(toReadSize, encryptedData);
+ 
+-                    // Get the status of the last decrypt.
+-                    ret = Status();
++                    SetStreamInfo(streamInfoLength, streamInfo);
++                    if(properties != nullptr) {
++                        SetMediaProperties(properties->height, properties->width, properties->media_type);
++                    }
+ 
+-                    // And free the lock, for the next production Scenario..
+-                    Consumed();
++                    Write(encryptedDataLength, encryptedData);
++
++                    // This will trigger the OpenCDMIServer to decrypt this memory...
++                    Produced();
++
++                    // Now we should wait till it is decrypted, that happens if the
++                    // Producer, can run again.
++                    for (retryDecrypt=0; retryDecrypt < MAX_DECRYPT_PRODUCER_BUFFER_RETRY; retryDecrypt++) {
++                        if (RequestProduce(REQUEST_PRODUCE_TIMEOUT) == Core::ERROR_NONE) {
++
++                            uint32_t toReadSize = BytesWritten();
++                            if (toReadSize > encryptedDataLength) {
++                                //TODO in case the size of the buffer is not big enough to hold everything server wrote
++                                // decrypted data may contain just part of the "decrypted content".
++                                toReadSize = std::min(toReadSize, encryptedDataBufferLength);
++                                Size(toReadSize);
++                            }
++                            // For nowe we just copy the clear data..
++                            Read(toReadSize, encryptedData);
++
++                            // Get the status of the last decrypt.
++                            ret = Status();
++
++                            // And free the lock, for the next production Scenario..
++                            Consumed();
++                            break;
++                        }
++                    }
++                    break;
+                 }
+             }
+ 
+@@ -641,6 +651,11 @@ private:
+ 
+             _systemLock.Unlock();
+ 
++            if ((retryEncrypt >= MAX_DECRYPT_PRODUCER_BUFFER_RETRY) || (retryDecrypt >= MAX_DECRYPT_PRODUCER_BUFFER_RETRY))  {
++                TRACE_L1("RequestProduce retries failed, ERROR_SERVER_INTERNAL_ERROR. retryEncrypt [%d], retryDecrypt [%d], LINE[%d]",retryEncrypt,retryDecrypt,__LINE__);
++                return (OpenCDMError::ERROR_SERVER_INTERNAL_ERROR);
++            }
++
+             return (ret);
+         }
+ 
+-- 
+2.34.1
+
