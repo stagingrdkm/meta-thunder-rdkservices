@@ -25,6 +25,7 @@ SRC_URI += "file://0116-ONEM-41577-backport-from-rdkcentral.patch"
 SRC_URI += "file://0117-ONEM-41577-OCDM-session-creation-modified.patch"
 SRC_URI += "file://0118-ONEM-40864-Deinitialize-DRM-on-client-crash.patch"
 SRC_URI += "file://0119-ARRISEOS-48273-Decryption-of-small-chunks-corrected.patch"
+SRC_URI += "file://0120-ONEM-42412-Implement-opencdm_gstreamer_session_decrypt_buffer.patch"
 
 EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
 

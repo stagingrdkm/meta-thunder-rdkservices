@@ -1,0 +1,26 @@
+From aab08fa954b848a3458ef3ea5aa1048d36cefa87 Mon Sep 17 00:00:00 2001
+From: aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+Date: Mon, 15 Sep 2025 16:26:58 +0530
+Subject: [PATCH] [ONEM-42412] Implement opencdm_gstreamer_session_decrypt_buffer() method
+
+---
+ Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+index d5ae01c..6636ac0 100644
+--- a/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
++++ b/Source/ocdm/adapter/broadcom-svp/open_cdm_adapter.cpp
+@@ -393,3 +393,9 @@ OpenCDMError opencdm_gstreamer_session_decrypt(struct OpenCDMSession* session, G
+        std::vector<GstBuffer*> vbuff{buffer};
+        return opencdm_gstreamer_session_multi_decrypt(session, vbuff);
+ }
++
++OpenCDMError opencdm_gstreamer_session_decrypt_buffer(struct OpenCDMSession* session, GstBuffer* buffer, GstCaps* caps)
++{
++    std::vector<GstBuffer*> vbuff{buffer};
++    return opencdm_gstreamer_session_multi_decrypt(session, vbuff);
++}
+-- 
+2.25.1
+
