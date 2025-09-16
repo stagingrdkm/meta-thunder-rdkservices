@@ -1,0 +1,2863 @@
+From 2cb4fea62146c69c079a3a0794be25684b3ca1c1 Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Wed, 8 Oct 2025 16:43:50 +0530
+Subject: [PATCH] ARRISEOS-48192 ARRISEOS-48324 Improve Playready ODH reporting
+
+Change-Id: I170c88353d818d6fc45a70b46064e31da901a3c6
+---
+ MediaSession.cpp        |   18 +-
+ MediaSessionExt.cpp     |   32 +-
+ MediaSystem.cpp         |   22 +-
+ ReportPlayreadyErrors.h |   91 +-
+ drmresults_brcm30.inc   | 2403 +++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 2519 insertions(+), 47 deletions(-)
+ create mode 100644 drmresults_brcm30.inc
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index e182465..5d169e2 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -429,7 +429,7 @@ ErrorExit:
+     if (DRM_FAILED(dr))
+     {
+         m_eKeyState = KEY_ERROR;
+-        LOGGER(LERROR_, "Drm_Content_SetProperty() failed, exiting");
++        LOGGER_ODH(dr, m_keySystem.c_str(), "Failed to set DRM property during MediaKeySession creation");
+     }
+ }
+ 
+@@ -571,7 +571,7 @@ ErrorExit:
+             m_piCallback->OnError(0, CDMi_S_FALSE, "KeyError");
+         }
+         m_eKeyState = KEY_ERROR;
+-        LOGGER(LERROR_, "Failure during license acquisition challenge. (error: 0x%08X)",(unsigned int)dr);
++        LOGGER_ODH(dr, m_keySystem.c_str(), "Failure during license acquisition challenge");
+     }
+ 
+     SAFE_OEM_FREE(pbChallenge);
+@@ -656,7 +656,7 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+                 
+                 m_piCallback->OnKeyStatusUpdate("KeyUsable", oLicenseResponse.m_rgoAcks[i].m_oKID.rgb, DRM_ID_SIZE);
+             } else {
+-                LOGGER(LERROR_, "Drm_LicenseAcq_ProcessResponse error: [%d]: 0x%08X)", i, (unsigned int)oLicenseResponse.m_rgoAcks[i].m_dwResult);
++                LOGGER_ODH(oLicenseResponse.m_rgoAcks[i].m_dwResult, m_keySystem.c_str(), "Drm_LicenseAcq_ProcessResponse failed for index: [%d]", i);
+             }
+         }
+         m_piCallback->OnKeyStatusesUpdated();
+@@ -677,10 +677,10 @@ ErrorExit:
+                   dr == DRM_E_LICEVAL_REQUIRED_REVOCATION_LIST_NOT_AVAILABLE )
+         {
+             /* Revocation Package must be update */
+-            LOGGER(LERROR_, "Revocation Package must be update. (error: 0x%08X)",(unsigned int)dr);
++            LOGGER_ODH(dr, m_keySystem.c_str(), "Revocation Package must be update");
+         }
+         else {
+-            LOGGER(LERROR_, "Unexpected failure during bind. (error: 0x%08X)",(unsigned int)dr);
++            LOGGER_ODH(dr, m_keySystem.c_str(), "Unexpected failure during bind");
+         }
+         
+         m_eKeyState = KEY_ERROR;
+@@ -895,7 +895,7 @@ ErrorExit:
+             pOpaqueData = nullptr;
+         }
+         cr = MapDrmErrorToCDMiResult(dr);
+-        LOGGER(LERROR_, "Decryption failed (error: 0x%08X)", static_cast<uint32_t>(dr));
++        LOGGER_ODH(dr, m_keySystem.c_str(), "Decryption failed");
+         if (m_piCallback) {
+             // Error code should normally be passed in first param but its type is too small (int16_t)
+             // Some of the errors require 32bit type.
+@@ -1055,7 +1055,7 @@ void MediaKeySession::CleanLicenseStore()
+         // Since there are multiple licenses in a batch, we might have already cleared
+         // them all. Ignore DRM_E_NOMORE returned from Drm_StoreMgmt_DeleteInMemoryLicenses.
+         if (DRM_FAILED(dr) && (dr != DRM_E_NOMORE)) {
+-            LOGGER(LERROR_, "Error in Drm_StoreMgmt_DeleteInMemoryLicenses 0x%08lX", dr);
++            LOGGER_ODH(dr, m_keySystem.c_str(), "Error in Drm_StoreMgmt_DeleteInMemoryLicenses");
+         } else {
+             m_hasInMemoryLicenses = false;
+         }
+@@ -1077,12 +1077,12 @@ void MediaKeySession::CleanLicenseStore()
+ 
+                 dr = Drm_StoreMgmt_DeleteLicenses(m_poAppContext, &cstrKid, nullptr, &removedCount);
+                 if DRM_FAILED(dr) {
+-                    LOGGER(LERROR_, "Error in Drm_StoreMgmt_DeleteLicenses 0x%08lX", dr);
++                    LOGGER_ODH(dr, m_keySystem.c_str(), "Error in Drm_StoreMgmt_DeleteLicenses");
+                 } else {
+                     licensesRemoved += removedCount;
+                 }
+             } else {
+-                LOGGER(LERROR_, "Error: Error base64-encoding KID (error: 0x%08X)", dr);
++                LOGGER_ODH(dr, m_keySystem.c_str(), "Error in base64-encoding KID");
+             }
+         }
+         LOGGER(LINFO_, "Number of licenses removed :%d",licensesRemoved);
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 4c5cd43..12ee69d 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -340,17 +340,17 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
+         // DRM_MAX_LICENSE_ACK (usually 20). Should allocate space and retry.
+         // FIXME NRDLIB-4481: This will need to be implemented when we start
+         // using batch license requests.
+-        LOGGER(LERROR_, "Drm_LicenseAcq_ProcessResponse too many licenses in response.");
++        LOGGER_ODH(err, m_keySystem.c_str(), "Drm_LicenseAcq_ProcessResponse too many licenses in response");
+         return MapDrmErrorToCDMiResult(err);
+     }
+     else if (DRM_FAILED(err)) {
+-        LOGGER(LERROR_, "Drm_LicenseAcq_ProcessResponse failed (error: 0x%08X)", static_cast<unsigned int>(err));
++        LOGGER_ODH(err, m_keySystem.c_str(), "Drm_LicenseAcq_ProcessResponse failed");
+         return MapDrmErrorToCDMiResult(err);
+     }
+ 
+     // Next, examine the returned drmLicenseResponse struct for a top-level error.
+     if (DRM_FAILED(drmLicenseResponse.m_dwResult)) {
+-        LOGGER(LERROR_, "Error in DRM_LICENSE_RESPONSE");
++        LOGGER_ODH(drmLicenseResponse.m_dwResult, m_keySystem.c_str(), "Error in DRM_LICENSE_RESPONSE");
+         return MapDrmErrorToCDMiResult(drmLicenseResponse.m_dwResult);
+     }
+ 
+@@ -364,18 +364,18 @@ CDMi_RESULT MediaKeySession::StoreLicenseData(const uint8_t licenseData[], uint3
+             // Special handling for DRM_E_DST_STORE_FULL. If this error is
+             // detected for any license, reset the DRM appcontext and return error.
+             if (drmLicenseResponse.m_rgoAcks[i].m_dwResult == DRM_E_DST_STORE_FULL) {
+-                LOGGER(LERROR_, "Found DRM_E_DST_STORE_FULL error in license %d, reinitializing!", i);
++                LOGGER_ODH(drmLicenseResponse.m_rgoAcks[i].m_dwResult, m_keySystem.c_str(), "Found DRM_E_DST_STORE_FULL error in license [%d], reinitializing!", i);
+                 
+                 err = Drm_Reinitialize(m_poAppContext);
+                 if (DRM_FAILED(err))
+                 {
+-                    LOGGER(LERROR_, "Error: Drm_Reinitialize returned (error: 0x%08X)", static_cast<unsigned int>(err));
++                    LOGGER_ODH(err, m_keySystem.c_str(), "Drm_Reinitialize failed");
+                     return MapDrmErrorToCDMiResult(err);
+                 }
+ 
+             }
+             else {
+-                LOGGER(LERROR_, "Error 0x%08lX found in license %d", (unsigned long)drmLicenseResponse.m_rgoAcks[i].m_dwResult, i);
++                LOGGER_ODH(drmLicenseResponse.m_rgoAcks[i].m_dwResult, m_keySystem.c_str(), "Found error in license [%d]", i);
+             }
+             return MapDrmErrorToCDMiResult(drmLicenseResponse.m_rgoAcks[i].m_dwResult);
+         }
+@@ -451,7 +451,7 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+         }
+         if (DRM_FAILED(err))
+         {
+-            LOGGER(LERROR_, "Error: Drm_Reader_Bind (error: 0x%08X)", static_cast<unsigned int>(err));
++            LOGGER_ODH(err, m_keySystem.c_str(), "Drm_Reader_Bind failed");
+             return MapDrmErrorToCDMiResult(err);
+         }
+         UpdateLicenseProps();
+@@ -463,7 +463,7 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+         err = Drm_Reader_Commit(m_poAppContext, NULL, NULL);
+         if (DRM_FAILED(err))
+         {
+-            LOGGER(LERROR_, "Error: Drm_Reader_Commit (error: 0x%08X)", static_cast<unsigned int>(err));
++            LOGGER_ODH(err, m_keySystem.c_str(), "Drm_Reader_Commit failed");
+             return MapDrmErrorToCDMiResult(err);
+         }
+         UpdateSession(newDecryptContext.get());
+@@ -508,7 +508,7 @@ CDMi_RESULT MediaKeySession::GetChallengeDataExt(uint8_t * challenge, uint32_t &
+ 
+     // sanity check for drm header
+     if (mDrmHeader.size() == 0) {
+-        LOGGER(LERROR_, "Error: No valid DRM header");
++        LOGGER_ODH(0, m_keySystem.c_str(), "No valid DRM header");
+         return CDMi_S_FALSE;
+     }
+ 
+@@ -556,12 +556,12 @@ CDMi_RESULT MediaKeySession::GetChallengeDataExt(uint8_t * challenge, uint32_t &
+                                             nullptr);
+ 
+     if ((err != DRM_E_BUFFERTOOSMALL) && (DRM_FAILED(err))){
+-        LOGGER(LERROR_, "Error: Drm_LicenseAcq_GenerateChallenge (error: 0x%08X)", static_cast<unsigned int>(err));
++        LOGGER_ODH(err, m_keySystem.c_str(), "Drm_LicenseAcq_GenerateChallenge failed");
+         return MapDrmErrorToCDMiResult(err);
+     }
+ 
+     if ((passedChallenge != nullptr || passedUrl != nullptr) && (err == DRM_E_BUFFERTOOSMALL)){
+-        LOGGER(LERROR_, "Error: Drm_LicenseAcq_GenerateChallenge (error: 0x%08X)", static_cast<unsigned int>(err));
++        LOGGER_ODH(err, m_keySystem.c_str(), "Drm_LicenseAcq_GenerateChallenge failed");
+         return MapDrmErrorToCDMiResult(err);
+     }
+ 
+@@ -576,7 +576,7 @@ CDMi_RESULT MediaKeySession::SetKeyId(DRM_APP_CONTEXT *pDrmAppCtx, const uint8_t
+     
+     DRM_RESULT err = DRM_B64_EncodeW(&keyId[0], sizeof(DRM_KID), rgwchEncodedKid, &cchEncodedKid, 0);
+     if (DRM_FAILED(err)) {
+-        LOGGER(LERROR_, "Error: Error base64-encoding KID (error: 0x%08X)", static_cast<unsigned int>(err));
++        LOGGER_ODH(err, m_keySystem.c_str(), "Error in base64-encoding KID");
+         return MapDrmErrorToCDMiResult(err);
+     }
+ 
+@@ -589,7 +589,7 @@ CDMi_RESULT MediaKeySession::SetKeyId(DRM_APP_CONTEXT *pDrmAppCtx, const uint8_t
+             (DRM_BYTE*)rgwchEncodedKid,
+             sizeof(rgwchEncodedKid));
+     if (DRM_FAILED(err)) {
+-        LOGGER(LERROR_, "Error in Drm_Content_SetProperty DRM_CSP_SELECT_KID (error: 0x%08X)", static_cast<unsigned int>(err));
++        LOGGER_ODH(err, m_keySystem.c_str(), "Error in Drm_Content_SetProperty DRM_CSP_SELECT_KID");
+         return MapDrmErrorToCDMiResult(err);
+     }
+     
+@@ -607,7 +607,7 @@ CDMi_RESULT MediaKeySession::SelectDrmHeader(DRM_APP_CONTEXT *pDrmAppCtx,
+             header,
+             headerLength);
+     if (DRM_FAILED(err)) {
+-        LOGGER(LERROR_, "Error: Drm_Content_SetProperty DRM_CSP_AUTODETECT_HEADER (error: 0x%08X)", static_cast<unsigned int>(err));
++        LOGGER_ODH(err, m_keySystem.c_str(), "Error in Drm_Content_SetProperty DRM_CSP_AUTODETECT_HEADER");
+         return MapDrmErrorToCDMiResult(err);
+     }
+ 
+@@ -634,7 +634,7 @@ DRM_RESULT MediaKeySession::ProcessLicenseResponse(const uint8_t* licenseData, u
+             static DRM_WORD const callbackIntervalPercent = 100;
+             DRM_RESULT cleanDR = Drm_StoreMgmt_CleanupStore(m_poAppContext, DRM_STORE_CLEANUP_ALL, nullptr, callbackIntervalPercent, nullptr);
+             if(DRM_FAILED(cleanDR)) {
+-                LOGGER(LERROR_,  "Warning, Cleaning licenses on license store failure returned: 0x%08lX", cleanDR);
++                LOGGER_ODH(cleanDR, m_keySystem.c_str(), "License store cleanup failed");
+             }
+         }
+     } else {
+@@ -672,7 +672,7 @@ DRM_RESULT MediaKeySession::ProcessLicenseResponse(const uint8_t* licenseData, u
+         // for in-memory licenses. Hopefully this error was already caught above.
+         const uint8_t zeros[sizeof(mBatchId.rgb)] = { 0 };
+         if(memcmp(mBatchId.rgb, zeros, sizeof(mBatchId.rgb)) == 0){
+-            LOGGER(LERROR_, "No batch ID in processed response");
++            LOGGER_ODH(0, m_keySystem.c_str(), "No batch ID in processed response");
+             return CDMi_S_FALSE;
+         }
+ 
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 3772751..ad8a533 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -206,6 +206,7 @@ public:
+         joinSettings.ignoreStandbyRequest = true;
+         rc = NxClient_Join(&joinSettings);
+         if (rc) {
++            dr = DRM_E_DRM_NOT_INITIALIZED;
+             LOGGER(LERROR_, "Couldnt join nxserver [rc=0x%08X]", rc);
+             goto ErrorExit;
+         }
+@@ -215,13 +216,14 @@ public:
+         rc = NxClient_Alloc(&nxAllocSettings, &m_nxAllocResults);       
+ 
+         if (rc) {
++            dr = DRM_E_DRM_NOT_INITIALIZED;
+             LOGGER(LERROR_, "NxClient_Alloc failed nxserver [rc=0x%08X]", rc);
+             goto ErrorExit;
+         }
+     ErrorExit:
+         if (DRM_FAILED(dr))
+         {
+-            LOGGER(LERROR_, "Playready Initialize failed (error: 0x%08X)", static_cast<unsigned int>(dr));
++            LOGGER_ODH(dr, "", "Playready Initialize failed [rc=0x%08X]", rc);
+         }
+     }
+ 
+@@ -305,7 +307,7 @@ public:
+             it->second->refCount--;
+             DeinitializeSystemRefCounted(keySystem, cleanOnDestroy);
+         } else {
+-            LOGGER(LERROR_, "No key system context for %s", keySystem.c_str());
++            LOGGER_ODH(0, keySystem.c_str(), "No context found for the key system");
+             cr = CDMi_S_FALSE;
+         }
+         return cr;
+@@ -384,7 +386,7 @@ public:
+         if (DRM_FAILED(dr))
+         {
+             cr = MapDrmErrorToCDMiResult(dr, CDMi_INIT_FAILED);
+-            LOGGER(LERROR_, "Playready System Initialize failed (error: 0x%08X)", static_cast<unsigned int>(dr));
++            LOGGER_ODH(dr, "","Playready System Initialize failed");
+         }
+ 
+         return cr;
+@@ -457,7 +459,7 @@ public:
+                     it = m_keySystemCtxs.find(keySystem);
+                     ASSERT(it != m_keySystemCtxs.end());
+                 } else {
+-                    LOGGER(LERROR_, "System not re-inited - active media sessions present, %s", keySystem.c_str());
++                    LOGGER_ODH(0, keySystem.c_str(), "System not re-inited - active media sessions present");
+                 }
+             }
+             if (cr == CDMi_SUCCESS) {
+@@ -471,7 +473,7 @@ public:
+                 it->second->mediaKeySessionsCount++;
+             }
+         } else {
+-            LOGGER(LERROR_, "Attempt of creating session without active system %s", keySystem.c_str());
++            LOGGER_ODH(0, keySystem.c_str(), "Attempt of creating session without active system");
+             cr = CDMi_S_FALSE;
+         }
+ 
+@@ -498,7 +500,7 @@ public:
+             it->second->mediaKeySessionsCount--;
+             ReinitializeAppCtx(it->second.get(), keySystem);
+         } else {
+-            LOGGER(LERROR_, "No keySystemCtx found");
++            LOGGER_ODH(0, keySystem.c_str(), "No keySystemCtx found");
+         }
+         return CDMi_SUCCESS;
+     }
+@@ -507,7 +509,7 @@ public:
+         if (keySystemCtx->mediaKeySessionsCount == 0) {
+             DRM_RESULT dr = Drm_Reinitialize(&keySystemCtx->drmAppctx);
+             if(DRM_FAILED(dr)) {
+-                LOGGER(LERROR_,  "Warning, Drm_Reinitialize returned 0x%08lX", dr);
++                LOGGER_ODH(dr, keySystem.c_str(), "Drm_Reinitialize failed");
+             }
+         }
+     }
+@@ -1011,7 +1013,7 @@ public:
+     ErrorExit:
+         if (DRM_FAILED(dr)) {
+             cr =  MapDrmErrorToCDMiResult(dr, CDMi_INIT_FAILED);
+-            LOGGER(LERROR_,  "Error in creating system ext,  0x%08lX", dr);
++            LOGGER_ODH(dr, keySystem.c_str(),  "Error in creating system ext");
+         }
+ 
+         m_keySystemCtxs.emplace(keySystem,keySystemCtx);
+@@ -1102,11 +1104,11 @@ private:
+             LOGGER(LINFO_,"Drm_StoreMgmt_CleanupStore");
+             DRM_RESULT dr = Drm_StoreMgmt_CleanupStore(&it->second->drmAppctx, DRM_STORE_CLEANUP_DELETE_EXPIRED_LICENSES, nullptr, callbackIntervalPercent, nullptr);
+             if (DRM_FAILED(dr)) {
+-                LOGGER(LERROR_, "Error in Drm_StoreMgmt_CleanupStore,  0x%08lX", dr);
++                LOGGER_ODH(dr, keySystem.c_str(), "Error in Drm_StoreMgmt_CleanupStore");
+                 cr = CDMi_S_FALSE;
+             }
+         } else {
+-            LOGGER(LERROR_, "No keySystemCtx found");
++            LOGGER_ODH(0, keySystem.c_str(), "No keySystemCtx found");
+             cr = CDMi_S_FALSE;
+         }
+ 
+diff --git a/ReportPlayreadyErrors.h b/ReportPlayreadyErrors.h
+index 35e5a37..af93bf6 100644
+--- a/ReportPlayreadyErrors.h
++++ b/ReportPlayreadyErrors.h
+@@ -5,13 +5,71 @@
+ #include <sys/syscall.h>
+ #include <unistd.h>
+ 
++std::unordered_map<DRM_RESULT, char const *> const drmResultMap {
++#include "drmresults_brcm30.inc"
++};
++
+ #ifdef ExamineDRValue
+ #undef ExamineDRValue
+ #endif
+ 
++inline void reportError(const char * fileName, const int lineNumber, const char* errorMessage, const int errorCode, const char * errorCodeDescription, const char * keySystem) {
++    std::ostringstream errorCodeBuilder;
++    errorCodeBuilder << "0x" << std::hex << std::uppercase << errorCode;
++    std::string errorCodeString = errorCodeBuilder.str();
++
++    std::string contextJsonString;
++    bool hasKeySystem = (keySystem && strlen(keySystem) > 0);
++    bool hasError = (errorCode != 0);
++    if (hasKeySystem || hasError) {
++        std::ostringstream contextJsonBuilder;
++        contextJsonBuilder << "{";
++        const char* delim = "";
++        if (hasKeySystem) {
++            contextJsonBuilder << "\"keySystem\":\"" << keySystem << "\"";
++            delim = ", ";
++        }
++        if (hasError) {
++            contextJsonBuilder << delim << "\"errorCode\":\"" << errorCodeString << " [" << errorCodeDescription << "]\"";
++        }
++        contextJsonBuilder << "}";
++        contextJsonString = contextJsonBuilder.str();
++    }
++    std::stringstream backtraceBuilder;
++    backtraceBuilder << std::string{fileName}  << ":" << lineNumber;
++    std::string backtraceString = backtraceBuilder.str();
++
++    odh_error_report_send_source_v3(ODH_SOURCE_NAME,
++                                   ODH_ERROR_REPORT_SENSITIVITY_NONSENSITIVE,
++                                   ODH_ERROR_REPORT_LEVEL_ERROR,
++                                   errorCodeString.c_str(),
++                                   "0",
++                                   errorMessage,
++                                   (contextJsonString.empty() ? nullptr : contextJsonString.c_str()),
++                                   (backtraceString.empty() ? nullptr : backtraceString.c_str()),
++                                   NULL);
++}
++
++inline std::string formatString(const char *fmt, ...) {
++    va_list args;
++    va_start(args, fmt);
++    int length = vsnprintf(NULL, 0, fmt, args);
++    va_end(args);
++
++    std::string result;
++    if (length >= 0) {
++        result.resize(length);
++        va_start(args, fmt);
++        vsnprintf(&result[0], length + 1, fmt, args);
++        va_end(args);
++    }
++
++    return result;
++}
++
+ #define ExamineDRValue(_drval_,_file_,_line_,_expr_)                                                                   \
+ do {                                                                                                                   \
+-    if (_drval_ != DRM_SUCCESS) ODH_ERROR_REPORT_CTX_ERROR(_drval_, "Playready internal error", __FUNCTION__, _expr_); \
++    if (_drval_ != DRM_SUCCESS) LOGGER_NO_THIS(LERROR_, "Playready internal error: drval=%ld, expr=%s", _drval_, _expr_); \
+ } while (false)
+ 
+ #ifdef LOGGER
+@@ -27,22 +85,31 @@ do {
+     do {                                                                                                            \
+         fprintf(stdout, "[%s:%d](%s)[tid=%ld]{object=%p} " fmt "\n", __FILENAME__, __LINE__, __FUNCTION__, syscall(SYS_gettid), this, ##__VA_ARGS__); \
+         fflush(stdout);                                                                                             \
+-        if (lvl == LERROR_) {                                                                                       \
+-            char *msg = odh_error_report_sprintf(fmt, ##__VA_ARGS__);                                               \
+-            ODH_ERROR_REPORT_CTX_ERROR(0, msg, __FUNCTION__);                                                       \
+-            free(msg);                                                                                              \
+-        }                                                                                                           \
+     } while( 0 )
+ 
+ #define LOGGER_NO_THIS(lvl, fmt, ...)                                                                               \
+     do {                                                                                                            \
+-        fprintf(stdout, "[%s:%d](%s)[tid=%ld] " fmt "\n", __FILENAME__, __LINE__, __FUNCTION__, syscall(SYS_gettid), ##__VA_ARGS__);                  \
++        fprintf(stdout, "[%s:%d](%s)[tid=%ld] " fmt "\n", __FILENAME__, __LINE__, __FUNCTION__, syscall(SYS_gettid), ##__VA_ARGS__); \
+         fflush(stdout);                                                                                             \
+-        if (lvl == LERROR_) {                                                                                       \
+-            char *msg = odh_error_report_sprintf(fmt, ##__VA_ARGS__);                                               \
+-            ODH_ERROR_REPORT_CTX_ERROR(0, msg, __FUNCTION__);                                                       \
+-            free(msg);                                                                                              \
+-        }                                                                                                           \
+     } while( 0 )
+ 
++#define LOGGER_ODH(errorCode, keySystem, fmt, ...)                                                                              \
++    do {                                                                                                                        \
++        std::ostringstream errorCodeBuilder;                                                                                    \
++        std::string errorCodeDescription;                                                                                       \
++        if (errorCode) {                                                                                                        \
++            auto mapIt = drmResultMap.find(static_cast<DRM_RESULT>(errorCode));                                                 \
++            if (mapIt != drmResultMap.end()) {                                                                                  \
++                errorCodeDescription = mapIt->second;                                                                           \
++            }                                                                                                                   \
++            errorCodeBuilder << "error: 0x" << std::hex << std::uppercase << errorCode << " [" << errorCodeDescription << "]";  \
++        }                                                                                                                       \
++        std::string errorCodeDetails = errorCodeBuilder.str();                                                                  \
++        LOGGER(LERROR_, fmt " %s, key system: %s", ##__VA_ARGS__,errorCodeDetails.c_str(), keySystem);                          \
++        if (errorCode != DRM_E_LICENSE_EXPIRED && errorCode != DRM_E_LICENSE_REALTIME_EXPIRED && errorCode != DRM_E_LICENSE_NOT_FOUND) { \
++            std::string errorMessage = formatString(fmt, ##__VA_ARGS__);                                                        \
++            reportError( __FILENAME__, __LINE__, errorMessage.c_str(), errorCode, errorCodeDescription.c_str(), keySystem);     \
++        }                                                                                                                       \
++    } while(0)
++
+ #endif
+diff --git a/drmresults_brcm30.inc b/drmresults_brcm30.inc
+new file mode 100644
+index 0000000..d06c5df
+--- /dev/null
++++ b/drmresults_brcm30.inc
+@@ -0,0 +1,2403 @@
++#ifdef DRM_SUCCESS
++{DRM_SUCCESS, "DRM_SUCCESS"},
++#endif
++#ifdef DRM_S_FALSE
++{DRM_S_FALSE, "DRM_S_FALSE"},
++#endif
++#ifdef DRM_S_MORE_DATA
++{DRM_S_MORE_DATA, "DRM_S_MORE_DATA"},
++#endif
++#ifdef DRM_E_OUTOFMEMORY
++{DRM_E_OUTOFMEMORY, "DRM_E_OUTOFMEMORY"},
++#endif
++#ifdef DRM_E_NOTIMPL
++{DRM_E_NOTIMPL, "DRM_E_NOTIMPL"},
++#endif
++#ifdef DRM_E_POINTER
++{DRM_E_POINTER, "DRM_E_POINTER"},
++#endif
++#ifdef DRM_E_FAIL
++{DRM_E_FAIL, "DRM_E_FAIL"},
++#endif
++#ifdef DRM_E_WIN32_FILE_NOT_FOUND
++{DRM_E_WIN32_FILE_NOT_FOUND, "DRM_E_WIN32_FILE_NOT_FOUND"},
++#endif
++#ifdef DRM_E_HANDLE
++{DRM_E_HANDLE, "DRM_E_HANDLE"},
++#endif
++#ifdef DRM_E_WIN32_NO_MORE_FILES
++{DRM_E_WIN32_NO_MORE_FILES, "DRM_E_WIN32_NO_MORE_FILES"},
++#endif
++#ifdef DRM_E_INVALIDARG
++{DRM_E_INVALIDARG, "DRM_E_INVALIDARG"},
++#endif
++#ifdef DRM_E_BUFFERTOOSMALL
++{DRM_E_BUFFERTOOSMALL, "DRM_E_BUFFERTOOSMALL"},
++#endif
++#ifdef DRM_E_NOMORE
++{DRM_E_NOMORE, "DRM_E_NOMORE"},
++#endif
++#ifdef DRM_E_ARITHMETIC_OVERFLOW
++{DRM_E_ARITHMETIC_OVERFLOW, "DRM_E_ARITHMETIC_OVERFLOW"},
++#endif
++#ifdef DRM_E_NOT_FOUND
++{DRM_E_NOT_FOUND, "DRM_E_NOT_FOUND"},
++#endif
++#ifdef DRM_E_INVALID_COMMAND_LINE
++{DRM_E_INVALID_COMMAND_LINE, "DRM_E_INVALID_COMMAND_LINE"},
++#endif
++#ifdef DRM_E_FILENOTFOUND
++{DRM_E_FILENOTFOUND, "DRM_E_FILENOTFOUND"},
++#endif
++#ifdef DRM_E_FILEOPEN
++{DRM_E_FILEOPEN, "DRM_E_FILEOPEN"},
++#endif
++#ifdef DRM_E_PARAMETERS_MISMATCHED
++{DRM_E_PARAMETERS_MISMATCHED, "DRM_E_PARAMETERS_MISMATCHED"},
++#endif
++#ifdef DRM_E_FAILED_TO_STORE_LICENSE
++{DRM_E_FAILED_TO_STORE_LICENSE, "DRM_E_FAILED_TO_STORE_LICENSE"},
++#endif
++#ifdef DRM_E_NOT_ALL_STORED
++{DRM_E_NOT_ALL_STORED, "DRM_E_NOT_ALL_STORED"},
++#endif
++#ifdef DRM_E_VERIFICATION_FAILURE
++{DRM_E_VERIFICATION_FAILURE, "DRM_E_VERIFICATION_FAILURE"},
++#endif
++#ifdef DRM_E_RSA_SIGNATURE_ERROR
++{DRM_E_RSA_SIGNATURE_ERROR, "DRM_E_RSA_SIGNATURE_ERROR"},
++#endif
++#ifdef DRM_E_BAD_RSA_EXPONENT
++{DRM_E_BAD_RSA_EXPONENT, "DRM_E_BAD_RSA_EXPONENT"},
++#endif
++#ifdef DRM_E_P256_CONVERSION_FAILURE
++{DRM_E_P256_CONVERSION_FAILURE, "DRM_E_P256_CONVERSION_FAILURE"},
++#endif
++#ifdef DRM_E_P256_PKCRYPTO_FAILURE
++{DRM_E_P256_PKCRYPTO_FAILURE, "DRM_E_P256_PKCRYPTO_FAILURE"},
++#endif
++#ifdef DRM_E_P256_PLAINTEXT_MAPPING_FAILURE
++{DRM_E_P256_PLAINTEXT_MAPPING_FAILURE, "DRM_E_P256_PLAINTEXT_MAPPING_FAILURE"},
++#endif
++#ifdef DRM_E_P256_INVALID_SIGNATURE
++{DRM_E_P256_INVALID_SIGNATURE, "DRM_E_P256_INVALID_SIGNATURE"},
++#endif
++#ifdef DRM_E_P256_ECDSA_VERIFICATION_ERROR
++{DRM_E_P256_ECDSA_VERIFICATION_ERROR, "DRM_E_P256_ECDSA_VERIFICATION_ERROR"},
++#endif
++#ifdef DRM_E_P256_ECDSA_SIGNING_ERROR
++{DRM_E_P256_ECDSA_SIGNING_ERROR, "DRM_E_P256_ECDSA_SIGNING_ERROR"},
++#endif
++#ifdef DRM_E_P256_HMAC_KEYGEN_FAILURE
++{DRM_E_P256_HMAC_KEYGEN_FAILURE, "DRM_E_P256_HMAC_KEYGEN_FAILURE"},
++#endif
++#ifdef DRM_E_CH_BASECODE
++{DRM_E_CH_BASECODE, "DRM_E_CH_BASECODE"},
++#endif
++#ifdef DRM_E_CH_VERSION_MISSING
++{DRM_E_CH_VERSION_MISSING, "DRM_E_CH_VERSION_MISSING"},
++#endif
++#ifdef DRM_E_CH_KID_MISSING
++{DRM_E_CH_KID_MISSING, "DRM_E_CH_KID_MISSING"},
++#endif
++#ifdef DRM_E_CH_LAINFO_MISSING
++{DRM_E_CH_LAINFO_MISSING, "DRM_E_CH_LAINFO_MISSING"},
++#endif
++#ifdef DRM_E_CH_CHECKSUM_MISSING
++{DRM_E_CH_CHECKSUM_MISSING, "DRM_E_CH_CHECKSUM_MISSING"},
++#endif
++#ifdef DRM_E_CH_ATTR_MISSING
++{DRM_E_CH_ATTR_MISSING, "DRM_E_CH_ATTR_MISSING"},
++#endif
++#ifdef DRM_E_CH_INVALID_HEADER
++{DRM_E_CH_INVALID_HEADER, "DRM_E_CH_INVALID_HEADER"},
++#endif
++#ifdef DRM_E_CH_INVALID_CHECKSUM
++{DRM_E_CH_INVALID_CHECKSUM, "DRM_E_CH_INVALID_CHECKSUM"},
++#endif
++#ifdef DRM_E_CH_UNABLE_TO_VERIFY
++{DRM_E_CH_UNABLE_TO_VERIFY, "DRM_E_CH_UNABLE_TO_VERIFY"},
++#endif
++#ifdef DRM_E_CH_UNSUPPORTED_VERSION
++{DRM_E_CH_UNSUPPORTED_VERSION, "DRM_E_CH_UNSUPPORTED_VERSION"},
++#endif
++#ifdef DRM_E_CH_BAD_KEY
++{DRM_E_CH_BAD_KEY, "DRM_E_CH_BAD_KEY"},
++#endif
++#ifdef DRM_E_CH_INCOMPATIBLE_HEADER_TYPE
++{DRM_E_CH_INCOMPATIBLE_HEADER_TYPE, "DRM_E_CH_INCOMPATIBLE_HEADER_TYPE"},
++#endif
++#ifdef DRM_E_HEADER_ALREADY_SET
++{DRM_E_HEADER_ALREADY_SET, "DRM_E_HEADER_ALREADY_SET"},
++#endif
++#ifdef DRM_E_CH_MULTIPLE_KIDS
++{DRM_E_CH_MULTIPLE_KIDS, "DRM_E_CH_MULTIPLE_KIDS"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_BASECODE
++{DRM_E_CDMIGRATIONTOOL_BASECODE, "DRM_E_CDMIGRATIONTOOL_BASECODE"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_MAXCODE
++{DRM_E_CDMIGRATIONTOOL_MAXCODE, "DRM_E_CDMIGRATIONTOOL_MAXCODE"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_INVALID_FILE
++{DRM_E_CDMIGRATIONTOOL_INVALID_FILE, "DRM_E_CDMIGRATIONTOOL_INVALID_FILE"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_FILE_IS_NOT_CD_RIPPED
++{DRM_E_CDMIGRATIONTOOL_FILE_IS_NOT_CD_RIPPED, "DRM_E_CDMIGRATIONTOOL_FILE_IS_NOT_CD_RIPPED"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_FILE_IS_NOT_PROTECTED
++{DRM_E_CDMIGRATIONTOOL_FILE_IS_NOT_PROTECTED, "DRM_E_CDMIGRATIONTOOL_FILE_IS_NOT_PROTECTED"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_LICENSE_KID_INVALID
++{DRM_E_CDMIGRATIONTOOL_LICENSE_KID_INVALID, "DRM_E_CDMIGRATIONTOOL_LICENSE_KID_INVALID"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_LICENSE_KID_MISMATCH
++{DRM_E_CDMIGRATIONTOOL_LICENSE_KID_MISMATCH, "DRM_E_CDMIGRATIONTOOL_LICENSE_KID_MISMATCH"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_LICENSE_CONTENT_KEY_INVALID
++{DRM_E_CDMIGRATIONTOOL_LICENSE_CONTENT_KEY_INVALID, "DRM_E_CDMIGRATIONTOOL_LICENSE_CONTENT_KEY_INVALID"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_INVALID_ASF_FORMAT
++{DRM_E_CDMIGRATIONTOOL_INVALID_ASF_FORMAT, "DRM_E_CDMIGRATIONTOOL_INVALID_ASF_FORMAT"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_INVALID_ASF_PACKETS
++{DRM_E_CDMIGRATIONTOOL_INVALID_ASF_PACKETS, "DRM_E_CDMIGRATIONTOOL_INVALID_ASF_PACKETS"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_CONTENT_KEY_CACHE_CORRUPT
++{DRM_E_CDMIGRATIONTOOL_CONTENT_KEY_CACHE_CORRUPT, "DRM_E_CDMIGRATIONTOOL_CONTENT_KEY_CACHE_CORRUPT"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_FILE_WRITE_ERROR
++{DRM_E_CDMIGRATIONTOOL_FILE_WRITE_ERROR, "DRM_E_CDMIGRATIONTOOL_FILE_WRITE_ERROR"},
++#endif
++#ifdef DRM_E_CDMIGRATIONTOOL_CANCELLED
++{DRM_E_CDMIGRATIONTOOL_CANCELLED, "DRM_E_CDMIGRATIONTOOL_CANCELLED"},
++#endif
++#ifdef DRM_E_LIC_BASECODE
++{DRM_E_LIC_BASECODE, "DRM_E_LIC_BASECODE"},
++#endif
++#ifdef DRM_E_LIC_UNSUPPORTED_VALUE
++{DRM_E_LIC_UNSUPPORTED_VALUE, "DRM_E_LIC_UNSUPPORTED_VALUE"},
++#endif
++#ifdef DRM_E_CDMI_BASECODE
++{DRM_E_CDMI_BASECODE, "DRM_E_CDMI_BASECODE"},
++#endif
++#ifdef DRM_E_CDMI_INVALID_INITIALIZATION_DATA
++{DRM_E_CDMI_INVALID_INITIALIZATION_DATA, "DRM_E_CDMI_INVALID_INITIALIZATION_DATA"},
++#endif
++#ifdef DRM_E_CDMI_PERSISTENT_LICENSE_FOR_NON_PERSISTENT_LICENSE_SESSION
++{DRM_E_CDMI_PERSISTENT_LICENSE_FOR_NON_PERSISTENT_LICENSE_SESSION, "DRM_E_CDMI_PERSISTENT_LICENSE_FOR_NON_PERSISTENT_LICENSE_SESSION"},
++#endif
++#ifdef DRM_E_CDMI_SECURE_STOP_LICENSE_FOR_NON_PERSISTENT_USAGE_RECORD_SESSION
++{DRM_E_CDMI_SECURE_STOP_LICENSE_FOR_NON_PERSISTENT_USAGE_RECORD_SESSION, "DRM_E_CDMI_SECURE_STOP_LICENSE_FOR_NON_PERSISTENT_USAGE_RECORD_SESSION"},
++#endif
++#ifdef DRM_E_CDMI_TEMPORARY_LICENSE_FOR_NON_TEMPORARY_SESSION
++{DRM_E_CDMI_TEMPORARY_LICENSE_FOR_NON_TEMPORARY_SESSION, "DRM_E_CDMI_TEMPORARY_LICENSE_FOR_NON_TEMPORARY_SESSION"},
++#endif
++#ifdef DRM_E_CDMI_UNSUPPORTED_KEY_SYSTEM
++{DRM_E_CDMI_UNSUPPORTED_KEY_SYSTEM, "DRM_E_CDMI_UNSUPPORTED_KEY_SYSTEM"},
++#endif
++#ifdef DRM_E_CDMI_UNSUPPORTED_INITIALIZATION_DATA_TYPES
++{DRM_E_CDMI_UNSUPPORTED_INITIALIZATION_DATA_TYPES, "DRM_E_CDMI_UNSUPPORTED_INITIALIZATION_DATA_TYPES"},
++#endif
++#ifdef DRM_E_CDMI_UNSUPPORTED_DISTINCTIVE_IDENTIFIER
++{DRM_E_CDMI_UNSUPPORTED_DISTINCTIVE_IDENTIFIER, "DRM_E_CDMI_UNSUPPORTED_DISTINCTIVE_IDENTIFIER"},
++#endif
++#ifdef DRM_E_CDMI_UNSUPPORTED_SESSION_TYPE
++{DRM_E_CDMI_UNSUPPORTED_SESSION_TYPE, "DRM_E_CDMI_UNSUPPORTED_SESSION_TYPE"},
++#endif
++#ifdef DRM_E_CDMI_UNSUPPORTED_INITIALIZATION_DATA
++{DRM_E_CDMI_UNSUPPORTED_INITIALIZATION_DATA, "DRM_E_CDMI_UNSUPPORTED_INITIALIZATION_DATA"},
++#endif
++#ifdef DRM_E_CDMI_SESSION_ALREADY_USED
++{DRM_E_CDMI_SESSION_ALREADY_USED, "DRM_E_CDMI_SESSION_ALREADY_USED"},
++#endif
++#ifdef DRM_E_CDMI_SESSION_UNINITIALIZED
++{DRM_E_CDMI_SESSION_UNINITIALIZED, "DRM_E_CDMI_SESSION_UNINITIALIZED"},
++#endif
++#ifdef DRM_E_CDMI_SESSION_CLOSED
++{DRM_E_CDMI_SESSION_CLOSED, "DRM_E_CDMI_SESSION_CLOSED"},
++#endif
++#ifdef DRM_E_CDMI_SESSION_ID_NOT_FOUND
++{DRM_E_CDMI_SESSION_ID_NOT_FOUND, "DRM_E_CDMI_SESSION_ID_NOT_FOUND"},
++#endif
++#ifdef DRM_E_CDMI_SESSION_TYPE_MISMATCH
++{DRM_E_CDMI_SESSION_TYPE_MISMATCH, "DRM_E_CDMI_SESSION_TYPE_MISMATCH"},
++#endif
++#ifdef DRM_E_LEGACY_BASECODE
++{DRM_E_LEGACY_BASECODE, "DRM_E_LEGACY_BASECODE"},
++#endif
++#ifdef DRM_E_LIC_KEY_DECODE_FAILURE
++{DRM_E_LIC_KEY_DECODE_FAILURE, "DRM_E_LIC_KEY_DECODE_FAILURE"},
++#endif
++#ifdef DRM_E_LIC_SIGNATURE_FAILURE
++{DRM_E_LIC_SIGNATURE_FAILURE, "DRM_E_LIC_SIGNATURE_FAILURE"},
++#endif
++#ifdef DRM_E_KEY_MISMATCH
++{DRM_E_KEY_MISMATCH, "DRM_E_KEY_MISMATCH"},
++#endif
++#ifdef DRM_E_INVALID_SIGNATURE
++{DRM_E_INVALID_SIGNATURE, "DRM_E_INVALID_SIGNATURE"},
++#endif
++#ifdef DRM_E_CIPHER_NOT_INITIALIZED
++{DRM_E_CIPHER_NOT_INITIALIZED, "DRM_E_CIPHER_NOT_INITIALIZED"},
++#endif
++#ifdef DRM_E_DECRYPT_NOT_INITIALIZED
++{DRM_E_DECRYPT_NOT_INITIALIZED, "DRM_E_DECRYPT_NOT_INITIALIZED"},
++#endif
++#ifdef DRM_E_SECURESTORE_LOCK_NOT_OBTAINED
++{DRM_E_SECURESTORE_LOCK_NOT_OBTAINED, "DRM_E_SECURESTORE_LOCK_NOT_OBTAINED"},
++#endif
++#ifdef DRM_E_PKCRYPTO_FAILURE
++{DRM_E_PKCRYPTO_FAILURE, "DRM_E_PKCRYPTO_FAILURE"},
++#endif
++#ifdef DRM_E_INVALID_DST_SLOT_SIZE
++{DRM_E_INVALID_DST_SLOT_SIZE, "DRM_E_INVALID_DST_SLOT_SIZE"},
++#endif
++#ifdef DRM_E_UNSUPPORTED_VERSION
++{DRM_E_UNSUPPORTED_VERSION, "DRM_E_UNSUPPORTED_VERSION"},
++#endif
++#ifdef DRM_E_EXPIRED_CERT
++{DRM_E_EXPIRED_CERT, "DRM_E_EXPIRED_CERT"},
++#endif
++#ifdef DRM_E_DRMUTIL_INVALID_CERT
++{DRM_E_DRMUTIL_INVALID_CERT, "DRM_E_DRMUTIL_INVALID_CERT"},
++#endif
++#ifdef DRM_E_DEVICE_NOT_REGISTERED
++{DRM_E_DEVICE_NOT_REGISTERED, "DRM_E_DEVICE_NOT_REGISTERED"},
++#endif
++#ifdef DRM_E_TOO_MANY_INCLUSION_GUIDS
++{DRM_E_TOO_MANY_INCLUSION_GUIDS, "DRM_E_TOO_MANY_INCLUSION_GUIDS"},
++#endif
++#ifdef DRM_E_REVOCATION_GUID_NOT_RECOGNIZED
++{DRM_E_REVOCATION_GUID_NOT_RECOGNIZED, "DRM_E_REVOCATION_GUID_NOT_RECOGNIZED"},
++#endif
++#ifdef DRM_E_LIC_CHAIN_TOO_DEEP
++{DRM_E_LIC_CHAIN_TOO_DEEP, "DRM_E_LIC_CHAIN_TOO_DEEP"},
++#endif
++#ifdef DRM_E_DEVICE_SECURITY_LEVEL_TOO_LOW
++{DRM_E_DEVICE_SECURITY_LEVEL_TOO_LOW, "DRM_E_DEVICE_SECURITY_LEVEL_TOO_LOW"},
++#endif
++#ifdef DRM_E_DST_BLOCK_CACHE_CORRUPT
++{DRM_E_DST_BLOCK_CACHE_CORRUPT, "DRM_E_DST_BLOCK_CACHE_CORRUPT"},
++#endif
++#ifdef DRM_E_DST_BLOCK_CACHE_MISS
++{DRM_E_DST_BLOCK_CACHE_MISS, "DRM_E_DST_BLOCK_CACHE_MISS"},
++#endif
++#ifdef DRM_E_INVALID_METERRESPONSE_SIGNATURE
++{DRM_E_INVALID_METERRESPONSE_SIGNATURE, "DRM_E_INVALID_METERRESPONSE_SIGNATURE"},
++#endif
++#ifdef DRM_E_INVALID_LICENSE_REVOCATION_LIST_SIGNATURE
++{DRM_E_INVALID_LICENSE_REVOCATION_LIST_SIGNATURE, "DRM_E_INVALID_LICENSE_REVOCATION_LIST_SIGNATURE"},
++#endif
++#ifdef DRM_E_INVALID_METERCERT_SIGNATURE
++{DRM_E_INVALID_METERCERT_SIGNATURE, "DRM_E_INVALID_METERCERT_SIGNATURE"},
++#endif
++#ifdef DRM_E_METERSTORE_DATA_NOT_FOUND
++{DRM_E_METERSTORE_DATA_NOT_FOUND, "DRM_E_METERSTORE_DATA_NOT_FOUND"},
++#endif
++#ifdef DRM_E_INVALID_REVOCATION_LIST
++{DRM_E_INVALID_REVOCATION_LIST, "DRM_E_INVALID_REVOCATION_LIST"},
++#endif
++#ifdef DRM_E_ENVELOPE_CORRUPT
++{DRM_E_ENVELOPE_CORRUPT, "DRM_E_ENVELOPE_CORRUPT"},
++#endif
++#ifdef DRM_E_ENVELOPE_FILE_NOT_COMPATIBLE
++{DRM_E_ENVELOPE_FILE_NOT_COMPATIBLE, "DRM_E_ENVELOPE_FILE_NOT_COMPATIBLE"},
++#endif
++#ifdef DRM_E_EXTENDED_RESTRICTION_NOT_UNDERSTOOD
++{DRM_E_EXTENDED_RESTRICTION_NOT_UNDERSTOOD, "DRM_E_EXTENDED_RESTRICTION_NOT_UNDERSTOOD"},
++#endif
++#ifdef DRM_E_INVALID_SLK
++{DRM_E_INVALID_SLK, "DRM_E_INVALID_SLK"},
++#endif
++#ifdef DRM_E_DEVCERT_MODEL_MISMATCH
++{DRM_E_DEVCERT_MODEL_MISMATCH, "DRM_E_DEVCERT_MODEL_MISMATCH"},
++#endif
++#ifdef DRM_E_OUTDATED_REVOCATION_LIST
++{DRM_E_OUTDATED_REVOCATION_LIST, "DRM_E_OUTDATED_REVOCATION_LIST"},
++#endif
++#ifdef DRM_E_DSTR_NOT_FOUND
++{DRM_E_DSTR_NOT_FOUND, "DRM_E_DSTR_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DEVICE_NOT_INITIALIZED
++{DRM_E_DEVICE_NOT_INITIALIZED, "DRM_E_DEVICE_NOT_INITIALIZED"},
++#endif
++#ifdef DRM_E_DRM_NOT_INITIALIZED
++{DRM_E_DRM_NOT_INITIALIZED, "DRM_E_DRM_NOT_INITIALIZED"},
++#endif
++#ifdef DRM_E_INVALID_RIGHT
++{DRM_E_INVALID_RIGHT, "DRM_E_INVALID_RIGHT"},
++#endif
++#ifdef DRM_E_INVALID_LICENSE
++{DRM_E_INVALID_LICENSE, "DRM_E_INVALID_LICENSE"},
++#endif
++#ifdef DRM_E_CONDITION_NOT_SUPPORTED
++{DRM_E_CONDITION_NOT_SUPPORTED, "DRM_E_CONDITION_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_LICENSE_EXPIRED
++{DRM_E_LICENSE_EXPIRED, "DRM_E_LICENSE_EXPIRED"},
++#endif
++#ifdef DRM_E_RIGHTS_NOT_AVAILABLE
++{DRM_E_RIGHTS_NOT_AVAILABLE, "DRM_E_RIGHTS_NOT_AVAILABLE"},
++#endif
++#ifdef DRM_E_LICENSE_MISMATCH
++{DRM_E_LICENSE_MISMATCH, "DRM_E_LICENSE_MISMATCH"},
++#endif
++#ifdef DRM_E_WRONG_TOKEN_TYPE
++{DRM_E_WRONG_TOKEN_TYPE, "DRM_E_WRONG_TOKEN_TYPE"},
++#endif
++#ifdef DRM_E_LICENSE_NOT_BOUND
++{DRM_E_LICENSE_NOT_BOUND, "DRM_E_LICENSE_NOT_BOUND"},
++#endif
++#ifdef DRM_E_HASH_MISMATCH
++{DRM_E_HASH_MISMATCH, "DRM_E_HASH_MISMATCH"},
++#endif
++#ifdef DRM_E_LICENSESTORE_NOT_FOUND
++{DRM_E_LICENSESTORE_NOT_FOUND, "DRM_E_LICENSESTORE_NOT_FOUND"},
++#endif
++#ifdef DRM_E_LICENSE_NOT_FOUND
++{DRM_E_LICENSE_NOT_FOUND, "DRM_E_LICENSE_NOT_FOUND"},
++#endif
++#ifdef DRM_E_LICENSE_VERSION_NOT_SUPPORTED
++{DRM_E_LICENSE_VERSION_NOT_SUPPORTED, "DRM_E_LICENSE_VERSION_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_UNSUPPORTED_ALGORITHM
++{DRM_E_UNSUPPORTED_ALGORITHM, "DRM_E_UNSUPPORTED_ALGORITHM"},
++#endif
++#ifdef DRM_E_INVALID_LICENSE_STORE
++{DRM_E_INVALID_LICENSE_STORE, "DRM_E_INVALID_LICENSE_STORE"},
++#endif
++#ifdef DRM_E_FILE_READ_ERROR
++{DRM_E_FILE_READ_ERROR, "DRM_E_FILE_READ_ERROR"},
++#endif
++#ifdef DRM_E_FILE_WRITE_ERROR
++{DRM_E_FILE_WRITE_ERROR, "DRM_E_FILE_WRITE_ERROR"},
++#endif
++#ifdef DRM_E_DST_STORE_FULL
++{DRM_E_DST_STORE_FULL, "DRM_E_DST_STORE_FULL"},
++#endif
++#ifdef DRM_E_NO_XML_OPEN_TAG
++{DRM_E_NO_XML_OPEN_TAG, "DRM_E_NO_XML_OPEN_TAG"},
++#endif
++#ifdef DRM_E_NO_XML_CLOSE_TAG
++{DRM_E_NO_XML_CLOSE_TAG, "DRM_E_NO_XML_CLOSE_TAG"},
++#endif
++#ifdef DRM_E_INVALID_XML_TAG
++{DRM_E_INVALID_XML_TAG, "DRM_E_INVALID_XML_TAG"},
++#endif
++#ifdef DRM_E_NO_XML_CDATA
++{DRM_E_NO_XML_CDATA, "DRM_E_NO_XML_CDATA"},
++#endif
++#ifdef DRM_E_DST_NAMESPACE_NOT_FOUND
++{DRM_E_DST_NAMESPACE_NOT_FOUND, "DRM_E_DST_NAMESPACE_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DST_SLOT_NOT_FOUND
++{DRM_E_DST_SLOT_NOT_FOUND, "DRM_E_DST_SLOT_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DST_SLOT_EXISTS
++{DRM_E_DST_SLOT_EXISTS, "DRM_E_DST_SLOT_EXISTS"},
++#endif
++#ifdef DRM_E_DST_CORRUPTED
++{DRM_E_DST_CORRUPTED, "DRM_E_DST_CORRUPTED"},
++#endif
++#ifdef DRM_E_DST_SEEK_ERROR
++{DRM_E_DST_SEEK_ERROR, "DRM_E_DST_SEEK_ERROR"},
++#endif
++#ifdef DRM_E_INVALID_SECURESTORE_PASSWORD
++{DRM_E_INVALID_SECURESTORE_PASSWORD, "DRM_E_INVALID_SECURESTORE_PASSWORD"},
++#endif
++#ifdef DRM_E_SECURESTORE_CORRUPT
++{DRM_E_SECURESTORE_CORRUPT, "DRM_E_SECURESTORE_CORRUPT"},
++#endif
++#ifdef DRM_E_SECURESTORE_FULL
++{DRM_E_SECURESTORE_FULL, "DRM_E_SECURESTORE_FULL"},
++#endif
++#ifdef DRM_E_DUPLICATED_HEADER_ATTRIBUTE
++{DRM_E_DUPLICATED_HEADER_ATTRIBUTE, "DRM_E_DUPLICATED_HEADER_ATTRIBUTE"},
++#endif
++#ifdef DRM_E_NO_KID_IN_HEADER
++{DRM_E_NO_KID_IN_HEADER, "DRM_E_NO_KID_IN_HEADER"},
++#endif
++#ifdef DRM_E_NO_LAINFO_IN_HEADER
++{DRM_E_NO_LAINFO_IN_HEADER, "DRM_E_NO_LAINFO_IN_HEADER"},
++#endif
++#ifdef DRM_E_NO_CHECKSUM_IN_HEADER
++{DRM_E_NO_CHECKSUM_IN_HEADER, "DRM_E_NO_CHECKSUM_IN_HEADER"},
++#endif
++#ifdef DRM_E_DST_BLOCK_MISMATCH
++{DRM_E_DST_BLOCK_MISMATCH, "DRM_E_DST_BLOCK_MISMATCH"},
++#endif
++#ifdef DRM_E_LICENSE_TOO_LONG
++{DRM_E_LICENSE_TOO_LONG, "DRM_E_LICENSE_TOO_LONG"},
++#endif
++#ifdef DRM_E_DST_EXISTS
++{DRM_E_DST_EXISTS, "DRM_E_DST_EXISTS"},
++#endif
++#ifdef DRM_E_INVALID_DEVICE_CERTIFICATE
++{DRM_E_INVALID_DEVICE_CERTIFICATE, "DRM_E_INVALID_DEVICE_CERTIFICATE"},
++#endif
++#ifdef DRM_E_DST_LOCK_FAILED
++{DRM_E_DST_LOCK_FAILED, "DRM_E_DST_LOCK_FAILED"},
++#endif
++#ifdef DRM_E_FILE_SEEK_ERROR
++{DRM_E_FILE_SEEK_ERROR, "DRM_E_FILE_SEEK_ERROR"},
++#endif
++#ifdef DRM_E_DST_NOT_LOCKED_EXCLUSIVE
++{DRM_E_DST_NOT_LOCKED_EXCLUSIVE, "DRM_E_DST_NOT_LOCKED_EXCLUSIVE"},
++#endif
++#ifdef DRM_E_DST_EXCLUSIVE_LOCK_ONLY
++{DRM_E_DST_EXCLUSIVE_LOCK_ONLY, "DRM_E_DST_EXCLUSIVE_LOCK_ONLY"},
++#endif
++#ifdef DRM_E_V1_NOT_SUPPORTED
++{DRM_E_V1_NOT_SUPPORTED, "DRM_E_V1_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_HEADER_NOT_SET
++{DRM_E_HEADER_NOT_SET, "DRM_E_HEADER_NOT_SET"},
++#endif
++#ifdef DRM_E_NEED_DEVCERT_INDIV
++{DRM_E_NEED_DEVCERT_INDIV, "DRM_E_NEED_DEVCERT_INDIV"},
++#endif
++#ifdef DRM_E_MACHINE_ID_MISMATCH
++{DRM_E_MACHINE_ID_MISMATCH, "DRM_E_MACHINE_ID_MISMATCH"},
++#endif
++#ifdef DRM_E_CLK_INVALID_RESPONSE
++{DRM_E_CLK_INVALID_RESPONSE, "DRM_E_CLK_INVALID_RESPONSE"},
++#endif
++#ifdef DRM_E_CLK_INVALID_DATE
++{DRM_E_CLK_INVALID_DATE, "DRM_E_CLK_INVALID_DATE"},
++#endif
++#ifdef DRM_E_INVALID_DEVCERT_TEMPLATE
++{DRM_E_INVALID_DEVCERT_TEMPLATE, "DRM_E_INVALID_DEVCERT_TEMPLATE"},
++#endif
++#ifdef DRM_E_DEVCERT_EXCEEDS_SIZE_LIMIT
++{DRM_E_DEVCERT_EXCEEDS_SIZE_LIMIT, "DRM_E_DEVCERT_EXCEEDS_SIZE_LIMIT"},
++#endif
++#ifdef DRM_E_DEVCERT_READ_ERROR
++{DRM_E_DEVCERT_READ_ERROR, "DRM_E_DEVCERT_READ_ERROR"},
++#endif
++#ifdef DRM_E_PRIVKEY_READ_ERROR
++{DRM_E_PRIVKEY_READ_ERROR, "DRM_E_PRIVKEY_READ_ERROR"},
++#endif
++#ifdef DRM_E_DEVCERT_TEMPLATE_READ_ERROR
++{DRM_E_DEVCERT_TEMPLATE_READ_ERROR, "DRM_E_DEVCERT_TEMPLATE_READ_ERROR"},
++#endif
++#ifdef DRM_E_CLK_NOT_SUPPORTED
++{DRM_E_CLK_NOT_SUPPORTED, "DRM_E_CLK_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_METERING_NOT_SUPPORTED
++{DRM_E_METERING_NOT_SUPPORTED, "DRM_E_METERING_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_CLK_RESET_STATE_READ_ERROR
++{DRM_E_CLK_RESET_STATE_READ_ERROR, "DRM_E_CLK_RESET_STATE_READ_ERROR"},
++#endif
++#ifdef DRM_E_CLK_RESET_STATE_WRITE_ERROR
++{DRM_E_CLK_RESET_STATE_WRITE_ERROR, "DRM_E_CLK_RESET_STATE_WRITE_ERROR"},
++#endif
++#ifdef DRM_E_XMLNOTFOUND
++{DRM_E_XMLNOTFOUND, "DRM_E_XMLNOTFOUND"},
++#endif
++#ifdef DRM_E_METERING_WRONG_TID
++{DRM_E_METERING_WRONG_TID, "DRM_E_METERING_WRONG_TID"},
++#endif
++#ifdef DRM_E_METERING_INVALID_COMMAND
++{DRM_E_METERING_INVALID_COMMAND, "DRM_E_METERING_INVALID_COMMAND"},
++#endif
++#ifdef DRM_E_METERING_STORE_CORRUPT
++{DRM_E_METERING_STORE_CORRUPT, "DRM_E_METERING_STORE_CORRUPT"},
++#endif
++#ifdef DRM_E_CERTIFICATE_REVOKED
++{DRM_E_CERTIFICATE_REVOKED, "DRM_E_CERTIFICATE_REVOKED"},
++#endif
++#ifdef DRM_E_CRYPTO_FAILED
++{DRM_E_CRYPTO_FAILED, "DRM_E_CRYPTO_FAILED"},
++#endif
++#ifdef DRM_E_STACK_CORRUPT
++{DRM_E_STACK_CORRUPT, "DRM_E_STACK_CORRUPT"},
++#endif
++#ifdef DRM_E_UNKNOWN_BINDING_KEY
++{DRM_E_UNKNOWN_BINDING_KEY, "DRM_E_UNKNOWN_BINDING_KEY"},
++#endif
++#ifdef DRM_E_V1_LICENSE_CHAIN_NOT_SUPPORTED
++{DRM_E_V1_LICENSE_CHAIN_NOT_SUPPORTED, "DRM_E_V1_LICENSE_CHAIN_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_POLICY_METERING_DISABLED
++{DRM_E_POLICY_METERING_DISABLED, "DRM_E_POLICY_METERING_DISABLED"},
++#endif
++#ifdef DRM_E_CLK_NOT_SET
++{DRM_E_CLK_NOT_SET, "DRM_E_CLK_NOT_SET"},
++#endif
++#ifdef DRM_E_NO_CLK_SUPPORTED
++{DRM_E_NO_CLK_SUPPORTED, "DRM_E_NO_CLK_SUPPORTED"},
++#endif
++#ifdef DRM_E_NO_URL
++{DRM_E_NO_URL, "DRM_E_NO_URL"},
++#endif
++#ifdef DRM_E_UNKNOWN_DEVICE_PROPERTY
++{DRM_E_UNKNOWN_DEVICE_PROPERTY, "DRM_E_UNKNOWN_DEVICE_PROPERTY"},
++#endif
++#ifdef DRM_E_METERING_MID_MISMATCH
++{DRM_E_METERING_MID_MISMATCH, "DRM_E_METERING_MID_MISMATCH"},
++#endif
++#ifdef DRM_E_METERING_RESPONSE_DECRYPT_FAILED
++{DRM_E_METERING_RESPONSE_DECRYPT_FAILED, "DRM_E_METERING_RESPONSE_DECRYPT_FAILED"},
++#endif
++#ifdef DRM_E_RIV_TOO_SMALL
++{DRM_E_RIV_TOO_SMALL, "DRM_E_RIV_TOO_SMALL"},
++#endif
++#ifdef DRM_E_STACK_ALREADY_INITIALIZED
++{DRM_E_STACK_ALREADY_INITIALIZED, "DRM_E_STACK_ALREADY_INITIALIZED"},
++#endif
++#ifdef DRM_E_DEVCERT_REVOKED
++{DRM_E_DEVCERT_REVOKED, "DRM_E_DEVCERT_REVOKED"},
++#endif
++#ifdef DRM_E_OEM_RSA_DECRYPTION_ERROR
++{DRM_E_OEM_RSA_DECRYPTION_ERROR, "DRM_E_OEM_RSA_DECRYPTION_ERROR"},
++#endif
++#ifdef DRM_E_OEM_RSA_ENCRYPTION_ERROR
++{DRM_E_OEM_RSA_ENCRYPTION_ERROR, "DRM_E_OEM_RSA_ENCRYPTION_ERROR"},
++#endif
++#ifdef DRM_E_DST_NAMESPACE_EXISTS
++{DRM_E_DST_NAMESPACE_EXISTS, "DRM_E_DST_NAMESPACE_EXISTS"},
++#endif
++#ifdef DRM_E_PERF_SCOPING_ERROR
++{DRM_E_PERF_SCOPING_ERROR, "DRM_E_PERF_SCOPING_ERROR"},
++#endif
++#ifdef DRM_E_OEM_RSA_INVALID_PRIVATE_KEY
++{DRM_E_OEM_RSA_INVALID_PRIVATE_KEY, "DRM_E_OEM_RSA_INVALID_PRIVATE_KEY"},
++#endif
++#ifdef DRM_E_NO_OPL_CALLBACK
++{DRM_E_NO_OPL_CALLBACK, "DRM_E_NO_OPL_CALLBACK"},
++#endif
++#ifdef DRM_E_INVALID_PLAYREADY_OBJECT
++{DRM_E_INVALID_PLAYREADY_OBJECT, "DRM_E_INVALID_PLAYREADY_OBJECT"},
++#endif
++#ifdef DRM_E_DUPLICATE_LICENSE
++{DRM_E_DUPLICATE_LICENSE, "DRM_E_DUPLICATE_LICENSE"},
++#endif
++#ifdef DRM_E_RECORD_NOT_FOUND
++{DRM_E_RECORD_NOT_FOUND, "DRM_E_RECORD_NOT_FOUND"},
++#endif
++#ifdef DRM_E_BUFFER_BOUNDS_EXCEEDED
++{DRM_E_BUFFER_BOUNDS_EXCEEDED, "DRM_E_BUFFER_BOUNDS_EXCEEDED"},
++#endif
++#ifdef DRM_E_INVALID_BASE64
++{DRM_E_INVALID_BASE64, "DRM_E_INVALID_BASE64"},
++#endif
++#ifdef DRM_E_PROTOCOL_VERSION_NOT_SUPPORTED
++{DRM_E_PROTOCOL_VERSION_NOT_SUPPORTED, "DRM_E_PROTOCOL_VERSION_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_INVALID_LICENSE_RESPONSE_SIGNATURE
++{DRM_E_INVALID_LICENSE_RESPONSE_SIGNATURE, "DRM_E_INVALID_LICENSE_RESPONSE_SIGNATURE"},
++#endif
++#ifdef DRM_E_INVALID_LICENSE_RESPONSE_ID
++{DRM_E_INVALID_LICENSE_RESPONSE_ID, "DRM_E_INVALID_LICENSE_RESPONSE_ID"},
++#endif
++#ifdef DRM_E_LICENSE_RESPONSE_SIGNATURE_MISSING
++{DRM_E_LICENSE_RESPONSE_SIGNATURE_MISSING, "DRM_E_LICENSE_RESPONSE_SIGNATURE_MISSING"},
++#endif
++#ifdef DRM_E_INVALID_DOMAIN_JOIN_RESPONSE_SIGNATURE
++{DRM_E_INVALID_DOMAIN_JOIN_RESPONSE_SIGNATURE, "DRM_E_INVALID_DOMAIN_JOIN_RESPONSE_SIGNATURE"},
++#endif
++#ifdef DRM_E_DOMAIN_JOIN_RESPONSE_SIGNATURE_MISSING
++{DRM_E_DOMAIN_JOIN_RESPONSE_SIGNATURE_MISSING, "DRM_E_DOMAIN_JOIN_RESPONSE_SIGNATURE_MISSING"},
++#endif
++#ifdef DRM_E_ACTIVATION_REQUIRED
++{DRM_E_ACTIVATION_REQUIRED, "DRM_E_ACTIVATION_REQUIRED"},
++#endif
++#ifdef DRM_E_ACTIVATION_INTERNAL_ERROR
++{DRM_E_ACTIVATION_INTERNAL_ERROR, "DRM_E_ACTIVATION_INTERNAL_ERROR"},
++#endif
++#ifdef DRM_E_ACTIVATION_GROUP_CERT_REVOKED_ERROR
++{DRM_E_ACTIVATION_GROUP_CERT_REVOKED_ERROR, "DRM_E_ACTIVATION_GROUP_CERT_REVOKED_ERROR"},
++#endif
++#ifdef DRM_E_ACTIVATION_NEW_CLIENT_LIB_REQUIRED_ERROR
++{DRM_E_ACTIVATION_NEW_CLIENT_LIB_REQUIRED_ERROR, "DRM_E_ACTIVATION_NEW_CLIENT_LIB_REQUIRED_ERROR"},
++#endif
++#ifdef DRM_E_ACTIVATION_BAD_REQUEST
++{DRM_E_ACTIVATION_BAD_REQUEST, "DRM_E_ACTIVATION_BAD_REQUEST"},
++#endif
++#ifdef DRM_E_FILEIO_ERROR
++{DRM_E_FILEIO_ERROR, "DRM_E_FILEIO_ERROR"},
++#endif
++#ifdef DRM_E_DISK_SPACE_ERROR
++{DRM_E_DISK_SPACE_ERROR, "DRM_E_DISK_SPACE_ERROR"},
++#endif
++#ifdef DRM_E_UPLINK_LICENSE_NOT_FOUND
++{DRM_E_UPLINK_LICENSE_NOT_FOUND, "DRM_E_UPLINK_LICENSE_NOT_FOUND"},
++#endif
++#ifdef DRM_E_ACTIVATION_CLIENT_ALREADY_CURRENT
++{DRM_E_ACTIVATION_CLIENT_ALREADY_CURRENT, "DRM_E_ACTIVATION_CLIENT_ALREADY_CURRENT"},
++#endif
++#ifdef DRM_E_LICENSE_REALTIME_EXPIRED
++{DRM_E_LICENSE_REALTIME_EXPIRED, "DRM_E_LICENSE_REALTIME_EXPIRED"},
++#endif
++#ifdef DRM_E_DECRYPTOR_CANNOT_CLONE
++{DRM_E_DECRYPTOR_CANNOT_CLONE, "DRM_E_DECRYPTOR_CANNOT_CLONE"},
++#endif
++#ifdef DRM_E_ACTIVATION_REQUIRED_REACTIVATION_POSSIBLE
++{DRM_E_ACTIVATION_REQUIRED_REACTIVATION_POSSIBLE, "DRM_E_ACTIVATION_REQUIRED_REACTIVATION_POSSIBLE"},
++#endif
++#ifdef DRM_E_LICEVAL_LICENSE_NOT_SUPPLIED
++{DRM_E_LICEVAL_LICENSE_NOT_SUPPLIED, "DRM_E_LICEVAL_LICENSE_NOT_SUPPLIED"},
++#endif
++#ifdef DRM_E_LICEVAL_KID_MISMATCH
++{DRM_E_LICEVAL_KID_MISMATCH, "DRM_E_LICEVAL_KID_MISMATCH"},
++#endif
++#ifdef DRM_E_LICEVAL_LICENSE_REVOKED
++{DRM_E_LICEVAL_LICENSE_REVOKED, "DRM_E_LICEVAL_LICENSE_REVOKED"},
++#endif
++#ifdef DRM_E_LICEVAL_UPDATE_FAILURE
++{DRM_E_LICEVAL_UPDATE_FAILURE, "DRM_E_LICEVAL_UPDATE_FAILURE"},
++#endif
++#ifdef DRM_E_LICEVAL_REQUIRED_REVOCATION_LIST_NOT_AVAILABLE
++{DRM_E_LICEVAL_REQUIRED_REVOCATION_LIST_NOT_AVAILABLE, "DRM_E_LICEVAL_REQUIRED_REVOCATION_LIST_NOT_AVAILABLE"},
++#endif
++#ifdef DRM_E_XMR_OBJECT_ALREADY_EXISTS
++{DRM_E_XMR_OBJECT_ALREADY_EXISTS, "DRM_E_XMR_OBJECT_ALREADY_EXISTS"},
++#endif
++#ifdef DRM_E_XMR_OBJECT_NOT_FOUND
++{DRM_E_XMR_OBJECT_NOT_FOUND, "DRM_E_XMR_OBJECT_NOT_FOUND"},
++#endif
++#ifdef DRM_E_XMR_REQUIRED_OBJECT_MISSING
++{DRM_E_XMR_REQUIRED_OBJECT_MISSING, "DRM_E_XMR_REQUIRED_OBJECT_MISSING"},
++#endif
++#ifdef DRM_E_XMR_INVALID_UNKNOWN_OBJECT
++{DRM_E_XMR_INVALID_UNKNOWN_OBJECT, "DRM_E_XMR_INVALID_UNKNOWN_OBJECT"},
++#endif
++#ifdef DRM_E_XMR_LICENSE_BINDABLE
++{DRM_E_XMR_LICENSE_BINDABLE, "DRM_E_XMR_LICENSE_BINDABLE"},
++#endif
++#ifdef DRM_E_XMR_LICENSE_NOT_BINDABLE
++{DRM_E_XMR_LICENSE_NOT_BINDABLE, "DRM_E_XMR_LICENSE_NOT_BINDABLE"},
++#endif
++#ifdef DRM_E_XMR_UNSUPPORTED_XMR_VERSION
++{DRM_E_XMR_UNSUPPORTED_XMR_VERSION, "DRM_E_XMR_UNSUPPORTED_XMR_VERSION"},
++#endif
++#ifdef DRM_E_INVALID_DEVCERT_ATTRIBUTE
++{DRM_E_INVALID_DEVCERT_ATTRIBUTE, "DRM_E_INVALID_DEVCERT_ATTRIBUTE"},
++#endif
++#ifdef DRM_S_TEST_SKIP_FILE
++{DRM_S_TEST_SKIP_FILE, "DRM_S_TEST_SKIP_FILE"},
++#endif
++#ifdef DRM_S_TEST_CONVERTED_FILE
++{DRM_S_TEST_CONVERTED_FILE, "DRM_S_TEST_CONVERTED_FILE"},
++#endif
++#ifdef DRM_E_TEST_PKCRYPTO_FAILURE
++{DRM_E_TEST_PKCRYPTO_FAILURE, "DRM_E_TEST_PKCRYPTO_FAILURE"},
++#endif
++#ifdef DRM_E_TEST_PKSIGN_VERIFY_ERROR
++{DRM_E_TEST_PKSIGN_VERIFY_ERROR, "DRM_E_TEST_PKSIGN_VERIFY_ERROR"},
++#endif
++#ifdef DRM_E_TEST_ENCRYPT_ERROR
++{DRM_E_TEST_ENCRYPT_ERROR, "DRM_E_TEST_ENCRYPT_ERROR"},
++#endif
++#ifdef DRM_E_TEST_RC4KEY_FAILED
++{DRM_E_TEST_RC4KEY_FAILED, "DRM_E_TEST_RC4KEY_FAILED"},
++#endif
++#ifdef DRM_E_TEST_DECRYPT_ERROR
++{DRM_E_TEST_DECRYPT_ERROR, "DRM_E_TEST_DECRYPT_ERROR"},
++#endif
++#ifdef DRM_E_TEST_DESKEY_FAILED
++{DRM_E_TEST_DESKEY_FAILED, "DRM_E_TEST_DESKEY_FAILED"},
++#endif
++#ifdef DRM_E_TEST_CBC_INVERSEMAC_FAILURE
++{DRM_E_TEST_CBC_INVERSEMAC_FAILURE, "DRM_E_TEST_CBC_INVERSEMAC_FAILURE"},
++#endif
++#ifdef DRM_E_TEST_HMAC_FAILURE
++{DRM_E_TEST_HMAC_FAILURE, "DRM_E_TEST_HMAC_FAILURE"},
++#endif
++#ifdef DRM_E_TEST_INVALIDARG
++{DRM_E_TEST_INVALIDARG, "DRM_E_TEST_INVALIDARG"},
++#endif
++#ifdef DRM_E_TEST_DEVICE_PRIVATE_KEY_INCORRECTLY_STORED
++{DRM_E_TEST_DEVICE_PRIVATE_KEY_INCORRECTLY_STORED, "DRM_E_TEST_DEVICE_PRIVATE_KEY_INCORRECTLY_STORED"},
++#endif
++#ifdef DRM_E_TEST_DRMMANAGER_CONTEXT_NULL
++{DRM_E_TEST_DRMMANAGER_CONTEXT_NULL, "DRM_E_TEST_DRMMANAGER_CONTEXT_NULL"},
++#endif
++#ifdef DRM_E_TEST_UNEXPECTED_REVINFO_RESULT
++{DRM_E_TEST_UNEXPECTED_REVINFO_RESULT, "DRM_E_TEST_UNEXPECTED_REVINFO_RESULT"},
++#endif
++#ifdef DRM_E_TEST_RIV_MISMATCH
++{DRM_E_TEST_RIV_MISMATCH, "DRM_E_TEST_RIV_MISMATCH"},
++#endif
++#ifdef DRM_E_TEST_URL_ERROR
++{DRM_E_TEST_URL_ERROR, "DRM_E_TEST_URL_ERROR"},
++#endif
++#ifdef DRM_E_TEST_MID_MISMATCH
++{DRM_E_TEST_MID_MISMATCH, "DRM_E_TEST_MID_MISMATCH"},
++#endif
++#ifdef DRM_E_TEST_METER_CERTIFICATE_MISMATCH
++{DRM_E_TEST_METER_CERTIFICATE_MISMATCH, "DRM_E_TEST_METER_CERTIFICATE_MISMATCH"},
++#endif
++#ifdef DRM_E_TEST_LICENSE_STATE_MISMATCH
++{DRM_E_TEST_LICENSE_STATE_MISMATCH, "DRM_E_TEST_LICENSE_STATE_MISMATCH"},
++#endif
++#ifdef DRM_E_TEST_SOURCE_ID_MISMATCH
++{DRM_E_TEST_SOURCE_ID_MISMATCH, "DRM_E_TEST_SOURCE_ID_MISMATCH"},
++#endif
++#ifdef DRM_E_TEST_UNEXPECTED_LICENSE_COUNT
++{DRM_E_TEST_UNEXPECTED_LICENSE_COUNT, "DRM_E_TEST_UNEXPECTED_LICENSE_COUNT"},
++#endif
++#ifdef DRM_E_TEST_UNEXPECTED_DEVICE_PROPERTY
++{DRM_E_TEST_UNEXPECTED_DEVICE_PROPERTY, "DRM_E_TEST_UNEXPECTED_DEVICE_PROPERTY"},
++#endif
++#ifdef DRM_E_TEST_DRMMANAGER_MISALIGNED_BYTES
++{DRM_E_TEST_DRMMANAGER_MISALIGNED_BYTES, "DRM_E_TEST_DRMMANAGER_MISALIGNED_BYTES"},
++#endif
++#ifdef DRM_E_TEST_LICENSE_RESPONSE_ERROR
++{DRM_E_TEST_LICENSE_RESPONSE_ERROR, "DRM_E_TEST_LICENSE_RESPONSE_ERROR"},
++#endif
++#ifdef DRM_E_TEST_OPL_MISMATCH
++{DRM_E_TEST_OPL_MISMATCH, "DRM_E_TEST_OPL_MISMATCH"},
++#endif
++#ifdef DRM_E_TEST_INVALID_OPL_CALLBACK
++{DRM_E_TEST_INVALID_OPL_CALLBACK, "DRM_E_TEST_INVALID_OPL_CALLBACK"},
++#endif
++#ifdef DRM_E_TEST_INCOMPLETE
++{DRM_E_TEST_INCOMPLETE, "DRM_E_TEST_INCOMPLETE"},
++#endif
++#ifdef DRM_E_TEST_UNEXPECTED_OUTPUT
++{DRM_E_TEST_UNEXPECTED_OUTPUT, "DRM_E_TEST_UNEXPECTED_OUTPUT"},
++#endif
++#ifdef DRM_E_TEST_TOO_SLOW
++{DRM_E_TEST_TOO_SLOW, "DRM_E_TEST_TOO_SLOW"},
++#endif
++#ifdef DRM_E_TEST_LICENSESTORE_NOT_OPEN
++{DRM_E_TEST_LICENSESTORE_NOT_OPEN, "DRM_E_TEST_LICENSESTORE_NOT_OPEN"},
++#endif
++#ifdef DRM_E_TEST_DEVICE_NOT_INITED
++{DRM_E_TEST_DEVICE_NOT_INITED, "DRM_E_TEST_DEVICE_NOT_INITED"},
++#endif
++#ifdef DRM_E_TEST_VARIABLE_NOT_SET
++{DRM_E_TEST_VARIABLE_NOT_SET, "DRM_E_TEST_VARIABLE_NOT_SET"},
++#endif
++#ifdef DRM_E_TEST_NOMORE
++{DRM_E_TEST_NOMORE, "DRM_E_TEST_NOMORE"},
++#endif
++#ifdef DRM_E_TEST_FILE_LOAD_ERROR
++{DRM_E_TEST_FILE_LOAD_ERROR, "DRM_E_TEST_FILE_LOAD_ERROR"},
++#endif
++#ifdef DRM_E_TEST_LICENSE_ACQ_FAILED
++{DRM_E_TEST_LICENSE_ACQ_FAILED, "DRM_E_TEST_LICENSE_ACQ_FAILED"},
++#endif
++#ifdef DRM_E_TEST_UNSUPPORTED_FILE_FORMAT
++{DRM_E_TEST_UNSUPPORTED_FILE_FORMAT, "DRM_E_TEST_UNSUPPORTED_FILE_FORMAT"},
++#endif
++#ifdef DRM_E_TEST_PARSING_ERROR
++{DRM_E_TEST_PARSING_ERROR, "DRM_E_TEST_PARSING_ERROR"},
++#endif
++#ifdef DRM_E_TEST_NOTIMPL
++{DRM_E_TEST_NOTIMPL, "DRM_E_TEST_NOTIMPL"},
++#endif
++#ifdef DRM_E_TEST_VARIABLE_NOTFOUND
++{DRM_E_TEST_VARIABLE_NOTFOUND, "DRM_E_TEST_VARIABLE_NOTFOUND"},
++#endif
++#ifdef DRM_E_TEST_VARIABLE_LISTFULL
++{DRM_E_TEST_VARIABLE_LISTFULL, "DRM_E_TEST_VARIABLE_LISTFULL"},
++#endif
++#ifdef DRM_E_TEST_UNEXPECTED_CONTENT_PROPERTY
++{DRM_E_TEST_UNEXPECTED_CONTENT_PROPERTY, "DRM_E_TEST_UNEXPECTED_CONTENT_PROPERTY"},
++#endif
++#ifdef DRM_E_TEST_PRO_HEADER_NOT_SET
++{DRM_E_TEST_PRO_HEADER_NOT_SET, "DRM_E_TEST_PRO_HEADER_NOT_SET"},
++#endif
++#ifdef DRM_E_TEST_NON_PRO_HEADER_TYPE
++{DRM_E_TEST_NON_PRO_HEADER_TYPE, "DRM_E_TEST_NON_PRO_HEADER_TYPE"},
++#endif
++#ifdef DRM_E_TEST_INVALID_DEVICE_WRAPPER
++{DRM_E_TEST_INVALID_DEVICE_WRAPPER, "DRM_E_TEST_INVALID_DEVICE_WRAPPER"},
++#endif
++#ifdef DRM_E_TEST_INVALID_WMDM_WRAPPER
++{DRM_E_TEST_INVALID_WMDM_WRAPPER, "DRM_E_TEST_INVALID_WMDM_WRAPPER"},
++#endif
++#ifdef DRM_E_TEST_INVALID_WPD_WRAPPER
++{DRM_E_TEST_INVALID_WPD_WRAPPER, "DRM_E_TEST_INVALID_WPD_WRAPPER"},
++#endif
++#ifdef DRM_E_TEST_INVALID_FILE
++{DRM_E_TEST_INVALID_FILE, "DRM_E_TEST_INVALID_FILE"},
++#endif
++#ifdef DRM_E_TEST_PROPERTY_NOT_FOUND
++{DRM_E_TEST_PROPERTY_NOT_FOUND, "DRM_E_TEST_PROPERTY_NOT_FOUND"},
++#endif
++#ifdef DRM_E_TEST_METERING_DATA_INCORRECT
++{DRM_E_TEST_METERING_DATA_INCORRECT, "DRM_E_TEST_METERING_DATA_INCORRECT"},
++#endif
++#ifdef DRM_E_TEST_FILE_ALREADY_OPEN
++{DRM_E_TEST_FILE_ALREADY_OPEN, "DRM_E_TEST_FILE_ALREADY_OPEN"},
++#endif
++#ifdef DRM_E_TEST_FILE_NOT_OPEN
++{DRM_E_TEST_FILE_NOT_OPEN, "DRM_E_TEST_FILE_NOT_OPEN"},
++#endif
++#ifdef DRM_E_TEST_PICT_COLUMN_TOO_WIDE
++{DRM_E_TEST_PICT_COLUMN_TOO_WIDE, "DRM_E_TEST_PICT_COLUMN_TOO_WIDE"},
++#endif
++#ifdef DRM_E_TEST_PICT_COLUMN_MISMATCH
++{DRM_E_TEST_PICT_COLUMN_MISMATCH, "DRM_E_TEST_PICT_COLUMN_MISMATCH"},
++#endif
++#ifdef DRM_E_TEST_TUX_TEST_SKIPPED
++{DRM_E_TEST_TUX_TEST_SKIPPED, "DRM_E_TEST_TUX_TEST_SKIPPED"},
++#endif
++#ifdef DRM_E_TEST_KEYFILE_VERIFICATION_FAILURE
++{DRM_E_TEST_KEYFILE_VERIFICATION_FAILURE, "DRM_E_TEST_KEYFILE_VERIFICATION_FAILURE"},
++#endif
++#ifdef DRM_E_TEST_DATA_VERIFICATION_FAILURE
++{DRM_E_TEST_DATA_VERIFICATION_FAILURE, "DRM_E_TEST_DATA_VERIFICATION_FAILURE"},
++#endif
++#ifdef DRM_E_TEST_NET_FAIL
++{DRM_E_TEST_NET_FAIL, "DRM_E_TEST_NET_FAIL"},
++#endif
++#ifdef DRM_E_TEST_CLEANUP_FAIL
++{DRM_E_TEST_CLEANUP_FAIL, "DRM_E_TEST_CLEANUP_FAIL"},
++#endif
++#ifdef DRM_E_TEST_LICGEN_UNSUPPORTED_VALUE
++{DRM_E_TEST_LICGEN_UNSUPPORTED_VALUE, "DRM_E_TEST_LICGEN_UNSUPPORTED_VALUE"},
++#endif
++#ifdef DRM_E_LOGICERR
++{DRM_E_LOGICERR, "DRM_E_LOGICERR"},
++#endif
++#ifdef DRM_E_INVALID_REV_INFO
++{DRM_E_INVALID_REV_INFO, "DRM_E_INVALID_REV_INFO"},
++#endif
++#ifdef DRM_E_SYNCLIST_NOT_SUPPORTED
++{DRM_E_SYNCLIST_NOT_SUPPORTED, "DRM_E_SYNCLIST_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_REVOCATION_BUFFER_TOO_SMALL
++{DRM_E_REVOCATION_BUFFER_TOO_SMALL, "DRM_E_REVOCATION_BUFFER_TOO_SMALL"},
++#endif
++#ifdef DRM_E_DEVICE_ALREADY_REGISTERED
++{DRM_E_DEVICE_ALREADY_REGISTERED, "DRM_E_DEVICE_ALREADY_REGISTERED"},
++#endif
++#ifdef DRM_E_DST_NOT_COMPATIBLE
++{DRM_E_DST_NOT_COMPATIBLE, "DRM_E_DST_NOT_COMPATIBLE"},
++#endif
++#ifdef DRM_E_RSA_DECRYPTION_ERROR
++{DRM_E_RSA_DECRYPTION_ERROR, "DRM_E_RSA_DECRYPTION_ERROR"},
++#endif
++#ifdef DRM_E_OEM_RSA_MESSAGE_TOO_BIG
++{DRM_E_OEM_RSA_MESSAGE_TOO_BIG, "DRM_E_OEM_RSA_MESSAGE_TOO_BIG"},
++#endif
++#ifdef DRM_E_METERCERT_NOT_FOUND
++{DRM_E_METERCERT_NOT_FOUND, "DRM_E_METERCERT_NOT_FOUND"},
++#endif
++#ifdef DRM_E_MODULAR_ARITHMETIC_FAILURE
++{DRM_E_MODULAR_ARITHMETIC_FAILURE, "DRM_E_MODULAR_ARITHMETIC_FAILURE"},
++#endif
++#ifdef DRM_E_REVOCATION_INVALID_PACKAGE
++{DRM_E_REVOCATION_INVALID_PACKAGE, "DRM_E_REVOCATION_INVALID_PACKAGE"},
++#endif
++#ifdef DRM_E_HWID_ERROR
++{DRM_E_HWID_ERROR, "DRM_E_HWID_ERROR"},
++#endif
++#ifdef DRM_E_VAR_NOT_INITIALIZED
++{DRM_E_VAR_NOT_INITIALIZED, "DRM_E_VAR_NOT_INITIALIZED"},
++#endif
++#ifdef DRM_E_DOMAIN_INVALID_GUID
++{DRM_E_DOMAIN_INVALID_GUID, "DRM_E_DOMAIN_INVALID_GUID"},
++#endif
++#ifdef DRM_E_DOMAIN_INVALID_CUSTOM_DATA_TYPE
++{DRM_E_DOMAIN_INVALID_CUSTOM_DATA_TYPE, "DRM_E_DOMAIN_INVALID_CUSTOM_DATA_TYPE"},
++#endif
++#ifdef DRM_E_DOMAIN_STORE_ADD_DATA
++{DRM_E_DOMAIN_STORE_ADD_DATA, "DRM_E_DOMAIN_STORE_ADD_DATA"},
++#endif
++#ifdef DRM_E_DOMAIN_STORE_GET_DATA
++{DRM_E_DOMAIN_STORE_GET_DATA, "DRM_E_DOMAIN_STORE_GET_DATA"},
++#endif
++#ifdef DRM_E_DOMAIN_STORE_DELETE_DATA
++{DRM_E_DOMAIN_STORE_DELETE_DATA, "DRM_E_DOMAIN_STORE_DELETE_DATA"},
++#endif
++#ifdef DRM_E_DOMAIN_STORE_OPEN_STORE
++{DRM_E_DOMAIN_STORE_OPEN_STORE, "DRM_E_DOMAIN_STORE_OPEN_STORE"},
++#endif
++#ifdef DRM_E_DOMAIN_STORE_CLOSE_STORE
++{DRM_E_DOMAIN_STORE_CLOSE_STORE, "DRM_E_DOMAIN_STORE_CLOSE_STORE"},
++#endif
++#ifdef DRM_E_DOMAIN_BIND_LICENSE
++{DRM_E_DOMAIN_BIND_LICENSE, "DRM_E_DOMAIN_BIND_LICENSE"},
++#endif
++#ifdef DRM_E_DOMAIN_INVALID_CUSTOM_DATA
++{DRM_E_DOMAIN_INVALID_CUSTOM_DATA, "DRM_E_DOMAIN_INVALID_CUSTOM_DATA"},
++#endif
++#ifdef DRM_E_DOMAIN_NOT_FOUND
++{DRM_E_DOMAIN_NOT_FOUND, "DRM_E_DOMAIN_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DOMAIN_INVALID_DOMKEYXMR_DATA
++{DRM_E_DOMAIN_INVALID_DOMKEYXMR_DATA, "DRM_E_DOMAIN_INVALID_DOMKEYXMR_DATA"},
++#endif
++#ifdef DRM_E_DOMAIN_STORE_INVALID_KEY_RECORD
++{DRM_E_DOMAIN_STORE_INVALID_KEY_RECORD, "DRM_E_DOMAIN_STORE_INVALID_KEY_RECORD"},
++#endif
++#ifdef DRM_E_DOMAIN_JOIN_TOO_MANY_KEYS
++{DRM_E_DOMAIN_JOIN_TOO_MANY_KEYS, "DRM_E_DOMAIN_JOIN_TOO_MANY_KEYS"},
++#endif
++#ifdef DRM_E_DEVICE_DOMAIN_JOIN_REQUIRED
++{DRM_E_DEVICE_DOMAIN_JOIN_REQUIRED, "DRM_E_DEVICE_DOMAIN_JOIN_REQUIRED"},
++#endif
++#ifdef DRM_E_SERVER_INTERNAL_ERROR
++{DRM_E_SERVER_INTERNAL_ERROR, "DRM_E_SERVER_INTERNAL_ERROR"},
++#endif
++#ifdef DRM_E_SERVER_INVALID_MESSAGE
++{DRM_E_SERVER_INVALID_MESSAGE, "DRM_E_SERVER_INVALID_MESSAGE"},
++#endif
++#ifdef DRM_E_SERVER_DEVICE_LIMIT_REACHED
++{DRM_E_SERVER_DEVICE_LIMIT_REACHED, "DRM_E_SERVER_DEVICE_LIMIT_REACHED"},
++#endif
++#ifdef DRM_E_SERVER_INDIV_REQUIRED
++{DRM_E_SERVER_INDIV_REQUIRED, "DRM_E_SERVER_INDIV_REQUIRED"},
++#endif
++#ifdef DRM_E_SERVER_SERVICE_SPECIFIC
++{DRM_E_SERVER_SERVICE_SPECIFIC, "DRM_E_SERVER_SERVICE_SPECIFIC"},
++#endif
++#ifdef DRM_E_SERVER_DOMAIN_REQUIRED
++{DRM_E_SERVER_DOMAIN_REQUIRED, "DRM_E_SERVER_DOMAIN_REQUIRED"},
++#endif
++#ifdef DRM_E_SERVER_RENEW_DOMAIN
++{DRM_E_SERVER_RENEW_DOMAIN, "DRM_E_SERVER_RENEW_DOMAIN"},
++#endif
++#ifdef DRM_E_SERVER_UNKNOWN_METERINGID
++{DRM_E_SERVER_UNKNOWN_METERINGID, "DRM_E_SERVER_UNKNOWN_METERINGID"},
++#endif
++#ifdef DRM_E_SERVER_COMPUTER_LIMIT_REACHED
++{DRM_E_SERVER_COMPUTER_LIMIT_REACHED, "DRM_E_SERVER_COMPUTER_LIMIT_REACHED"},
++#endif
++#ifdef DRM_E_SERVER_PROTOCOL_FALLBACK
++{DRM_E_SERVER_PROTOCOL_FALLBACK, "DRM_E_SERVER_PROTOCOL_FALLBACK"},
++#endif
++#ifdef DRM_E_SERVER_NOT_A_MEMBER
++{DRM_E_SERVER_NOT_A_MEMBER, "DRM_E_SERVER_NOT_A_MEMBER"},
++#endif
++#ifdef DRM_E_SERVER_PROTOCOL_VERSION_MISMATCH
++{DRM_E_SERVER_PROTOCOL_VERSION_MISMATCH, "DRM_E_SERVER_PROTOCOL_VERSION_MISMATCH"},
++#endif
++#ifdef DRM_E_SERVER_UNKNOWN_ACCOUNTID
++{DRM_E_SERVER_UNKNOWN_ACCOUNTID, "DRM_E_SERVER_UNKNOWN_ACCOUNTID"},
++#endif
++#ifdef DRM_E_SERVER_PROTOCOL_REDIRECT
++{DRM_E_SERVER_PROTOCOL_REDIRECT, "DRM_E_SERVER_PROTOCOL_REDIRECT"},
++#endif
++#ifdef DRM_E_SERVER_UNKNOWN_TRANSACTIONID
++{DRM_E_SERVER_UNKNOWN_TRANSACTIONID, "DRM_E_SERVER_UNKNOWN_TRANSACTIONID"},
++#endif
++#ifdef DRM_E_SERVER_INVALID_LICENSEID
++{DRM_E_SERVER_INVALID_LICENSEID, "DRM_E_SERVER_INVALID_LICENSEID"},
++#endif
++#ifdef DRM_E_SERVER_MAXIMUM_LICENSEID_EXCEEDED
++{DRM_E_SERVER_MAXIMUM_LICENSEID_EXCEEDED, "DRM_E_SERVER_MAXIMUM_LICENSEID_EXCEEDED"},
++#endif
++#ifdef DRM_E_LICACQ_TOO_MANY_LICENSES
++{DRM_E_LICACQ_TOO_MANY_LICENSES, "DRM_E_LICACQ_TOO_MANY_LICENSES"},
++#endif
++#ifdef DRM_E_LICACQ_ACK_TRANSACTION_ID_TOO_BIG
++{DRM_E_LICACQ_ACK_TRANSACTION_ID_TOO_BIG, "DRM_E_LICACQ_ACK_TRANSACTION_ID_TOO_BIG"},
++#endif
++#ifdef DRM_E_LICACQ_ACK_MESSAGE_NOT_CREATED
++{DRM_E_LICACQ_ACK_MESSAGE_NOT_CREATED, "DRM_E_LICACQ_ACK_MESSAGE_NOT_CREATED"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_SIGNATURE_TYPE
++{DRM_E_BCERT_INVALID_SIGNATURE_TYPE, "DRM_E_BCERT_INVALID_SIGNATURE_TYPE"},
++#endif
++#ifdef DRM_E_BCERT_CHAIN_TOO_DEEP
++{DRM_E_BCERT_CHAIN_TOO_DEEP, "DRM_E_BCERT_CHAIN_TOO_DEEP"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_CERT_TYPE
++{DRM_E_BCERT_INVALID_CERT_TYPE, "DRM_E_BCERT_INVALID_CERT_TYPE"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_FEATURE
++{DRM_E_BCERT_INVALID_FEATURE, "DRM_E_BCERT_INVALID_FEATURE"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_KEY_USAGE
++{DRM_E_BCERT_INVALID_KEY_USAGE, "DRM_E_BCERT_INVALID_KEY_USAGE"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_SECURITY_VERSION
++{DRM_E_BCERT_INVALID_SECURITY_VERSION, "DRM_E_BCERT_INVALID_SECURITY_VERSION"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_KEY_TYPE
++{DRM_E_BCERT_INVALID_KEY_TYPE, "DRM_E_BCERT_INVALID_KEY_TYPE"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_KEY_LENGTH
++{DRM_E_BCERT_INVALID_KEY_LENGTH, "DRM_E_BCERT_INVALID_KEY_LENGTH"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_MAX_LICENSE_SIZE
++{DRM_E_BCERT_INVALID_MAX_LICENSE_SIZE, "DRM_E_BCERT_INVALID_MAX_LICENSE_SIZE"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_MAX_HEADER_SIZE
++{DRM_E_BCERT_INVALID_MAX_HEADER_SIZE, "DRM_E_BCERT_INVALID_MAX_HEADER_SIZE"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_MAX_LICENSE_CHAIN_DEPTH
++{DRM_E_BCERT_INVALID_MAX_LICENSE_CHAIN_DEPTH, "DRM_E_BCERT_INVALID_MAX_LICENSE_CHAIN_DEPTH"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_SECURITY_LEVEL
++{DRM_E_BCERT_INVALID_SECURITY_LEVEL, "DRM_E_BCERT_INVALID_SECURITY_LEVEL"},
++#endif
++#ifdef DRM_E_BCERT_PRIVATE_KEY_NOT_SPECIFIED
++{DRM_E_BCERT_PRIVATE_KEY_NOT_SPECIFIED, "DRM_E_BCERT_PRIVATE_KEY_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_ISSUER_KEY_NOT_SPECIFIED
++{DRM_E_BCERT_ISSUER_KEY_NOT_SPECIFIED, "DRM_E_BCERT_ISSUER_KEY_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_ACCOUNT_ID_NOT_SPECIFIED
++{DRM_E_BCERT_ACCOUNT_ID_NOT_SPECIFIED, "DRM_E_BCERT_ACCOUNT_ID_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_SERVICE_ID_NOT_SPECIFIED
++{DRM_E_BCERT_SERVICE_ID_NOT_SPECIFIED, "DRM_E_BCERT_SERVICE_ID_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_DOMAIN_URL_NOT_SPECIFIED
++{DRM_E_BCERT_DOMAIN_URL_NOT_SPECIFIED, "DRM_E_BCERT_DOMAIN_URL_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_DOMAIN_URL_TOO_LONG
++{DRM_E_BCERT_DOMAIN_URL_TOO_LONG, "DRM_E_BCERT_DOMAIN_URL_TOO_LONG"},
++#endif
++#ifdef DRM_E_BCERT_HARDWARE_ID_TOO_LONG
++{DRM_E_BCERT_HARDWARE_ID_TOO_LONG, "DRM_E_BCERT_HARDWARE_ID_TOO_LONG"},
++#endif
++#ifdef DRM_E_BCERT_CERT_ID_NOT_SPECIFIED
++{DRM_E_BCERT_CERT_ID_NOT_SPECIFIED, "DRM_E_BCERT_CERT_ID_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_PUBLIC_KEY_NOT_SPECIFIED
++{DRM_E_BCERT_PUBLIC_KEY_NOT_SPECIFIED, "DRM_E_BCERT_PUBLIC_KEY_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_KEY_USAGES_NOT_SPECIFIED
++{DRM_E_BCERT_KEY_USAGES_NOT_SPECIFIED, "DRM_E_BCERT_KEY_USAGES_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_STRING_NOT_NULL_TERMINATED
++{DRM_E_BCERT_STRING_NOT_NULL_TERMINATED, "DRM_E_BCERT_STRING_NOT_NULL_TERMINATED"},
++#endif
++#ifdef DRM_E_BCERT_OBJECTHEADER_LEN_TOO_BIG
++{DRM_E_BCERT_OBJECTHEADER_LEN_TOO_BIG, "DRM_E_BCERT_OBJECTHEADER_LEN_TOO_BIG"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_ISSUERKEY_LENGTH
++{DRM_E_BCERT_INVALID_ISSUERKEY_LENGTH, "DRM_E_BCERT_INVALID_ISSUERKEY_LENGTH"},
++#endif
++#ifdef DRM_E_BCERT_BASICINFO_CERT_EXPIRED
++{DRM_E_BCERT_BASICINFO_CERT_EXPIRED, "DRM_E_BCERT_BASICINFO_CERT_EXPIRED"},
++#endif
++#ifdef DRM_E_BCERT_UNEXPECTED_OBJECT_HEADER
++{DRM_E_BCERT_UNEXPECTED_OBJECT_HEADER, "DRM_E_BCERT_UNEXPECTED_OBJECT_HEADER"},
++#endif
++#ifdef DRM_E_BCERT_ISSUERKEY_KEYINFO_MISMATCH
++{DRM_E_BCERT_ISSUERKEY_KEYINFO_MISMATCH, "DRM_E_BCERT_ISSUERKEY_KEYINFO_MISMATCH"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_MAX_KEY_USAGES
++{DRM_E_BCERT_INVALID_MAX_KEY_USAGES, "DRM_E_BCERT_INVALID_MAX_KEY_USAGES"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_MAX_FEATURES
++{DRM_E_BCERT_INVALID_MAX_FEATURES, "DRM_E_BCERT_INVALID_MAX_FEATURES"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_CHAIN_HEADER_TAG
++{DRM_E_BCERT_INVALID_CHAIN_HEADER_TAG, "DRM_E_BCERT_INVALID_CHAIN_HEADER_TAG"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_CHAIN_VERSION
++{DRM_E_BCERT_INVALID_CHAIN_VERSION, "DRM_E_BCERT_INVALID_CHAIN_VERSION"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_CHAIN_LENGTH
++{DRM_E_BCERT_INVALID_CHAIN_LENGTH, "DRM_E_BCERT_INVALID_CHAIN_LENGTH"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_CERT_HEADER_TAG
++{DRM_E_BCERT_INVALID_CERT_HEADER_TAG, "DRM_E_BCERT_INVALID_CERT_HEADER_TAG"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_CERT_VERSION
++{DRM_E_BCERT_INVALID_CERT_VERSION, "DRM_E_BCERT_INVALID_CERT_VERSION"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_CERT_LENGTH
++{DRM_E_BCERT_INVALID_CERT_LENGTH, "DRM_E_BCERT_INVALID_CERT_LENGTH"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_SIGNEDCERT_LENGTH
++{DRM_E_BCERT_INVALID_SIGNEDCERT_LENGTH, "DRM_E_BCERT_INVALID_SIGNEDCERT_LENGTH"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_PLATFORM_IDENTIFIER
++{DRM_E_BCERT_INVALID_PLATFORM_IDENTIFIER, "DRM_E_BCERT_INVALID_PLATFORM_IDENTIFIER"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_NUMBER_EXTDATARECORDS
++{DRM_E_BCERT_INVALID_NUMBER_EXTDATARECORDS, "DRM_E_BCERT_INVALID_NUMBER_EXTDATARECORDS"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_EXTDATARECORD
++{DRM_E_BCERT_INVALID_EXTDATARECORD, "DRM_E_BCERT_INVALID_EXTDATARECORD"},
++#endif
++#ifdef DRM_E_BCERT_EXTDATA_LENGTH_MUST_PRESENT
++{DRM_E_BCERT_EXTDATA_LENGTH_MUST_PRESENT, "DRM_E_BCERT_EXTDATA_LENGTH_MUST_PRESENT"},
++#endif
++#ifdef DRM_E_BCERT_EXTDATA_PRIVKEY_MUST_PRESENT
++{DRM_E_BCERT_EXTDATA_PRIVKEY_MUST_PRESENT, "DRM_E_BCERT_EXTDATA_PRIVKEY_MUST_PRESENT"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_EXTDATA_LENGTH
++{DRM_E_BCERT_INVALID_EXTDATA_LENGTH, "DRM_E_BCERT_INVALID_EXTDATA_LENGTH"},
++#endif
++#ifdef DRM_E_BCERT_EXTDATA_IS_NOT_PROVIDED
++{DRM_E_BCERT_EXTDATA_IS_NOT_PROVIDED, "DRM_E_BCERT_EXTDATA_IS_NOT_PROVIDED"},
++#endif
++#ifdef DRM_E_BCERT_HWIDINFO_IS_MISSING
++{DRM_E_BCERT_HWIDINFO_IS_MISSING, "DRM_E_BCERT_HWIDINFO_IS_MISSING"},
++#endif
++#ifdef DRM_E_BCERT_EXTDATAFLAG_CERT_TYPE_MISMATCH
++{DRM_E_BCERT_EXTDATAFLAG_CERT_TYPE_MISMATCH, "DRM_E_BCERT_EXTDATAFLAG_CERT_TYPE_MISMATCH"},
++#endif
++#ifdef DRM_E_BCERT_METERING_ID_NOT_SPECIFIED
++{DRM_E_BCERT_METERING_ID_NOT_SPECIFIED, "DRM_E_BCERT_METERING_ID_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_METERING_URL_NOT_SPECIFIED
++{DRM_E_BCERT_METERING_URL_NOT_SPECIFIED, "DRM_E_BCERT_METERING_URL_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_BCERT_METERING_URL_TOO_LONG
++{DRM_E_BCERT_METERING_URL_TOO_LONG, "DRM_E_BCERT_METERING_URL_TOO_LONG"},
++#endif
++#ifdef DRM_E_BCERT_VERIFICATION_ERRORS
++{DRM_E_BCERT_VERIFICATION_ERRORS, "DRM_E_BCERT_VERIFICATION_ERRORS"},
++#endif
++#ifdef DRM_E_BCERT_REQUIRED_KEYUSAGE_MISSING
++{DRM_E_BCERT_REQUIRED_KEYUSAGE_MISSING, "DRM_E_BCERT_REQUIRED_KEYUSAGE_MISSING"},
++#endif
++#ifdef DRM_E_BCERT_NO_PUBKEY_WITH_REQUESTED_KEYUSAGE
++{DRM_E_BCERT_NO_PUBKEY_WITH_REQUESTED_KEYUSAGE, "DRM_E_BCERT_NO_PUBKEY_WITH_REQUESTED_KEYUSAGE"},
++#endif
++#ifdef DRM_E_BCERT_MANUFACTURER_STRING_TOO_LONG
++{DRM_E_BCERT_MANUFACTURER_STRING_TOO_LONG, "DRM_E_BCERT_MANUFACTURER_STRING_TOO_LONG"},
++#endif
++#ifdef DRM_E_BCERT_TOO_MANY_PUBLIC_KEYS
++{DRM_E_BCERT_TOO_MANY_PUBLIC_KEYS, "DRM_E_BCERT_TOO_MANY_PUBLIC_KEYS"},
++#endif
++#ifdef DRM_E_BCERT_OBJECTHEADER_LEN_TOO_SMALL
++{DRM_E_BCERT_OBJECTHEADER_LEN_TOO_SMALL, "DRM_E_BCERT_OBJECTHEADER_LEN_TOO_SMALL"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_WARNING_DAYS
++{DRM_E_BCERT_INVALID_WARNING_DAYS, "DRM_E_BCERT_INVALID_WARNING_DAYS"},
++#endif
++#ifdef DRM_E_BCERT_INVALID_DIGEST
++{DRM_E_BCERT_INVALID_DIGEST, "DRM_E_BCERT_INVALID_DIGEST"},
++#endif
++#ifdef DRM_E_XMLSIG_ECDSA_VERIFY_FAILURE
++{DRM_E_XMLSIG_ECDSA_VERIFY_FAILURE, "DRM_E_XMLSIG_ECDSA_VERIFY_FAILURE"},
++#endif
++#ifdef DRM_E_XMLSIG_SHA_VERIFY_FAILURE
++{DRM_E_XMLSIG_SHA_VERIFY_FAILURE, "DRM_E_XMLSIG_SHA_VERIFY_FAILURE"},
++#endif
++#ifdef DRM_E_XMLSIG_FORMAT
++{DRM_E_XMLSIG_FORMAT, "DRM_E_XMLSIG_FORMAT"},
++#endif
++#ifdef DRM_E_XMLSIG_PUBLIC_KEY_ID
++{DRM_E_XMLSIG_PUBLIC_KEY_ID, "DRM_E_XMLSIG_PUBLIC_KEY_ID"},
++#endif
++#ifdef DRM_E_XMLSIG_INVALID_KEY_FORMAT
++{DRM_E_XMLSIG_INVALID_KEY_FORMAT, "DRM_E_XMLSIG_INVALID_KEY_FORMAT"},
++#endif
++#ifdef DRM_E_XMLSIG_SHA_HASH_SIZE
++{DRM_E_XMLSIG_SHA_HASH_SIZE, "DRM_E_XMLSIG_SHA_HASH_SIZE"},
++#endif
++#ifdef DRM_E_XMLSIG_ECDSA_SIGNATURE_SIZE
++{DRM_E_XMLSIG_ECDSA_SIGNATURE_SIZE, "DRM_E_XMLSIG_ECDSA_SIGNATURE_SIZE"},
++#endif
++#ifdef DRM_E_UTF_UNEXPECTED_END
++{DRM_E_UTF_UNEXPECTED_END, "DRM_E_UTF_UNEXPECTED_END"},
++#endif
++#ifdef DRM_E_UTF_INVALID_CODE
++{DRM_E_UTF_INVALID_CODE, "DRM_E_UTF_INVALID_CODE"},
++#endif
++#ifdef DRM_E_SOAPXML_INVALID_STATUS_CODE
++{DRM_E_SOAPXML_INVALID_STATUS_CODE, "DRM_E_SOAPXML_INVALID_STATUS_CODE"},
++#endif
++#ifdef DRM_E_SOAPXML_XML_FORMAT
++{DRM_E_SOAPXML_XML_FORMAT, "DRM_E_SOAPXML_XML_FORMAT"},
++#endif
++#ifdef DRM_E_SOAPXML_WRONG_MESSAGE_TYPE
++{DRM_E_SOAPXML_WRONG_MESSAGE_TYPE, "DRM_E_SOAPXML_WRONG_MESSAGE_TYPE"},
++#endif
++#ifdef DRM_E_SOAPXML_SIGNATURE_MISSING
++{DRM_E_SOAPXML_SIGNATURE_MISSING, "DRM_E_SOAPXML_SIGNATURE_MISSING"},
++#endif
++#ifdef DRM_E_SOAPXML_PROTOCOL_NOT_SUPPORTED
++{DRM_E_SOAPXML_PROTOCOL_NOT_SUPPORTED, "DRM_E_SOAPXML_PROTOCOL_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_SOAPXML_DATA_NOT_FOUND
++{DRM_E_SOAPXML_DATA_NOT_FOUND, "DRM_E_SOAPXML_DATA_NOT_FOUND"},
++#endif
++#ifdef DRM_E_CRYPTO_PUBLIC_KEY_NOT_MATCH
++{DRM_E_CRYPTO_PUBLIC_KEY_NOT_MATCH, "DRM_E_CRYPTO_PUBLIC_KEY_NOT_MATCH"},
++#endif
++#ifdef DRM_E_UNABLE_TO_RESOLVE_LOCATION_TREE
++{DRM_E_UNABLE_TO_RESOLVE_LOCATION_TREE, "DRM_E_UNABLE_TO_RESOLVE_LOCATION_TREE"},
++#endif
++#ifdef DRM_E_TEE_INVALID_KEY_DATA
++{DRM_E_TEE_INVALID_KEY_DATA, "DRM_E_TEE_INVALID_KEY_DATA"},
++#endif
++#ifdef DRM_E_TEE_PROVISIONING_REQUIRED
++{DRM_E_TEE_PROVISIONING_REQUIRED, "DRM_E_TEE_PROVISIONING_REQUIRED"},
++#endif
++#ifdef DRM_E_TEE_INVALID_HWDRM_STATE
++{DRM_E_TEE_INVALID_HWDRM_STATE, "DRM_E_TEE_INVALID_HWDRM_STATE"},
++#endif
++#ifdef DRM_E_TEE_PROVISIONING_REQUEST_EXPIRED
++{DRM_E_TEE_PROVISIONING_REQUEST_EXPIRED, "DRM_E_TEE_PROVISIONING_REQUEST_EXPIRED"},
++#endif
++#ifdef DRM_E_TEE_CLOCK_NOT_SET
++{DRM_E_TEE_CLOCK_NOT_SET, "DRM_E_TEE_CLOCK_NOT_SET"},
++#endif
++#ifdef DRM_E_TEE_BLOB_ACCESS_DENIED
++{DRM_E_TEE_BLOB_ACCESS_DENIED, "DRM_E_TEE_BLOB_ACCESS_DENIED"},
++#endif
++#ifdef DRM_E_TEE_PROVISIONING_BAD_NONCE
++{DRM_E_TEE_PROVISIONING_BAD_NONCE, "DRM_E_TEE_PROVISIONING_BAD_NONCE"},
++#endif
++#ifdef DRM_E_TEE_PROVISIONING_NONCE_MISMATCH
++{DRM_E_TEE_PROVISIONING_NONCE_MISMATCH, "DRM_E_TEE_PROVISIONING_NONCE_MISMATCH"},
++#endif
++#ifdef DRM_E_TEE_ROOT_KEY_CHANGED
++{DRM_E_TEE_ROOT_KEY_CHANGED, "DRM_E_TEE_ROOT_KEY_CHANGED"},
++#endif
++#ifdef DRM_E_TEE_PROVISIONING_INVALID_RESPONSE
++{DRM_E_TEE_PROVISIONING_INVALID_RESPONSE, "DRM_E_TEE_PROVISIONING_INVALID_RESPONSE"},
++#endif
++#ifdef DRM_E_TEE_PROXY_INVALID_SERIALIZATION_MESSAGE
++{DRM_E_TEE_PROXY_INVALID_SERIALIZATION_MESSAGE, "DRM_E_TEE_PROXY_INVALID_SERIALIZATION_MESSAGE"},
++#endif
++#ifdef DRM_E_TEE_PROXY_INVALID_SERIALIZATION_TYPE
++{DRM_E_TEE_PROXY_INVALID_SERIALIZATION_TYPE, "DRM_E_TEE_PROXY_INVALID_SERIALIZATION_TYPE"},
++#endif
++#ifdef DRM_E_TEE_LAYER_UNINITIALIZED
++{DRM_E_TEE_LAYER_UNINITIALIZED, "DRM_E_TEE_LAYER_UNINITIALIZED"},
++#endif
++#ifdef DRM_E_TEE_INVALID_HEADER_FOOTER_SIZE
++{DRM_E_TEE_INVALID_HEADER_FOOTER_SIZE, "DRM_E_TEE_INVALID_HEADER_FOOTER_SIZE"},
++#endif
++#ifdef DRM_E_TEE_MESSAGE_TOO_LARGE
++{DRM_E_TEE_MESSAGE_TOO_LARGE, "DRM_E_TEE_MESSAGE_TOO_LARGE"},
++#endif
++#ifdef DRM_E_TEE_CLOCK_DRIFTED
++{DRM_E_TEE_CLOCK_DRIFTED, "DRM_E_TEE_CLOCK_DRIFTED"},
++#endif
++#ifdef DRM_E_TEE_PROXY_INVALID_BUFFER_ALIGNMENT
++{DRM_E_TEE_PROXY_INVALID_BUFFER_ALIGNMENT, "DRM_E_TEE_PROXY_INVALID_BUFFER_ALIGNMENT"},
++#endif
++#ifdef DRM_E_TEE_PROXY_INVALID_ALIGNMENT
++{DRM_E_TEE_PROXY_INVALID_ALIGNMENT, "DRM_E_TEE_PROXY_INVALID_ALIGNMENT"},
++#endif
++#ifdef DRM_E_TEE_OUTPUT_PROTECTION_REQUIREMENTS_NOT_MET
++{DRM_E_TEE_OUTPUT_PROTECTION_REQUIREMENTS_NOT_MET, "DRM_E_TEE_OUTPUT_PROTECTION_REQUIREMENTS_NOT_MET"},
++#endif
++#ifdef DRM_E_NONCE_STORE_TOKEN_NOT_FOUND
++{DRM_E_NONCE_STORE_TOKEN_NOT_FOUND, "DRM_E_NONCE_STORE_TOKEN_NOT_FOUND"},
++#endif
++#ifdef DRM_E_NONCE_STORE_OPEN_STORE
++{DRM_E_NONCE_STORE_OPEN_STORE, "DRM_E_NONCE_STORE_OPEN_STORE"},
++#endif
++#ifdef DRM_E_NONCE_STORE_CLOSE_STORE
++{DRM_E_NONCE_STORE_CLOSE_STORE, "DRM_E_NONCE_STORE_CLOSE_STORE"},
++#endif
++#ifdef DRM_E_NONCE_STORE_ADD_LICENSE
++{DRM_E_NONCE_STORE_ADD_LICENSE, "DRM_E_NONCE_STORE_ADD_LICENSE"},
++#endif
++#ifdef DRM_E_POLICYSTATE_NOT_FOUND
++{DRM_E_POLICYSTATE_NOT_FOUND, "DRM_E_POLICYSTATE_NOT_FOUND"},
++#endif
++#ifdef DRM_E_POLICYSTATE_CORRUPTED
++{DRM_E_POLICYSTATE_CORRUPTED, "DRM_E_POLICYSTATE_CORRUPTED"},
++#endif
++#ifdef DRM_E_XB_OBJECT_NOTFOUND
++{DRM_E_XB_OBJECT_NOTFOUND, "DRM_E_XB_OBJECT_NOTFOUND"},
++#endif
++#ifdef DRM_E_XB_INVALID_OBJECT
++{DRM_E_XB_INVALID_OBJECT, "DRM_E_XB_INVALID_OBJECT"},
++#endif
++#ifdef DRM_E_XB_OBJECT_ALREADY_EXISTS
++{DRM_E_XB_OBJECT_ALREADY_EXISTS, "DRM_E_XB_OBJECT_ALREADY_EXISTS"},
++#endif
++#ifdef DRM_E_XB_REQUIRED_OBJECT_MISSING
++{DRM_E_XB_REQUIRED_OBJECT_MISSING, "DRM_E_XB_REQUIRED_OBJECT_MISSING"},
++#endif
++#ifdef DRM_E_XB_UNKNOWN_ELEMENT_TYPE
++{DRM_E_XB_UNKNOWN_ELEMENT_TYPE, "DRM_E_XB_UNKNOWN_ELEMENT_TYPE"},
++#endif
++#ifdef DRM_E_XB_INVALID_VERSION
++{DRM_E_XB_INVALID_VERSION, "DRM_E_XB_INVALID_VERSION"},
++#endif
++#ifdef DRM_E_XB_MAX_UNKNOWN_CONTAINER_DEPTH
++{DRM_E_XB_MAX_UNKNOWN_CONTAINER_DEPTH, "DRM_E_XB_MAX_UNKNOWN_CONTAINER_DEPTH"},
++#endif
++#ifdef DRM_E_XB_INVALID_ALIGNMENT
++{DRM_E_XB_INVALID_ALIGNMENT, "DRM_E_XB_INVALID_ALIGNMENT"},
++#endif
++#ifdef DRM_E_XB_OBJECT_OUT_OF_RANGE
++{DRM_E_XB_OBJECT_OUT_OF_RANGE, "DRM_E_XB_OBJECT_OUT_OF_RANGE"},
++#endif
++#ifdef DRM_E_LICGEN_CANNOT_PERSIST_LICENSE
++{DRM_E_LICGEN_CANNOT_PERSIST_LICENSE, "DRM_E_LICGEN_CANNOT_PERSIST_LICENSE"},
++#endif
++#ifdef DRM_E_LICGEN_ROOT_LICENSE_CANNOT_ENCRYPT
++{DRM_E_LICGEN_ROOT_LICENSE_CANNOT_ENCRYPT, "DRM_E_LICGEN_ROOT_LICENSE_CANNOT_ENCRYPT"},
++#endif
++#ifdef DRM_E_LICGEN_EMBED_LOCAL_LICENSE
++{DRM_E_LICGEN_EMBED_LOCAL_LICENSE, "DRM_E_LICGEN_EMBED_LOCAL_LICENSE"},
++#endif
++#ifdef DRM_E_LICGEN_DUPLICATE_PLAY_ENABLER
++{DRM_E_LICGEN_DUPLICATE_PLAY_ENABLER, "DRM_E_LICGEN_DUPLICATE_PLAY_ENABLER"},
++#endif
++#ifdef DRM_E_LICGEN_CHILD_SECURITY_LEVEL_TOO_LOW
++{DRM_E_LICGEN_CHILD_SECURITY_LEVEL_TOO_LOW, "DRM_E_LICGEN_CHILD_SECURITY_LEVEL_TOO_LOW"},
++#endif
++#ifdef DRM_E_H264_PARSING_FAILED
++{DRM_E_H264_PARSING_FAILED, "DRM_E_H264_PARSING_FAILED"},
++#endif
++#ifdef DRM_E_H264_SPS_PROFILE
++{DRM_E_H264_SPS_PROFILE, "DRM_E_H264_SPS_PROFILE"},
++#endif
++#ifdef DRM_E_H264_SPS_IDC
++{DRM_E_H264_SPS_IDC, "DRM_E_H264_SPS_IDC"},
++#endif
++#ifdef DRM_E_H264_SPS_SPSID
++{DRM_E_H264_SPS_SPSID, "DRM_E_H264_SPS_SPSID"},
++#endif
++#ifdef DRM_E_H264_SPS_FRAMENUM
++{DRM_E_H264_SPS_FRAMENUM, "DRM_E_H264_SPS_FRAMENUM"},
++#endif
++#ifdef DRM_E_H264_SPS_POCTYPE
++{DRM_E_H264_SPS_POCTYPE, "DRM_E_H264_SPS_POCTYPE"},
++#endif
++#ifdef DRM_E_H264_SPS_POCLSB
++{DRM_E_H264_SPS_POCLSB, "DRM_E_H264_SPS_POCLSB"},
++#endif
++#ifdef DRM_E_H264_SPS_POCCYCLE
++{DRM_E_H264_SPS_POCCYCLE, "DRM_E_H264_SPS_POCCYCLE"},
++#endif
++#ifdef DRM_E_H264_SPS_NUMREFFRAMES
++{DRM_E_H264_SPS_NUMREFFRAMES, "DRM_E_H264_SPS_NUMREFFRAMES"},
++#endif
++#ifdef DRM_E_H264_SPS_CHROMATOP
++{DRM_E_H264_SPS_CHROMATOP, "DRM_E_H264_SPS_CHROMATOP"},
++#endif
++#ifdef DRM_E_H264_SPS_CHROMABOTTOM
++{DRM_E_H264_SPS_CHROMABOTTOM, "DRM_E_H264_SPS_CHROMABOTTOM"},
++#endif
++#ifdef DRM_E_H264_SPS_NALHRD
++{DRM_E_H264_SPS_NALHRD, "DRM_E_H264_SPS_NALHRD"},
++#endif
++#ifdef DRM_E_H264_SPS_VLDHRD
++{DRM_E_H264_SPS_VLDHRD, "DRM_E_H264_SPS_VLDHRD"},
++#endif
++#ifdef DRM_E_H264_SPS_VUIBPPD
++{DRM_E_H264_SPS_VUIBPPD, "DRM_E_H264_SPS_VUIBPPD"},
++#endif
++#ifdef DRM_E_H264_SPS_VUIBPMD
++{DRM_E_H264_SPS_VUIBPMD, "DRM_E_H264_SPS_VUIBPMD"},
++#endif
++#ifdef DRM_E_H264_SPS_VUIMMLH
++{DRM_E_H264_SPS_VUIMMLH, "DRM_E_H264_SPS_VUIMMLH"},
++#endif
++#ifdef DRM_E_H264_SPS_VUIMMLV
++{DRM_E_H264_SPS_VUIMMLV, "DRM_E_H264_SPS_VUIMMLV"},
++#endif
++#ifdef DRM_E_H264_SPS_VUINRF
++{DRM_E_H264_SPS_VUINRF, "DRM_E_H264_SPS_VUINRF"},
++#endif
++#ifdef DRM_E_H264_SPS_VUIMDFB
++{DRM_E_H264_SPS_VUIMDFB, "DRM_E_H264_SPS_VUIMDFB"},
++#endif
++#ifdef DRM_E_H264_SPS_WIDTH_HEIGHT
++{DRM_E_H264_SPS_WIDTH_HEIGHT, "DRM_E_H264_SPS_WIDTH_HEIGHT"},
++#endif
++#ifdef DRM_E_H264_SPS_AREA
++{DRM_E_H264_SPS_AREA, "DRM_E_H264_SPS_AREA"},
++#endif
++#ifdef DRM_E_H264_SPS_MINHEIGHT2
++{DRM_E_H264_SPS_MINHEIGHT2, "DRM_E_H264_SPS_MINHEIGHT2"},
++#endif
++#ifdef DRM_E_H264_SPS_MINHEIGHT3
++{DRM_E_H264_SPS_MINHEIGHT3, "DRM_E_H264_SPS_MINHEIGHT3"},
++#endif
++#ifdef DRM_E_H264_SPS_CROPWIDTH
++{DRM_E_H264_SPS_CROPWIDTH, "DRM_E_H264_SPS_CROPWIDTH"},
++#endif
++#ifdef DRM_E_H264_SPS_CROPHEIGHT
++{DRM_E_H264_SPS_CROPHEIGHT, "DRM_E_H264_SPS_CROPHEIGHT"},
++#endif
++#ifdef DRM_E_H264_SPS_MORE_RBSP
++{DRM_E_H264_SPS_MORE_RBSP, "DRM_E_H264_SPS_MORE_RBSP"},
++#endif
++#ifdef DRM_E_H264_SPS_CHROMA_IDC
++{DRM_E_H264_SPS_CHROMA_IDC, "DRM_E_H264_SPS_CHROMA_IDC"},
++#endif
++#ifdef DRM_E_H264_SPS_BITDEPTHLUMA
++{DRM_E_H264_SPS_BITDEPTHLUMA, "DRM_E_H264_SPS_BITDEPTHLUMA"},
++#endif
++#ifdef DRM_E_H264_SPS_BITDEPTHCHROMA
++{DRM_E_H264_SPS_BITDEPTHCHROMA, "DRM_E_H264_SPS_BITDEPTHCHROMA"},
++#endif
++#ifdef DRM_E_H264_SPS_DELTASCALE1
++{DRM_E_H264_SPS_DELTASCALE1, "DRM_E_H264_SPS_DELTASCALE1"},
++#endif
++#ifdef DRM_E_H264_SPS_DELTASCALE2
++{DRM_E_H264_SPS_DELTASCALE2, "DRM_E_H264_SPS_DELTASCALE2"},
++#endif
++#ifdef DRM_E_H264_BITSTREAM_TOOMANY
++{DRM_E_H264_BITSTREAM_TOOMANY, "DRM_E_H264_BITSTREAM_TOOMANY"},
++#endif
++#ifdef DRM_E_H264_BITSTREAM_TOOSHORT1
++{DRM_E_H264_BITSTREAM_TOOSHORT1, "DRM_E_H264_BITSTREAM_TOOSHORT1"},
++#endif
++#ifdef DRM_E_H264_BITSTREAM_TOOSHORT2
++{DRM_E_H264_BITSTREAM_TOOSHORT2, "DRM_E_H264_BITSTREAM_TOOSHORT2"},
++#endif
++#ifdef DRM_E_H264_BITSTREAM_TOOSHORT3
++{DRM_E_H264_BITSTREAM_TOOSHORT3, "DRM_E_H264_BITSTREAM_TOOSHORT3"},
++#endif
++#ifdef DRM_E_H264_BITSTREAM_TOOSHORT4
++{DRM_E_H264_BITSTREAM_TOOSHORT4, "DRM_E_H264_BITSTREAM_TOOSHORT4"},
++#endif
++#ifdef DRM_E_H264_BITSTREAM_TOOSHORT5
++{DRM_E_H264_BITSTREAM_TOOSHORT5, "DRM_E_H264_BITSTREAM_TOOSHORT5"},
++#endif
++#ifdef DRM_E_H264_BITSTREAM_EXGOLOBMTOOLONG1
++{DRM_E_H264_BITSTREAM_EXGOLOBMTOOLONG1, "DRM_E_H264_BITSTREAM_EXGOLOBMTOOLONG1"},
++#endif
++#ifdef DRM_E_H264_BITSTREAM_EXGOLOBMTOOLONG2
++{DRM_E_H264_BITSTREAM_EXGOLOBMTOOLONG2, "DRM_E_H264_BITSTREAM_EXGOLOBMTOOLONG2"},
++#endif
++#ifdef DRM_E_H264_NALU_NO_START_CODE
++{DRM_E_H264_NALU_NO_START_CODE, "DRM_E_H264_NALU_NO_START_CODE"},
++#endif
++#ifdef DRM_E_H264_NALU_ALL_ZERO
++{DRM_E_H264_NALU_ALL_ZERO, "DRM_E_H264_NALU_ALL_ZERO"},
++#endif
++#ifdef DRM_E_H264_NALU_EMULATION
++{DRM_E_H264_NALU_EMULATION, "DRM_E_H264_NALU_EMULATION"},
++#endif
++#ifdef DRM_E_H264_PPS_PPSID
++{DRM_E_H264_PPS_PPSID, "DRM_E_H264_PPS_PPSID"},
++#endif
++#ifdef DRM_E_H264_PPS_SPSID
++{DRM_E_H264_PPS_SPSID, "DRM_E_H264_PPS_SPSID"},
++#endif
++#ifdef DRM_E_H264_PPS_SPS_NOT_FOUND
++{DRM_E_H264_PPS_SPS_NOT_FOUND, "DRM_E_H264_PPS_SPS_NOT_FOUND"},
++#endif
++#ifdef DRM_E_H264_PPS_NUM_SLICE_GROUPS
++{DRM_E_H264_PPS_NUM_SLICE_GROUPS, "DRM_E_H264_PPS_NUM_SLICE_GROUPS"},
++#endif
++#ifdef DRM_E_H264_PPS_SLICE_GROUP_MAX
++{DRM_E_H264_PPS_SLICE_GROUP_MAX, "DRM_E_H264_PPS_SLICE_GROUP_MAX"},
++#endif
++#ifdef DRM_E_H264_PPS_RUN_LENGTH
++{DRM_E_H264_PPS_RUN_LENGTH, "DRM_E_H264_PPS_RUN_LENGTH"},
++#endif
++#ifdef DRM_E_H264_PPS_TOP_LEFT
++{DRM_E_H264_PPS_TOP_LEFT, "DRM_E_H264_PPS_TOP_LEFT"},
++#endif
++#ifdef DRM_E_H264_PPS_SLICE_GROUP_RATE
++{DRM_E_H264_PPS_SLICE_GROUP_RATE, "DRM_E_H264_PPS_SLICE_GROUP_RATE"},
++#endif
++#ifdef DRM_E_H264_PPS_SLICE_GROUP_MAP
++{DRM_E_H264_PPS_SLICE_GROUP_MAP, "DRM_E_H264_PPS_SLICE_GROUP_MAP"},
++#endif
++#ifdef DRM_E_H264_PPS_SLICE_GROUP_ID
++{DRM_E_H264_PPS_SLICE_GROUP_ID, "DRM_E_H264_PPS_SLICE_GROUP_ID"},
++#endif
++#ifdef DRM_E_H264_PPS_REF_IDX_L0
++{DRM_E_H264_PPS_REF_IDX_L0, "DRM_E_H264_PPS_REF_IDX_L0"},
++#endif
++#ifdef DRM_E_H264_PPS_REF_IDX_L1
++{DRM_E_H264_PPS_REF_IDX_L1, "DRM_E_H264_PPS_REF_IDX_L1"},
++#endif
++#ifdef DRM_E_H264_PPS_WEIGHTED_BIPRED
++{DRM_E_H264_PPS_WEIGHTED_BIPRED, "DRM_E_H264_PPS_WEIGHTED_BIPRED"},
++#endif
++#ifdef DRM_E_H264_PPS_PIC_INIT_QP
++{DRM_E_H264_PPS_PIC_INIT_QP, "DRM_E_H264_PPS_PIC_INIT_QP"},
++#endif
++#ifdef DRM_E_H264_PPS_PIC_INIT_QS
++{DRM_E_H264_PPS_PIC_INIT_QS, "DRM_E_H264_PPS_PIC_INIT_QS"},
++#endif
++#ifdef DRM_E_H264_PPS_PIC_CHROMA_QP
++{DRM_E_H264_PPS_PIC_CHROMA_QP, "DRM_E_H264_PPS_PIC_CHROMA_QP"},
++#endif
++#ifdef DRM_E_H264_PPS_REDUN_PIC_COUNT
++{DRM_E_H264_PPS_REDUN_PIC_COUNT, "DRM_E_H264_PPS_REDUN_PIC_COUNT"},
++#endif
++#ifdef DRM_E_H264_PPS_DELTA_SCALE1
++{DRM_E_H264_PPS_DELTA_SCALE1, "DRM_E_H264_PPS_DELTA_SCALE1"},
++#endif
++#ifdef DRM_E_H264_PPS_DELTA_SCALE2
++{DRM_E_H264_PPS_DELTA_SCALE2, "DRM_E_H264_PPS_DELTA_SCALE2"},
++#endif
++#ifdef DRM_E_H264_PPS_SECOND_CHROMA_QP
++{DRM_E_H264_PPS_SECOND_CHROMA_QP, "DRM_E_H264_PPS_SECOND_CHROMA_QP"},
++#endif
++#ifdef DRM_E_H264_PPS_MORE_RBSP
++{DRM_E_H264_PPS_MORE_RBSP, "DRM_E_H264_PPS_MORE_RBSP"},
++#endif
++#ifdef DRM_E_H264_SH_SLICE_TYPE
++{DRM_E_H264_SH_SLICE_TYPE, "DRM_E_H264_SH_SLICE_TYPE"},
++#endif
++#ifdef DRM_E_H264_SH_SLICE_TYPE_UNSUPPORTED
++{DRM_E_H264_SH_SLICE_TYPE_UNSUPPORTED, "DRM_E_H264_SH_SLICE_TYPE_UNSUPPORTED"},
++#endif
++#ifdef DRM_E_H264_SH_PPSID
++{DRM_E_H264_SH_PPSID, "DRM_E_H264_SH_PPSID"},
++#endif
++#ifdef DRM_E_H264_SH_PPS_NOT_FOUND
++{DRM_E_H264_SH_PPS_NOT_FOUND, "DRM_E_H264_SH_PPS_NOT_FOUND"},
++#endif
++#ifdef DRM_E_H264_SH_SPS_NOT_FOUND
++{DRM_E_H264_SH_SPS_NOT_FOUND, "DRM_E_H264_SH_SPS_NOT_FOUND"},
++#endif
++#ifdef DRM_E_H264_SH_SLICE_TYPE_PROFILE
++{DRM_E_H264_SH_SLICE_TYPE_PROFILE, "DRM_E_H264_SH_SLICE_TYPE_PROFILE"},
++#endif
++#ifdef DRM_E_H264_SH_IDR_FRAME_NUM
++{DRM_E_H264_SH_IDR_FRAME_NUM, "DRM_E_H264_SH_IDR_FRAME_NUM"},
++#endif
++#ifdef DRM_E_H264_SH_FIRST_MB_IN_SLICE
++{DRM_E_H264_SH_FIRST_MB_IN_SLICE, "DRM_E_H264_SH_FIRST_MB_IN_SLICE"},
++#endif
++#ifdef DRM_E_H264_SH_IDR_PIC_ID
++{DRM_E_H264_SH_IDR_PIC_ID, "DRM_E_H264_SH_IDR_PIC_ID"},
++#endif
++#ifdef DRM_E_H264_SH_REDUN_PIC_COUNT
++{DRM_E_H264_SH_REDUN_PIC_COUNT, "DRM_E_H264_SH_REDUN_PIC_COUNT"},
++#endif
++#ifdef DRM_E_H264_SH_NUM_REF_IDX_LX0
++{DRM_E_H264_SH_NUM_REF_IDX_LX0, "DRM_E_H264_SH_NUM_REF_IDX_LX0"},
++#endif
++#ifdef DRM_E_H264_SH_NUM_REF_IDX_LX1
++{DRM_E_H264_SH_NUM_REF_IDX_LX1, "DRM_E_H264_SH_NUM_REF_IDX_LX1"},
++#endif
++#ifdef DRM_E_H264_SH_REF_PIC_LIST_REORDER0
++{DRM_E_H264_SH_REF_PIC_LIST_REORDER0, "DRM_E_H264_SH_REF_PIC_LIST_REORDER0"},
++#endif
++#ifdef DRM_E_H264_SH_REF_PIC_LIST_REORDER1
++{DRM_E_H264_SH_REF_PIC_LIST_REORDER1, "DRM_E_H264_SH_REF_PIC_LIST_REORDER1"},
++#endif
++#ifdef DRM_E_H264_SH_LUMA_WEIGHT_DENOM
++{DRM_E_H264_SH_LUMA_WEIGHT_DENOM, "DRM_E_H264_SH_LUMA_WEIGHT_DENOM"},
++#endif
++#ifdef DRM_E_H264_SH_CHROMA_WEIGHT_DENOM
++{DRM_E_H264_SH_CHROMA_WEIGHT_DENOM, "DRM_E_H264_SH_CHROMA_WEIGHT_DENOM"},
++#endif
++#ifdef DRM_E_H264_SH_WP_WEIGHT_LUMA0
++{DRM_E_H264_SH_WP_WEIGHT_LUMA0, "DRM_E_H264_SH_WP_WEIGHT_LUMA0"},
++#endif
++#ifdef DRM_E_H264_SH_WP_OFFSET_LUMA0
++{DRM_E_H264_SH_WP_OFFSET_LUMA0, "DRM_E_H264_SH_WP_OFFSET_LUMA0"},
++#endif
++#ifdef DRM_E_H264_SH_WP_WEIGHT_CHROMA0
++{DRM_E_H264_SH_WP_WEIGHT_CHROMA0, "DRM_E_H264_SH_WP_WEIGHT_CHROMA0"},
++#endif
++#ifdef DRM_E_H264_SH_WP_OFFSET_CHROMA0
++{DRM_E_H264_SH_WP_OFFSET_CHROMA0, "DRM_E_H264_SH_WP_OFFSET_CHROMA0"},
++#endif
++#ifdef DRM_E_H264_SH_WP_WEIGHT_LUMA1
++{DRM_E_H264_SH_WP_WEIGHT_LUMA1, "DRM_E_H264_SH_WP_WEIGHT_LUMA1"},
++#endif
++#ifdef DRM_E_H264_SH_WP_OFFSET_LUMA1
++{DRM_E_H264_SH_WP_OFFSET_LUMA1, "DRM_E_H264_SH_WP_OFFSET_LUMA1"},
++#endif
++#ifdef DRM_E_H264_SH_WP_WEIGHT_CHROMA1
++{DRM_E_H264_SH_WP_WEIGHT_CHROMA1, "DRM_E_H264_SH_WP_WEIGHT_CHROMA1"},
++#endif
++#ifdef DRM_E_H264_SH_WP_OFFSET_CHROMA1
++{DRM_E_H264_SH_WP_OFFSET_CHROMA1, "DRM_E_H264_SH_WP_OFFSET_CHROMA1"},
++#endif
++#ifdef DRM_E_H264_SH_NUM_REF_PIC_MARKING
++{DRM_E_H264_SH_NUM_REF_PIC_MARKING, "DRM_E_H264_SH_NUM_REF_PIC_MARKING"},
++#endif
++#ifdef DRM_E_H264_SH_MMCO4_DUPLICATE
++{DRM_E_H264_SH_MMCO4_DUPLICATE, "DRM_E_H264_SH_MMCO4_DUPLICATE"},
++#endif
++#ifdef DRM_E_H264_SH_MMCO4_MAX_LONG_TERM_FRAME
++{DRM_E_H264_SH_MMCO4_MAX_LONG_TERM_FRAME, "DRM_E_H264_SH_MMCO4_MAX_LONG_TERM_FRAME"},
++#endif
++#ifdef DRM_E_H264_SH_MMCO5_DUPLICATE
++{DRM_E_H264_SH_MMCO5_DUPLICATE, "DRM_E_H264_SH_MMCO5_DUPLICATE"},
++#endif
++#ifdef DRM_E_H264_SH_MMCO5_FOLLOWS_MMC06
++{DRM_E_H264_SH_MMCO5_FOLLOWS_MMC06, "DRM_E_H264_SH_MMCO5_FOLLOWS_MMC06"},
++#endif
++#ifdef DRM_E_H264_SH_MMCO5_COEXIST_MMCO_1_OR_3
++{DRM_E_H264_SH_MMCO5_COEXIST_MMCO_1_OR_3, "DRM_E_H264_SH_MMCO5_COEXIST_MMCO_1_OR_3"},
++#endif
++#ifdef DRM_E_H264_SH_MMCO6_DUPLICATE
++{DRM_E_H264_SH_MMCO6_DUPLICATE, "DRM_E_H264_SH_MMCO6_DUPLICATE"},
++#endif
++#ifdef DRM_E_H264_SH_MODEL_NUMBER
++{DRM_E_H264_SH_MODEL_NUMBER, "DRM_E_H264_SH_MODEL_NUMBER"},
++#endif
++#ifdef DRM_E_H264_SH_SLICE_QP
++{DRM_E_H264_SH_SLICE_QP, "DRM_E_H264_SH_SLICE_QP"},
++#endif
++#ifdef DRM_E_H264_SH_LF_ALPHA_C0_OFFSET
++{DRM_E_H264_SH_LF_ALPHA_C0_OFFSET, "DRM_E_H264_SH_LF_ALPHA_C0_OFFSET"},
++#endif
++#ifdef DRM_E_H264_SH_LF_BETA_OFFSET
++{DRM_E_H264_SH_LF_BETA_OFFSET, "DRM_E_H264_SH_LF_BETA_OFFSET"},
++#endif
++#ifdef DRM_E_H264_SH_SLICE_GROUP_CHANGE
++{DRM_E_H264_SH_SLICE_GROUP_CHANGE, "DRM_E_H264_SH_SLICE_GROUP_CHANGE"},
++#endif
++#ifdef DRM_E_RPROV_INVALID_REQUEST
++{DRM_E_RPROV_INVALID_REQUEST, "DRM_E_RPROV_INVALID_REQUEST"},
++#endif
++#ifdef DRM_E_RPROV_VERSION_MISSMATCH
++{DRM_E_RPROV_VERSION_MISSMATCH, "DRM_E_RPROV_VERSION_MISSMATCH"},
++#endif
++#ifdef DRM_E_RPROV_INVALID_RESPONSE
++{DRM_E_RPROV_INVALID_RESPONSE, "DRM_E_RPROV_INVALID_RESPONSE"},
++#endif
++#ifdef DRM_E_RPROV_BOOTSTRAP_FAILURE
++{DRM_E_RPROV_BOOTSTRAP_FAILURE, "DRM_E_RPROV_BOOTSTRAP_FAILURE"},
++#endif
++#ifdef DRM_E_FIRMWARE_REVOKED
++{DRM_E_FIRMWARE_REVOKED, "DRM_E_FIRMWARE_REVOKED"},
++#endif
++#ifdef DRM_E_RPROV_SKIP_BOOTSTRAP
++{DRM_E_RPROV_SKIP_BOOTSTRAP, "DRM_E_RPROV_SKIP_BOOTSTRAP"},
++#endif
++#ifdef DRM_E_SECURESTOP_STORE_CORRUPT
++{DRM_E_SECURESTOP_STORE_CORRUPT, "DRM_E_SECURESTOP_STORE_CORRUPT"},
++#endif
++#ifdef DRM_E_SECURESTOP_SESSION_LOCKED
++{DRM_E_SECURESTOP_SESSION_LOCKED, "DRM_E_SECURESTOP_SESSION_LOCKED"},
++#endif
++#ifdef DRM_E_SECURESTOP_SESSION_CORRUPT
++{DRM_E_SECURESTOP_SESSION_CORRUPT, "DRM_E_SECURESTOP_SESSION_CORRUPT"},
++#endif
++#ifdef DRM_E_SECURESTOP_SESSION_ACTIVE
++{DRM_E_SECURESTOP_SESSION_ACTIVE, "DRM_E_SECURESTOP_SESSION_ACTIVE"},
++#endif
++#ifdef DRM_E_SECURESTOP_SESSION_NOT_FOUND
++{DRM_E_SECURESTOP_SESSION_NOT_FOUND, "DRM_E_SECURESTOP_SESSION_NOT_FOUND"},
++#endif
++#ifdef DRM_E_SECURESTOP_INVALID_RESPONSE
++{DRM_E_SECURESTOP_INVALID_RESPONSE, "DRM_E_SECURESTOP_INVALID_RESPONSE"},
++#endif
++#ifdef DRM_E_SECURESTOP_SESSION_STOPPED
++{DRM_E_SECURESTOP_SESSION_STOPPED, "DRM_E_SECURESTOP_SESSION_STOPPED"},
++#endif
++#ifdef DRM_E_SECURESTOP_INVALID_PUBLISHER_ID
++{DRM_E_SECURESTOP_INVALID_PUBLISHER_ID, "DRM_E_SECURESTOP_INVALID_PUBLISHER_ID"},
++#endif
++#ifdef DRM_E_SECURESTOP_PUBLISHER_ID_INCONSISTENT
++{DRM_E_SECURESTOP_PUBLISHER_ID_INCONSISTENT, "DRM_E_SECURESTOP_PUBLISHER_ID_INCONSISTENT"},
++#endif
++#ifdef DRM_E_SECURESTOP_INCONSISTENT
++{DRM_E_SECURESTOP_INCONSISTENT, "DRM_E_SECURESTOP_INCONSISTENT"},
++#endif
++#ifdef DRM_E_BRCM_PLATFORM_ALREADY_INITIALIZED
++{DRM_E_BRCM_PLATFORM_ALREADY_INITIALIZED, "DRM_E_BRCM_PLATFORM_ALREADY_INITIALIZED"},
++#endif
++#ifdef DRM_E_BRCM_PLATFORM_FW_NOT_AUTHENTICATED
++{DRM_E_BRCM_PLATFORM_FW_NOT_AUTHENTICATED, "DRM_E_BRCM_PLATFORM_FW_NOT_AUTHENTICATED"},
++#endif
++#ifdef DRM_E_SECURETIME_INVALID_REQUEST_DATA
++{DRM_E_SECURETIME_INVALID_REQUEST_DATA, "DRM_E_SECURETIME_INVALID_REQUEST_DATA"},
++#endif
++#ifdef DRM_E_SECURETIME_CLOCK_NOT_SET
++{DRM_E_SECURETIME_CLOCK_NOT_SET, "DRM_E_SECURETIME_CLOCK_NOT_SET"},
++#endif
++#ifdef DRM_E_SECURETIME_RESPONSE_TIMEOUT
++{DRM_E_SECURETIME_RESPONSE_TIMEOUT, "DRM_E_SECURETIME_RESPONSE_TIMEOUT"},
++#endif
++#ifdef DRM_E_SECURETIME_SERVER_SECURITY_LEVEL_TOO_LOW
++{DRM_E_SECURETIME_SERVER_SECURITY_LEVEL_TOO_LOW, "DRM_E_SECURETIME_SERVER_SECURITY_LEVEL_TOO_LOW"},
++#endif
++#ifdef DRM_E_LSRD_DETECTED
++{DRM_E_LSRD_DETECTED, "DRM_E_LSRD_DETECTED"},
++#endif
++#ifdef DRM_E_LSRD_INVALID_ACL
++{DRM_E_LSRD_INVALID_ACL, "DRM_E_LSRD_INVALID_ACL"},
++#endif
++#ifdef DRM_E_LSRD_DETECTION_IN_PROGRESS
++{DRM_E_LSRD_DETECTION_IN_PROGRESS, "DRM_E_LSRD_DETECTION_IN_PROGRESS"},
++#endif
++#ifdef DRM_E_LSRD_ACL_NOT_PRESENT
++{DRM_E_LSRD_ACL_NOT_PRESENT, "DRM_E_LSRD_ACL_NOT_PRESENT"},
++#endif
++#ifdef DRM_E_LSRD_INVALID_COMMAND
++{DRM_E_LSRD_INVALID_COMMAND, "DRM_E_LSRD_INVALID_COMMAND"},
++#endif
++#ifdef DRM_E_LSRD_SEQUENCE_NUMBER_IS_AT_MAX_LIMIT
++{DRM_E_LSRD_SEQUENCE_NUMBER_IS_AT_MAX_LIMIT, "DRM_E_LSRD_SEQUENCE_NUMBER_IS_AT_MAX_LIMIT"},
++#endif
++#ifdef DRM_E_SECUREDELETE_INVALID_RESPONSE
++{DRM_E_SECUREDELETE_INVALID_RESPONSE, "DRM_E_SECUREDELETE_INVALID_RESPONSE"},
++#endif
++#ifdef DRM_E_DEPRECATED_CH_UNSUPPORTED_HASH_ALGORITHM
++{DRM_E_DEPRECATED_CH_UNSUPPORTED_HASH_ALGORITHM, "DRM_E_DEPRECATED_CH_UNSUPPORTED_HASH_ALGORITHM"},
++#endif
++#ifdef DRM_E_DEPRECATED_CH_UNSUPPORTED_SIGN_ALGORITHM
++{DRM_E_DEPRECATED_CH_UNSUPPORTED_SIGN_ALGORITHM, "DRM_E_DEPRECATED_CH_UNSUPPORTED_SIGN_ALGORITHM"},
++#endif
++#ifdef DRM_E_DEPRECATED_CH_NOT_SIGNED
++{DRM_E_DEPRECATED_CH_NOT_SIGNED, "DRM_E_DEPRECATED_CH_NOT_SIGNED"},
++#endif
++#ifdef DRM_E_DEPRECATED_CH_UNKNOWN_ERROR
++{DRM_E_DEPRECATED_CH_UNKNOWN_ERROR, "DRM_E_DEPRECATED_CH_UNKNOWN_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_INIT_FAILURE
++{DRM_E_DEPRECATED_LIC_INIT_FAILURE, "DRM_E_DEPRECATED_LIC_INIT_FAILURE"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_LICENSE_NOTSET
++{DRM_E_DEPRECATED_LIC_LICENSE_NOTSET, "DRM_E_DEPRECATED_LIC_LICENSE_NOTSET"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_PARAM_NOT_OPTIONAL
++{DRM_E_DEPRECATED_LIC_PARAM_NOT_OPTIONAL, "DRM_E_DEPRECATED_LIC_PARAM_NOT_OPTIONAL"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_MEMORY_ALLOCATION_ERROR
++{DRM_E_DEPRECATED_LIC_MEMORY_ALLOCATION_ERROR, "DRM_E_DEPRECATED_LIC_MEMORY_ALLOCATION_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_INVALID_LICENSE
++{DRM_E_DEPRECATED_LIC_INVALID_LICENSE, "DRM_E_DEPRECATED_LIC_INVALID_LICENSE"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_FIELD_MISSING
++{DRM_E_DEPRECATED_LIC_FIELD_MISSING, "DRM_E_DEPRECATED_LIC_FIELD_MISSING"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_UNKNOWN_ERROR
++{DRM_E_DEPRECATED_LIC_UNKNOWN_ERROR, "DRM_E_DEPRECATED_LIC_UNKNOWN_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_INVALID_REVLIST
++{DRM_E_DEPRECATED_LIC_INVALID_REVLIST, "DRM_E_DEPRECATED_LIC_INVALID_REVLIST"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_EXPIRED_CERT
++{DRM_E_DEPRECATED_LIC_EXPIRED_CERT, "DRM_E_DEPRECATED_LIC_EXPIRED_CERT"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_NOERROR
++{DRM_E_DEPRECATED_CPRMEXP_NOERROR, "DRM_E_DEPRECATED_CPRMEXP_NOERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_PARAM_NOT_OPTIONAL
++{DRM_E_DEPRECATED_CPRMEXP_PARAM_NOT_OPTIONAL, "DRM_E_DEPRECATED_CPRMEXP_PARAM_NOT_OPTIONAL"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_MEMORY_ALLOCATION_ERROR
++{DRM_E_DEPRECATED_CPRMEXP_MEMORY_ALLOCATION_ERROR, "DRM_E_DEPRECATED_CPRMEXP_MEMORY_ALLOCATION_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_NO_OPERANDS_IN_EXPRESSION
++{DRM_E_DEPRECATED_CPRMEXP_NO_OPERANDS_IN_EXPRESSION, "DRM_E_DEPRECATED_CPRMEXP_NO_OPERANDS_IN_EXPRESSION"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_INVALID_TOKEN
++{DRM_E_DEPRECATED_CPRMEXP_INVALID_TOKEN, "DRM_E_DEPRECATED_CPRMEXP_INVALID_TOKEN"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_INVALID_CONSTANT
++{DRM_E_DEPRECATED_CPRMEXP_INVALID_CONSTANT, "DRM_E_DEPRECATED_CPRMEXP_INVALID_CONSTANT"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_INVALID_VARIABLE
++{DRM_E_DEPRECATED_CPRMEXP_INVALID_VARIABLE, "DRM_E_DEPRECATED_CPRMEXP_INVALID_VARIABLE"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_INVALID_FUNCTION
++{DRM_E_DEPRECATED_CPRMEXP_INVALID_FUNCTION, "DRM_E_DEPRECATED_CPRMEXP_INVALID_FUNCTION"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_INVALID_ARGUMENT
++{DRM_E_DEPRECATED_CPRMEXP_INVALID_ARGUMENT, "DRM_E_DEPRECATED_CPRMEXP_INVALID_ARGUMENT"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_INVALID_CONTEXT
++{DRM_E_DEPRECATED_CPRMEXP_INVALID_CONTEXT, "DRM_E_DEPRECATED_CPRMEXP_INVALID_CONTEXT"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_ENDOFBUFFER
++{DRM_E_DEPRECATED_CPRMEXP_ENDOFBUFFER, "DRM_E_DEPRECATED_CPRMEXP_ENDOFBUFFER"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_MISSING_OPERAND
++{DRM_E_DEPRECATED_CPRMEXP_MISSING_OPERAND, "DRM_E_DEPRECATED_CPRMEXP_MISSING_OPERAND"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_OVERFLOW
++{DRM_E_DEPRECATED_CPRMEXP_OVERFLOW, "DRM_E_DEPRECATED_CPRMEXP_OVERFLOW"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_UNDERFLOW
++{DRM_E_DEPRECATED_CPRMEXP_UNDERFLOW, "DRM_E_DEPRECATED_CPRMEXP_UNDERFLOW"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_INCORRECT_NUM_ARGS
++{DRM_E_DEPRECATED_CPRMEXP_INCORRECT_NUM_ARGS, "DRM_E_DEPRECATED_CPRMEXP_INCORRECT_NUM_ARGS"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_VARIABLE_EXPECTED
++{DRM_E_DEPRECATED_CPRMEXP_VARIABLE_EXPECTED, "DRM_E_DEPRECATED_CPRMEXP_VARIABLE_EXPECTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_RETRIEVAL_FAILURE
++{DRM_E_DEPRECATED_CPRMEXP_RETRIEVAL_FAILURE, "DRM_E_DEPRECATED_CPRMEXP_RETRIEVAL_FAILURE"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_UPDATE_FAILURE
++{DRM_E_DEPRECATED_CPRMEXP_UPDATE_FAILURE, "DRM_E_DEPRECATED_CPRMEXP_UPDATE_FAILURE"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_STRING_UNTERMINATED
++{DRM_E_DEPRECATED_CPRMEXP_STRING_UNTERMINATED, "DRM_E_DEPRECATED_CPRMEXP_STRING_UNTERMINATED"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_UPDATE_UNSUPPORTED
++{DRM_E_DEPRECATED_CPRMEXP_UPDATE_UNSUPPORTED, "DRM_E_DEPRECATED_CPRMEXP_UPDATE_UNSUPPORTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_ISOLATED_OPERAND_OR_OPERATOR
++{DRM_E_DEPRECATED_CPRMEXP_ISOLATED_OPERAND_OR_OPERATOR, "DRM_E_DEPRECATED_CPRMEXP_ISOLATED_OPERAND_OR_OPERATOR"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_UNMATCHED
++{DRM_E_DEPRECATED_CPRMEXP_UNMATCHED, "DRM_E_DEPRECATED_CPRMEXP_UNMATCHED"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_WRONG_TYPE_OPERAND
++{DRM_E_DEPRECATED_CPRMEXP_WRONG_TYPE_OPERAND, "DRM_E_DEPRECATED_CPRMEXP_WRONG_TYPE_OPERAND"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_TOO_MANY_OPERANDS
++{DRM_E_DEPRECATED_CPRMEXP_TOO_MANY_OPERANDS, "DRM_E_DEPRECATED_CPRMEXP_TOO_MANY_OPERANDS"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_UNKNOWN_PARSE_ERROR
++{DRM_E_DEPRECATED_CPRMEXP_UNKNOWN_PARSE_ERROR, "DRM_E_DEPRECATED_CPRMEXP_UNKNOWN_PARSE_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_UNSUPPORTED_FUNCTION
++{DRM_E_DEPRECATED_CPRMEXP_UNSUPPORTED_FUNCTION, "DRM_E_DEPRECATED_CPRMEXP_UNSUPPORTED_FUNCTION"},
++#endif
++#ifdef DRM_E_DEPRECATED_CPRMEXP_CLOCK_REQUIRED
++{DRM_E_DEPRECATED_CPRMEXP_CLOCK_REQUIRED, "DRM_E_DEPRECATED_CPRMEXP_CLOCK_REQUIRED"},
++#endif
++#ifdef DRM_E_DEPRECATED_LIC_KEY_AND_CERT_MISMATCH
++{DRM_E_DEPRECATED_LIC_KEY_AND_CERT_MISMATCH, "DRM_E_DEPRECATED_LIC_KEY_AND_CERT_MISMATCH"},
++#endif
++#ifdef DRM_E_DEPRECATED_SYNC_ENTRY_NOT_FOUND
++{DRM_E_DEPRECATED_SYNC_ENTRY_NOT_FOUND, "DRM_E_DEPRECATED_SYNC_ENTRY_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DEPRECATED_STACK_TOO_SMALL
++{DRM_E_DEPRECATED_STACK_TOO_SMALL, "DRM_E_DEPRECATED_STACK_TOO_SMALL"},
++#endif
++#ifdef DRM_E_DEPRECATED_CONTRACT_FAILED
++{DRM_E_DEPRECATED_CONTRACT_FAILED, "DRM_E_DEPRECATED_CONTRACT_FAILED"},
++#endif
++#ifdef DRM_E_DEPRECATED_NO_LICENSES_TO_SYNC
++{DRM_E_DEPRECATED_NO_LICENSES_TO_SYNC, "DRM_E_DEPRECATED_NO_LICENSES_TO_SYNC"},
++#endif
++#ifdef DRM_E_DEPRECATED_INCOMPATABLE_LICENSE_SIZE
++{DRM_E_DEPRECATED_INCOMPATABLE_LICENSE_SIZE, "DRM_E_DEPRECATED_INCOMPATABLE_LICENSE_SIZE"},
++#endif
++#ifdef DRM_E_DEPRECATED_INVALID_LICENSE_FLAGS
++{DRM_E_DEPRECATED_INVALID_LICENSE_FLAGS, "DRM_E_DEPRECATED_INVALID_LICENSE_FLAGS"},
++#endif
++#ifdef DRM_E_DEPRECATED_CONDITION_FAIL
++{DRM_E_DEPRECATED_CONDITION_FAIL, "DRM_E_DEPRECATED_CONDITION_FAIL"},
++#endif
++#ifdef DRM_E_DEPRECATED_LICENSE_NOT_YET_VALID
++{DRM_E_DEPRECATED_LICENSE_NOT_YET_VALID, "DRM_E_DEPRECATED_LICENSE_NOT_YET_VALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_NO_RIGHTS_REQUESTED
++{DRM_E_DEPRECATED_NO_RIGHTS_REQUESTED, "DRM_E_DEPRECATED_NO_RIGHTS_REQUESTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_INVALID_TIME
++{DRM_E_DEPRECATED_INVALID_TIME, "DRM_E_DEPRECATED_INVALID_TIME"},
++#endif
++#ifdef DRM_E_DEPRECATED_INVALID_BIND_ID
++{DRM_E_DEPRECATED_INVALID_BIND_ID, "DRM_E_DEPRECATED_INVALID_BIND_ID"},
++#endif
++#ifdef DRM_E_DEPRECATED_ALGORITHM_NOT_SET
++{DRM_E_DEPRECATED_ALGORITHM_NOT_SET, "DRM_E_DEPRECATED_ALGORITHM_NOT_SET"},
++#endif
++#ifdef DRM_E_DEPRECATED_LICENSE_SERVER_NEEDS_KEY
++{DRM_E_DEPRECATED_LICENSE_SERVER_NEEDS_KEY, "DRM_E_DEPRECATED_LICENSE_SERVER_NEEDS_KEY"},
++#endif
++#ifdef DRM_E_DEPRECATED_CLIENT_TIME_INVALID
++{DRM_E_DEPRECATED_CLIENT_TIME_INVALID, "DRM_E_DEPRECATED_CLIENT_TIME_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_DST_NAMESPACE_FULL
++{DRM_E_DEPRECATED_DST_NAMESPACE_FULL, "DRM_E_DEPRECATED_DST_NAMESPACE_FULL"},
++#endif
++#ifdef DRM_E_DEPRECATED_DST_NAMESPACE_IN_USE
++{DRM_E_DEPRECATED_DST_NAMESPACE_IN_USE, "DRM_E_DEPRECATED_DST_NAMESPACE_IN_USE"},
++#endif
++#ifdef DRM_E_DEPRECATED_NO_ACTION_IN_LICENSE_REQUEST
++{DRM_E_DEPRECATED_NO_ACTION_IN_LICENSE_REQUEST, "DRM_E_DEPRECATED_NO_ACTION_IN_LICENSE_REQUEST"},
++#endif
++#ifdef DRM_E_DEPRECATED_BACKUP_EXISTS
++{DRM_E_DEPRECATED_BACKUP_EXISTS, "DRM_E_DEPRECATED_BACKUP_EXISTS"},
++#endif
++#ifdef DRM_E_DEPRECATED_DST_RESERVED_KEY_DETECTED
++{DRM_E_DEPRECATED_DST_RESERVED_KEY_DETECTED, "DRM_E_DEPRECATED_DST_RESERVED_KEY_DETECTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_CLK_UNSUPPORTED_VALUE
++{DRM_E_DEPRECATED_CLK_UNSUPPORTED_VALUE, "DRM_E_DEPRECATED_CLK_UNSUPPORTED_VALUE"},
++#endif
++#ifdef DRM_E_DEPRECATED_DEVCERT_TEMPLATE_EXCEEDS_SIZE_LIMIT
++{DRM_E_DEPRECATED_DEVCERT_TEMPLATE_EXCEEDS_SIZE_LIMIT, "DRM_E_DEPRECATED_DEVCERT_TEMPLATE_EXCEEDS_SIZE_LIMIT"},
++#endif
++#ifdef DRM_E_DEPRECATED_DEVCERT_WRITE_ERROR
++{DRM_E_DEPRECATED_DEVCERT_WRITE_ERROR, "DRM_E_DEPRECATED_DEVCERT_WRITE_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRIVKEY_WRITE_ERROR
++{DRM_E_DEPRECATED_PRIVKEY_WRITE_ERROR, "DRM_E_DEPRECATED_PRIVKEY_WRITE_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_DEVCERT_INDIV_NOT_SUPPORTED
++{DRM_E_DEPRECATED_DEVCERT_INDIV_NOT_SUPPORTED, "DRM_E_DEPRECATED_DEVCERT_INDIV_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_WRONG_TOKEN_TYPE
++{DRM_E_DEPRECATED_WRONG_TOKEN_TYPE, "DRM_E_DEPRECATED_WRONG_TOKEN_TYPE"},
++#endif
++#ifdef DRM_E_DEPRECATED_POLICY_ONLINE_DISABLED
++{DRM_E_DEPRECATED_POLICY_ONLINE_DISABLED, "DRM_E_DEPRECATED_POLICY_ONLINE_DISABLED"},
++#endif
++#ifdef DRM_E_DEPRECATED_INVALID_DEVSTORE_ATTRIBUTE
++{DRM_E_DEPRECATED_INVALID_DEVSTORE_ATTRIBUTE, "DRM_E_DEPRECATED_INVALID_DEVSTORE_ATTRIBUTE"},
++#endif
++#ifdef DRM_E_DEPRECATED_INVALID_DEVSTORE_ENTRY
++{DRM_E_DEPRECATED_INVALID_DEVSTORE_ENTRY, "DRM_E_DEPRECATED_INVALID_DEVSTORE_ENTRY"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRECISION_ARITHMETIC_FAIL
++{DRM_E_DEPRECATED_PRECISION_ARITHMETIC_FAIL, "DRM_E_DEPRECATED_PRECISION_ARITHMETIC_FAIL"},
++#endif
++#ifdef DRM_E_DEPRECATED_REVOCATION_NOT_SUPPORTED
++{DRM_E_DEPRECATED_REVOCATION_NOT_SUPPORTED, "DRM_E_DEPRECATED_REVOCATION_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_LRB_NO_LGPUBKEY
++{DRM_E_DEPRECATED_LRB_NO_LGPUBKEY, "DRM_E_DEPRECATED_LRB_NO_LGPUBKEY"},
++#endif
++#ifdef DRM_E_DEPRECATED_LRB_INVALID_SIGNATURE
++{DRM_E_DEPRECATED_LRB_INVALID_SIGNATURE, "DRM_E_DEPRECATED_LRB_INVALID_SIGNATURE"},
++#endif
++#ifdef DRM_E_DEPRECATED_LRB_LGPUBKEY_MISMATCH
++{DRM_E_DEPRECATED_LRB_LGPUBKEY_MISMATCH, "DRM_E_DEPRECATED_LRB_LGPUBKEY_MISMATCH"},
++#endif
++#ifdef DRM_E_DEPRECATED_LRB_INVALID_LICENSE_DATA
++{DRM_E_DEPRECATED_LRB_INVALID_LICENSE_DATA, "DRM_E_DEPRECATED_LRB_INVALID_LICENSE_DATA"},
++#endif
++#ifdef DRM_E_DEPRECATED_LICEVAL_INVALID_PRND_LICENSE
++{DRM_E_DEPRECATED_LICEVAL_INVALID_PRND_LICENSE, "DRM_E_DEPRECATED_LICEVAL_INVALID_PRND_LICENSE"},
++#endif
++#ifdef DRM_E_DEPRECATED_NOT_CRL_BLOB
++{DRM_E_DEPRECATED_NOT_CRL_BLOB, "DRM_E_DEPRECATED_NOT_CRL_BLOB"},
++#endif
++#ifdef DRM_E_DEPRECATED_BAD_CRL_BLOB
++{DRM_E_DEPRECATED_BAD_CRL_BLOB, "DRM_E_DEPRECATED_BAD_CRL_BLOB"},
++#endif
++#ifdef DRM_E_DEPRECATED_TEST_DLA_NO_CONTENT_HEADER
++{DRM_E_DEPRECATED_TEST_DLA_NO_CONTENT_HEADER, "DRM_E_DEPRECATED_TEST_DLA_NO_CONTENT_HEADER"},
++#endif
++#ifdef DRM_E_DEPRECATED_TEST_DLA_CONTENT_HEADER_FOUND
++{DRM_E_DEPRECATED_TEST_DLA_CONTENT_HEADER_FOUND, "DRM_E_DEPRECATED_TEST_DLA_CONTENT_HEADER_FOUND"},
++#endif
++#ifdef DRM_E_DEPRECATED_TEST_SYNC_LSD_INCORRECT
++{DRM_E_DEPRECATED_TEST_SYNC_LSD_INCORRECT, "DRM_E_DEPRECATED_TEST_SYNC_LSD_INCORRECT"},
++#endif
++#ifdef DRM_E_DEPRECATED_FEATURE_NOT_SUPPORTED
++{DRM_E_DEPRECATED_FEATURE_NOT_SUPPORTED, "DRM_E_DEPRECATED_FEATURE_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_INITIATORS_UNKNOWN_TYPE
++{DRM_E_DEPRECATED_INITIATORS_UNKNOWN_TYPE, "DRM_E_DEPRECATED_INITIATORS_UNKNOWN_TYPE"},
++#endif
++#ifdef DRM_E_DEPRECATED_INITIATORS_INVALID_SERVICEID
++{DRM_E_DEPRECATED_INITIATORS_INVALID_SERVICEID, "DRM_E_DEPRECATED_INITIATORS_INVALID_SERVICEID"},
++#endif
++#ifdef DRM_E_DEPRECATED_INITIATORS_INVALID_ACCOUNTID
++{DRM_E_DEPRECATED_INITIATORS_INVALID_ACCOUNTID, "DRM_E_DEPRECATED_INITIATORS_INVALID_ACCOUNTID"},
++#endif
++#ifdef DRM_E_DEPRECATED_INITIATORS_INVALID_MID
++{DRM_E_DEPRECATED_INITIATORS_INVALID_MID, "DRM_E_DEPRECATED_INITIATORS_INVALID_MID"},
++#endif
++#ifdef DRM_E_DEPRECATED_INITIATORS_MISSING_DC_URL
++{DRM_E_DEPRECATED_INITIATORS_MISSING_DC_URL, "DRM_E_DEPRECATED_INITIATORS_MISSING_DC_URL"},
++#endif
++#ifdef DRM_E_DEPRECATED_INITIATORS_MISSING_CONTENT_HEADER
++{DRM_E_DEPRECATED_INITIATORS_MISSING_CONTENT_HEADER, "DRM_E_DEPRECATED_INITIATORS_MISSING_CONTENT_HEADER"},
++#endif
++#ifdef DRM_E_DEPRECATED_INITIATORS_MISSING_LAURL_IN_CONTENT_HEADER
++{DRM_E_DEPRECATED_INITIATORS_MISSING_LAURL_IN_CONTENT_HEADER, "DRM_E_DEPRECATED_INITIATORS_MISSING_LAURL_IN_CONTENT_HEADER"},
++#endif
++#ifdef DRM_E_DEPRECATED_INITIATORS_MISSING_METERCERT_URL
++{DRM_E_DEPRECATED_INITIATORS_MISSING_METERCERT_URL, "DRM_E_DEPRECATED_INITIATORS_MISSING_METERCERT_URL"},
++#endif
++#ifdef DRM_E_DEPRECATED_BCERT_CLIENT_ID_NOT_SPECIFIED
++{DRM_E_DEPRECATED_BCERT_CLIENT_ID_NOT_SPECIFIED, "DRM_E_DEPRECATED_BCERT_CLIENT_ID_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_DEPRECATED_BCERT_HARDWARE_ID_NOT_SPECIFIED
++{DRM_E_DEPRECATED_BCERT_HARDWARE_ID_NOT_SPECIFIED, "DRM_E_DEPRECATED_BCERT_HARDWARE_ID_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_DEPRECATED_BCERT_SERIAL_NUM_NOT_SPECIFIED
++{DRM_E_DEPRECATED_BCERT_SERIAL_NUM_NOT_SPECIFIED, "DRM_E_DEPRECATED_BCERT_SERIAL_NUM_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_DEPRECATED_BCERT_INVALID_EXTDATA_SIGNED_LENGTH
++{DRM_E_DEPRECATED_BCERT_INVALID_EXTDATA_SIGNED_LENGTH, "DRM_E_DEPRECATED_BCERT_INVALID_EXTDATA_SIGNED_LENGTH"},
++#endif
++#ifdef DRM_E_DEPRECATED_BCERT_INVALID_EXTDATA_RECORD_TYPE
++{DRM_E_DEPRECATED_BCERT_INVALID_EXTDATA_RECORD_TYPE, "DRM_E_DEPRECATED_BCERT_INVALID_EXTDATA_RECORD_TYPE"},
++#endif
++#ifdef DRM_E_DEPRECATED_SECURE_TRACE_BAD_GLOBAL_DATA_POINTER
++{DRM_E_DEPRECATED_SECURE_TRACE_BAD_GLOBAL_DATA_POINTER, "DRM_E_DEPRECATED_SECURE_TRACE_BAD_GLOBAL_DATA_POINTER"},
++#endif
++#ifdef DRM_E_DEPRECATED_SECURE_TRACE_INVALID_GLOBAL_DATA
++{DRM_E_DEPRECATED_SECURE_TRACE_INVALID_GLOBAL_DATA, "DRM_E_DEPRECATED_SECURE_TRACE_INVALID_GLOBAL_DATA"},
++#endif
++#ifdef DRM_E_DEPRECATED_SECURE_TRACE_FORMATTING_ERROR
++{DRM_E_DEPRECATED_SECURE_TRACE_FORMATTING_ERROR, "DRM_E_DEPRECATED_SECURE_TRACE_FORMATTING_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_SECURE_TRACE_BAD_SCHEME_DATA_POINTER
++{DRM_E_DEPRECATED_SECURE_TRACE_BAD_SCHEME_DATA_POINTER, "DRM_E_DEPRECATED_SECURE_TRACE_BAD_SCHEME_DATA_POINTER"},
++#endif
++#ifdef DRM_E_DEPRECATED_SECURE_TRACE_BAD_PER_THREAD_AES_DATA_POINTER
++{DRM_E_DEPRECATED_SECURE_TRACE_BAD_PER_THREAD_AES_DATA_POINTER, "DRM_E_DEPRECATED_SECURE_TRACE_BAD_PER_THREAD_AES_DATA_POINTER"},
++#endif
++#ifdef DRM_E_DEPRECATED_SECURE_TRACE_BAD_PER_THREAD_AES_BUFFER_POINTER
++{DRM_E_DEPRECATED_SECURE_TRACE_BAD_PER_THREAD_AES_BUFFER_POINTER, "DRM_E_DEPRECATED_SECURE_TRACE_BAD_PER_THREAD_AES_BUFFER_POINTER"},
++#endif
++#ifdef DRM_E_DEPRECATED_SECURE_TRACE_AES_INSUFFICIENT_BUFFER
++{DRM_E_DEPRECATED_SECURE_TRACE_AES_INSUFFICIENT_BUFFER, "DRM_E_DEPRECATED_SECURE_TRACE_AES_INSUFFICIENT_BUFFER"},
++#endif
++#ifdef DRM_E_DEPRECATED_SECURE_TRACE_VERSION_MISMATCH
++{DRM_E_DEPRECATED_SECURE_TRACE_VERSION_MISMATCH, "DRM_E_DEPRECATED_SECURE_TRACE_VERSION_MISMATCH"},
++#endif
++#ifdef DRM_E_DEPRECATED_SECURE_TRACE_UNEXPECTED_ERROR
++{DRM_E_DEPRECATED_SECURE_TRACE_UNEXPECTED_ERROR, "DRM_E_DEPRECATED_SECURE_TRACE_UNEXPECTED_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_MUST_REVALIDATE
++{DRM_E_DEPRECATED_ND_MUST_REVALIDATE, "DRM_E_DEPRECATED_ND_MUST_REVALIDATE"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_INVALID_MESSAGE
++{DRM_E_DEPRECATED_ND_INVALID_MESSAGE, "DRM_E_DEPRECATED_ND_INVALID_MESSAGE"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_INVALID_MESSAGE_TYPE
++{DRM_E_DEPRECATED_ND_INVALID_MESSAGE_TYPE, "DRM_E_DEPRECATED_ND_INVALID_MESSAGE_TYPE"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_INVALID_MESSAGE_VERSION
++{DRM_E_DEPRECATED_ND_INVALID_MESSAGE_VERSION, "DRM_E_DEPRECATED_ND_INVALID_MESSAGE_VERSION"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_INVALID_SESSION
++{DRM_E_DEPRECATED_ND_INVALID_SESSION, "DRM_E_DEPRECATED_ND_INVALID_SESSION"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_MEDIA_SESSION_LIMIT_REACHED
++{DRM_E_DEPRECATED_ND_MEDIA_SESSION_LIMIT_REACHED, "DRM_E_DEPRECATED_ND_MEDIA_SESSION_LIMIT_REACHED"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_UNABLE_TO_VERIFY_PROXIMITY
++{DRM_E_DEPRECATED_ND_UNABLE_TO_VERIFY_PROXIMITY, "DRM_E_DEPRECATED_ND_UNABLE_TO_VERIFY_PROXIMITY"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_INVALID_PROXIMITY_RESPONSE
++{DRM_E_DEPRECATED_ND_INVALID_PROXIMITY_RESPONSE, "DRM_E_DEPRECATED_ND_INVALID_PROXIMITY_RESPONSE"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_DEVICE_LIMIT_REACHED
++{DRM_E_DEPRECATED_ND_DEVICE_LIMIT_REACHED, "DRM_E_DEPRECATED_ND_DEVICE_LIMIT_REACHED"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_BAD_REQUEST
++{DRM_E_DEPRECATED_ND_BAD_REQUEST, "DRM_E_DEPRECATED_ND_BAD_REQUEST"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_FAILED_SEEK
++{DRM_E_DEPRECATED_ND_FAILED_SEEK, "DRM_E_DEPRECATED_ND_FAILED_SEEK"},
++#endif
++#ifdef DRM_E_DEPRECATED_ND_INVALID_CONTEXT
++{DRM_E_DEPRECATED_ND_INVALID_CONTEXT, "DRM_E_DEPRECATED_ND_INVALID_CONTEXT"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_BAD_ASF_HEADER
++{DRM_E_DEPRECATED_ASF_BAD_ASF_HEADER, "DRM_E_DEPRECATED_ASF_BAD_ASF_HEADER"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_BAD_PACKET_HEADER
++{DRM_E_DEPRECATED_ASF_BAD_PACKET_HEADER, "DRM_E_DEPRECATED_ASF_BAD_PACKET_HEADER"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_BAD_PAYLOAD_HEADER
++{DRM_E_DEPRECATED_ASF_BAD_PAYLOAD_HEADER, "DRM_E_DEPRECATED_ASF_BAD_PAYLOAD_HEADER"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_BAD_DATA_HEADER
++{DRM_E_DEPRECATED_ASF_BAD_DATA_HEADER, "DRM_E_DEPRECATED_ASF_BAD_DATA_HEADER"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_INVALID_OPERATION
++{DRM_E_DEPRECATED_ASF_INVALID_OPERATION, "DRM_E_DEPRECATED_ASF_INVALID_OPERATION"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_AES_PAYLOAD_FOUND
++{DRM_E_DEPRECATED_ASF_AES_PAYLOAD_FOUND, "DRM_E_DEPRECATED_ASF_AES_PAYLOAD_FOUND"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_EXTENDED_STREAM_PROPERTIES_OBJ_NOT_FOUND
++{DRM_E_DEPRECATED_ASF_EXTENDED_STREAM_PROPERTIES_OBJ_NOT_FOUND, "DRM_E_DEPRECATED_ASF_EXTENDED_STREAM_PROPERTIES_OBJ_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_INVALID_DATA
++{DRM_E_DEPRECATED_ASF_INVALID_DATA, "DRM_E_DEPRECATED_ASF_INVALID_DATA"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_TOO_MANY_PAYLOADS
++{DRM_E_DEPRECATED_ASF_TOO_MANY_PAYLOADS, "DRM_E_DEPRECATED_ASF_TOO_MANY_PAYLOADS"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_BANDWIDTH_OVERRUN
++{DRM_E_DEPRECATED_ASF_BANDWIDTH_OVERRUN, "DRM_E_DEPRECATED_ASF_BANDWIDTH_OVERRUN"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_INVALID_STREAM_NUMBER
++{DRM_E_DEPRECATED_ASF_INVALID_STREAM_NUMBER, "DRM_E_DEPRECATED_ASF_INVALID_STREAM_NUMBER"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_LATE_SAMPLE
++{DRM_E_DEPRECATED_ASF_LATE_SAMPLE, "DRM_E_DEPRECATED_ASF_LATE_SAMPLE"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_NOT_ACCEPTING
++{DRM_E_DEPRECATED_ASF_NOT_ACCEPTING, "DRM_E_DEPRECATED_ASF_NOT_ACCEPTING"},
++#endif
++#ifdef DRM_E_DEPRECATED_ASF_UNEXPECTED
++{DRM_E_DEPRECATED_ASF_UNEXPECTED, "DRM_E_DEPRECATED_ASF_UNEXPECTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_LICGEN_POLICY_NOT_SUPPORTED
++{DRM_E_DEPRECATED_LICGEN_POLICY_NOT_SUPPORTED, "DRM_E_DEPRECATED_LICGEN_POLICY_NOT_SUPPORTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_MOVE_DENIED
++{DRM_E_DEPRECATED_MOVE_DENIED, "DRM_E_DEPRECATED_MOVE_DENIED"},
++#endif
++#ifdef DRM_E_DEPRECATED_INVALID_MOVE_RESPONSE
++{DRM_E_DEPRECATED_INVALID_MOVE_RESPONSE, "DRM_E_DEPRECATED_INVALID_MOVE_RESPONSE"},
++#endif
++#ifdef DRM_E_DEPRECATED_MOVE_NONCE_MISMATCH
++{DRM_E_DEPRECATED_MOVE_NONCE_MISMATCH, "DRM_E_DEPRECATED_MOVE_NONCE_MISMATCH"},
++#endif
++#ifdef DRM_E_DEPRECATED_MOVE_TXID_MISMATCH
++{DRM_E_DEPRECATED_MOVE_TXID_MISMATCH, "DRM_E_DEPRECATED_MOVE_TXID_MISMATCH"},
++#endif
++#ifdef DRM_E_DEPRECATED_MOVE_STORE_OPEN_STORE
++{DRM_E_DEPRECATED_MOVE_STORE_OPEN_STORE, "DRM_E_DEPRECATED_MOVE_STORE_OPEN_STORE"},
++#endif
++#ifdef DRM_E_DEPRECATED_MOVE_STORE_CLOSE_STORE
++{DRM_E_DEPRECATED_MOVE_STORE_CLOSE_STORE, "DRM_E_DEPRECATED_MOVE_STORE_CLOSE_STORE"},
++#endif
++#ifdef DRM_E_DEPRECATED_MOVE_STORE_ADD_DATA
++{DRM_E_DEPRECATED_MOVE_STORE_ADD_DATA, "DRM_E_DEPRECATED_MOVE_STORE_ADD_DATA"},
++#endif
++#ifdef DRM_E_DEPRECATED_MOVE_STORE_GET_DATA
++{DRM_E_DEPRECATED_MOVE_STORE_GET_DATA, "DRM_E_DEPRECATED_MOVE_STORE_GET_DATA"},
++#endif
++#ifdef DRM_E_DEPRECATED_MOVE_FORMAT_INVALID
++{DRM_E_DEPRECATED_MOVE_FORMAT_INVALID, "DRM_E_DEPRECATED_MOVE_FORMAT_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_MOVE_SIGNATURE_INVALID
++{DRM_E_DEPRECATED_MOVE_SIGNATURE_INVALID, "DRM_E_DEPRECATED_MOVE_SIGNATURE_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_COPY_DENIED
++{DRM_E_DEPRECATED_COPY_DENIED, "DRM_E_DEPRECATED_COPY_DENIED"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_INVALID_PLATFORM
++{DRM_E_DEPRECATED_KEYFILE_INVALID_PLATFORM, "DRM_E_DEPRECATED_KEYFILE_INVALID_PLATFORM"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_TOO_LARGE
++{DRM_E_DEPRECATED_KEYFILE_TOO_LARGE, "DRM_E_DEPRECATED_KEYFILE_TOO_LARGE"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_PRIVATE_KEY_NOT_FOUND
++{DRM_E_DEPRECATED_KEYFILE_PRIVATE_KEY_NOT_FOUND, "DRM_E_DEPRECATED_KEYFILE_PRIVATE_KEY_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_CERTIFICATE_CHAIN_NOT_FOUND
++{DRM_E_DEPRECATED_KEYFILE_CERTIFICATE_CHAIN_NOT_FOUND, "DRM_E_DEPRECATED_KEYFILE_CERTIFICATE_CHAIN_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_KEY_NOT_FOUND
++{DRM_E_DEPRECATED_KEYFILE_KEY_NOT_FOUND, "DRM_E_DEPRECATED_KEYFILE_KEY_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_UNKNOWN_DECRYPTION_METHOD
++{DRM_E_DEPRECATED_KEYFILE_UNKNOWN_DECRYPTION_METHOD, "DRM_E_DEPRECATED_KEYFILE_UNKNOWN_DECRYPTION_METHOD"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_INVALID_SIGNATURE
++{DRM_E_DEPRECATED_KEYFILE_INVALID_SIGNATURE, "DRM_E_DEPRECATED_KEYFILE_INVALID_SIGNATURE"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_INTERNAL_DECRYPTION_BUFFER_TOO_SMALL
++{DRM_E_DEPRECATED_KEYFILE_INTERNAL_DECRYPTION_BUFFER_TOO_SMALL, "DRM_E_DEPRECATED_KEYFILE_INTERNAL_DECRYPTION_BUFFER_TOO_SMALL"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_PLATFORMID_MISMATCH
++{DRM_E_DEPRECATED_KEYFILE_PLATFORMID_MISMATCH, "DRM_E_DEPRECATED_KEYFILE_PLATFORMID_MISMATCH"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_CERTIFICATE_ISSUER_KEY_MISMATCH
++{DRM_E_DEPRECATED_KEYFILE_CERTIFICATE_ISSUER_KEY_MISMATCH, "DRM_E_DEPRECATED_KEYFILE_CERTIFICATE_ISSUER_KEY_MISMATCH"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_ROBUSTNESSVERSION_MISMATCH
++{DRM_E_DEPRECATED_KEYFILE_ROBUSTNESSVERSION_MISMATCH, "DRM_E_DEPRECATED_KEYFILE_ROBUSTNESSVERSION_MISMATCH"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_FILE_NOT_CLOSED
++{DRM_E_DEPRECATED_KEYFILE_FILE_NOT_CLOSED, "DRM_E_DEPRECATED_KEYFILE_FILE_NOT_CLOSED"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_NOT_INITED
++{DRM_E_DEPRECATED_KEYFILE_NOT_INITED, "DRM_E_DEPRECATED_KEYFILE_NOT_INITED"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_FORMAT_INVALID
++{DRM_E_DEPRECATED_KEYFILE_FORMAT_INVALID, "DRM_E_DEPRECATED_KEYFILE_FORMAT_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_KEYFILE_UPDATE_NOT_ALLOWED
++{DRM_E_DEPRECATED_KEYFILE_UPDATE_NOT_ALLOWED, "DRM_E_DEPRECATED_KEYFILE_UPDATE_NOT_ALLOWED"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_MESSAGE_VERSION_INVALID
++{DRM_E_DEPRECATED_PRND_MESSAGE_VERSION_INVALID, "DRM_E_DEPRECATED_PRND_MESSAGE_VERSION_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_MESSAGE_WRONG_TYPE
++{DRM_E_DEPRECATED_PRND_MESSAGE_WRONG_TYPE, "DRM_E_DEPRECATED_PRND_MESSAGE_WRONG_TYPE"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_MESSAGE_INVALID
++{DRM_E_DEPRECATED_PRND_MESSAGE_INVALID, "DRM_E_DEPRECATED_PRND_MESSAGE_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_SESSION_ID_INVALID
++{DRM_E_DEPRECATED_PRND_SESSION_ID_INVALID, "DRM_E_DEPRECATED_PRND_SESSION_ID_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_PROXIMITY_DETECTION_REQUEST_CHANNEL_TYPE_UNSUPPORTED
++{DRM_E_DEPRECATED_PRND_PROXIMITY_DETECTION_REQUEST_CHANNEL_TYPE_UNSUPPORTED, "DRM_E_DEPRECATED_PRND_PROXIMITY_DETECTION_REQUEST_CHANNEL_TYPE_UNSUPPORTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_PROXIMITY_DETECTION_RESPONSE_INVALID
++{DRM_E_DEPRECATED_PRND_PROXIMITY_DETECTION_RESPONSE_INVALID, "DRM_E_DEPRECATED_PRND_PROXIMITY_DETECTION_RESPONSE_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_PROXIMITY_DETECTION_RESPONSE_TIMEOUT
++{DRM_E_DEPRECATED_PRND_PROXIMITY_DETECTION_RESPONSE_TIMEOUT, "DRM_E_DEPRECATED_PRND_PROXIMITY_DETECTION_RESPONSE_TIMEOUT"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_LICENSE_REQUEST_CID_CALLBACK_REQUIRED
++{DRM_E_DEPRECATED_PRND_LICENSE_REQUEST_CID_CALLBACK_REQUIRED, "DRM_E_DEPRECATED_PRND_LICENSE_REQUEST_CID_CALLBACK_REQUIRED"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_LICENSE_RESPONSE_CLMID_INVALID
++{DRM_E_DEPRECATED_PRND_LICENSE_RESPONSE_CLMID_INVALID, "DRM_E_DEPRECATED_PRND_LICENSE_RESPONSE_CLMID_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_CERTIFICATE_NOT_RECEIVER
++{DRM_E_DEPRECATED_PRND_CERTIFICATE_NOT_RECEIVER, "DRM_E_DEPRECATED_PRND_CERTIFICATE_NOT_RECEIVER"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_CANNOT_RENEW_USING_NEW_SESSION
++{DRM_E_DEPRECATED_PRND_CANNOT_RENEW_USING_NEW_SESSION, "DRM_E_DEPRECATED_PRND_CANNOT_RENEW_USING_NEW_SESSION"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_INVALID_CUSTOM_DATA_TYPE
++{DRM_E_DEPRECATED_PRND_INVALID_CUSTOM_DATA_TYPE, "DRM_E_DEPRECATED_PRND_INVALID_CUSTOM_DATA_TYPE"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_CLOCK_OUT_OF_SYNC
++{DRM_E_DEPRECATED_PRND_CLOCK_OUT_OF_SYNC, "DRM_E_DEPRECATED_PRND_CLOCK_OUT_OF_SYNC"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_CANNOT_REBIND_PRND_RECEIVED_LICENSE
++{DRM_E_DEPRECATED_PRND_CANNOT_REBIND_PRND_RECEIVED_LICENSE, "DRM_E_DEPRECATED_PRND_CANNOT_REBIND_PRND_RECEIVED_LICENSE"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_CANNOT_REGISTER_USING_EXISTING_SESSION
++{DRM_E_DEPRECATED_PRND_CANNOT_REGISTER_USING_EXISTING_SESSION, "DRM_E_DEPRECATED_PRND_CANNOT_REGISTER_USING_EXISTING_SESSION"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_BUSY_PERFORMING_RENEWAL
++{DRM_E_DEPRECATED_PRND_BUSY_PERFORMING_RENEWAL, "DRM_E_DEPRECATED_PRND_BUSY_PERFORMING_RENEWAL"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_LICENSE_REQUEST_INVALID_ACTION
++{DRM_E_DEPRECATED_PRND_LICENSE_REQUEST_INVALID_ACTION, "DRM_E_DEPRECATED_PRND_LICENSE_REQUEST_INVALID_ACTION"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_TRANSMITTER_UNAUTHORIZED
++{DRM_E_DEPRECATED_PRND_TRANSMITTER_UNAUTHORIZED, "DRM_E_DEPRECATED_PRND_TRANSMITTER_UNAUTHORIZED"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_TX_SESSION_EXPIRED
++{DRM_E_DEPRECATED_PRND_TX_SESSION_EXPIRED, "DRM_E_DEPRECATED_PRND_TX_SESSION_EXPIRED"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_INCOMPLETE_PROXIMITY_DETECTION
++{DRM_E_DEPRECATED_PRND_INCOMPLETE_PROXIMITY_DETECTION, "DRM_E_DEPRECATED_PRND_INCOMPLETE_PROXIMITY_DETECTION"},
++#endif
++#ifdef DRM_E_DEPRECATED_PRND_INVALID_CERT_DIGEST
++{DRM_E_DEPRECATED_PRND_INVALID_CERT_DIGEST, "DRM_E_DEPRECATED_PRND_INVALID_CERT_DIGEST"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_NOT_INITIALIZED
++{DRM_E_DEPRECATED_OEMHAL_NOT_INITIALIZED, "DRM_E_DEPRECATED_OEMHAL_NOT_INITIALIZED"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_OUT_OF_KEY_REGISTERS
++{DRM_E_DEPRECATED_OEMHAL_OUT_OF_KEY_REGISTERS, "DRM_E_DEPRECATED_OEMHAL_OUT_OF_KEY_REGISTERS"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_KEYS_IN_USE
++{DRM_E_DEPRECATED_OEMHAL_KEYS_IN_USE, "DRM_E_DEPRECATED_OEMHAL_KEYS_IN_USE"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_NO_KEY
++{DRM_E_DEPRECATED_OEMHAL_NO_KEY, "DRM_E_DEPRECATED_OEMHAL_NO_KEY"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_KEY_TYPE
++{DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_KEY_TYPE, "DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_KEY_TYPE"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_KEY_WRAPPING_FORMAT
++{DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_KEY_WRAPPING_FORMAT, "DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_KEY_WRAPPING_FORMAT"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_KEY_LENGTH
++{DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_KEY_LENGTH, "DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_KEY_LENGTH"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_HASH_TYPE
++{DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_HASH_TYPE, "DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_HASH_TYPE"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_SIGNATURE_SCHEME
++{DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_SIGNATURE_SCHEME, "DRM_E_DEPRECATED_OEMHAL_UNSUPPORTED_SIGNATURE_SCHEME"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_BUFFER_TOO_LARGE
++{DRM_E_DEPRECATED_OEMHAL_BUFFER_TOO_LARGE, "DRM_E_DEPRECATED_OEMHAL_BUFFER_TOO_LARGE"},
++#endif
++#ifdef DRM_E_DEPRECATED_OEMHAL_SAMPLE_ENCRYPTION_MODE_NOT_PERMITTED
++{DRM_E_DEPRECATED_OEMHAL_SAMPLE_ENCRYPTION_MODE_NOT_PERMITTED, "DRM_E_DEPRECATED_OEMHAL_SAMPLE_ENCRYPTION_MODE_NOT_PERMITTED"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_PAT_PID_IS_NOT_ZERO
++{DRM_E_DEPRECATED_M2TS_PAT_PID_IS_NOT_ZERO, "DRM_E_DEPRECATED_M2TS_PAT_PID_IS_NOT_ZERO"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_PTS_NOT_EXIST
++{DRM_E_DEPRECATED_M2TS_PTS_NOT_EXIST, "DRM_E_DEPRECATED_M2TS_PTS_NOT_EXIST"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_PES_PACKET_LENGTH_NOT_SPECIFIED
++{DRM_E_DEPRECATED_M2TS_PES_PACKET_LENGTH_NOT_SPECIFIED, "DRM_E_DEPRECATED_M2TS_PES_PACKET_LENGTH_NOT_SPECIFIED"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_OUTPUT_BUFFER_FULL
++{DRM_E_DEPRECATED_M2TS_OUTPUT_BUFFER_FULL, "DRM_E_DEPRECATED_M2TS_OUTPUT_BUFFER_FULL"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_CONTEXT_NOT_INITIALIZED
++{DRM_E_DEPRECATED_M2TS_CONTEXT_NOT_INITIALIZED, "DRM_E_DEPRECATED_M2TS_CONTEXT_NOT_INITIALIZED"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_NEED_KEY_DATA
++{DRM_E_DEPRECATED_M2TS_NEED_KEY_DATA, "DRM_E_DEPRECATED_M2TS_NEED_KEY_DATA"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_DDPLUS_FORMAT_INVALID
++{DRM_E_DEPRECATED_M2TS_DDPLUS_FORMAT_INVALID, "DRM_E_DEPRECATED_M2TS_DDPLUS_FORMAT_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_NOT_UNIT_START_PACKET
++{DRM_E_DEPRECATED_M2TS_NOT_UNIT_START_PACKET, "DRM_E_DEPRECATED_M2TS_NOT_UNIT_START_PACKET"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_TOO_MANY_SUBSAMPLES
++{DRM_E_DEPRECATED_M2TS_TOO_MANY_SUBSAMPLES, "DRM_E_DEPRECATED_M2TS_TOO_MANY_SUBSAMPLES"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_TABLE_ID_INVALID
++{DRM_E_DEPRECATED_M2TS_TABLE_ID_INVALID, "DRM_E_DEPRECATED_M2TS_TABLE_ID_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_PACKET_SYNC_BYTE_INVALID
++{DRM_E_DEPRECATED_M2TS_PACKET_SYNC_BYTE_INVALID, "DRM_E_DEPRECATED_M2TS_PACKET_SYNC_BYTE_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_ADAPTATION_LENGTH_INVALID
++{DRM_E_DEPRECATED_M2TS_ADAPTATION_LENGTH_INVALID, "DRM_E_DEPRECATED_M2TS_ADAPTATION_LENGTH_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_PAT_HEADER_INVALID
++{DRM_E_DEPRECATED_M2TS_PAT_HEADER_INVALID, "DRM_E_DEPRECATED_M2TS_PAT_HEADER_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_PMT_HEADER_INVALID
++{DRM_E_DEPRECATED_M2TS_PMT_HEADER_INVALID, "DRM_E_DEPRECATED_M2TS_PMT_HEADER_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_PES_START_CODE_NOT_FOUND
++{DRM_E_DEPRECATED_M2TS_PES_START_CODE_NOT_FOUND, "DRM_E_DEPRECATED_M2TS_PES_START_CODE_NOT_FOUND"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_STREAM_OR_PACKET_TYPE_CHANGED
++{DRM_E_DEPRECATED_M2TS_STREAM_OR_PACKET_TYPE_CHANGED, "DRM_E_DEPRECATED_M2TS_STREAM_OR_PACKET_TYPE_CHANGED"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_INTERNAL_ERROR
++{DRM_E_DEPRECATED_M2TS_INTERNAL_ERROR, "DRM_E_DEPRECATED_M2TS_INTERNAL_ERROR"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_ADTS_FORMAT_INVALID
++{DRM_E_DEPRECATED_M2TS_ADTS_FORMAT_INVALID, "DRM_E_DEPRECATED_M2TS_ADTS_FORMAT_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_MPEGA_FORMAT_INVALID
++{DRM_E_DEPRECATED_M2TS_MPEGA_FORMAT_INVALID, "DRM_E_DEPRECATED_M2TS_MPEGA_FORMAT_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_CA_DESCRIPTOR_LENGTH_INVALID
++{DRM_E_DEPRECATED_M2TS_CA_DESCRIPTOR_LENGTH_INVALID, "DRM_E_DEPRECATED_M2TS_CA_DESCRIPTOR_LENGTH_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_CRC_FIELD_INVALID
++{DRM_E_DEPRECATED_M2TS_CRC_FIELD_INVALID, "DRM_E_DEPRECATED_M2TS_CRC_FIELD_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_INCOMPLETE_SECTION_HEADER
++{DRM_E_DEPRECATED_M2TS_INCOMPLETE_SECTION_HEADER, "DRM_E_DEPRECATED_M2TS_INCOMPLETE_SECTION_HEADER"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_INVALID_UNALIGNED_DATA
++{DRM_E_DEPRECATED_M2TS_INVALID_UNALIGNED_DATA, "DRM_E_DEPRECATED_M2TS_INVALID_UNALIGNED_DATA"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_GET_ENCRYPTED_DATA_FIRST
++{DRM_E_DEPRECATED_M2TS_GET_ENCRYPTED_DATA_FIRST, "DRM_E_DEPRECATED_M2TS_GET_ENCRYPTED_DATA_FIRST"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_CANNOT_CHANGE_PARAMETER
++{DRM_E_DEPRECATED_M2TS_CANNOT_CHANGE_PARAMETER, "DRM_E_DEPRECATED_M2TS_CANNOT_CHANGE_PARAMETER"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_UNKNOWN_PACKET
++{DRM_E_DEPRECATED_M2TS_UNKNOWN_PACKET, "DRM_E_DEPRECATED_M2TS_UNKNOWN_PACKET"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_DROP_PACKET
++{DRM_E_DEPRECATED_M2TS_DROP_PACKET, "DRM_E_DEPRECATED_M2TS_DROP_PACKET"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_DROP_PES
++{DRM_E_DEPRECATED_M2TS_DROP_PES, "DRM_E_DEPRECATED_M2TS_DROP_PES"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_INCOMPLETE_PES
++{DRM_E_DEPRECATED_M2TS_INCOMPLETE_PES, "DRM_E_DEPRECATED_M2TS_INCOMPLETE_PES"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_WAITED_TOO_LONG
++{DRM_E_DEPRECATED_M2TS_WAITED_TOO_LONG, "DRM_E_DEPRECATED_M2TS_WAITED_TOO_LONG"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_SECTION_LENGTH_INVALID
++{DRM_E_DEPRECATED_M2TS_SECTION_LENGTH_INVALID, "DRM_E_DEPRECATED_M2TS_SECTION_LENGTH_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_PROGRAM_INFO_LENGTH_INVALID
++{DRM_E_DEPRECATED_M2TS_PROGRAM_INFO_LENGTH_INVALID, "DRM_E_DEPRECATED_M2TS_PROGRAM_INFO_LENGTH_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_PES_HEADER_INVALID
++{DRM_E_DEPRECATED_M2TS_PES_HEADER_INVALID, "DRM_E_DEPRECATED_M2TS_PES_HEADER_INVALID"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_ECM_PAYLOAD_OVER_LIMIT
++{DRM_E_DEPRECATED_M2TS_ECM_PAYLOAD_OVER_LIMIT, "DRM_E_DEPRECATED_M2TS_ECM_PAYLOAD_OVER_LIMIT"},
++#endif
++#ifdef DRM_E_DEPRECATED_M2TS_SET_CA_PID_FAILED
++{DRM_E_DEPRECATED_M2TS_SET_CA_PID_FAILED, "DRM_E_DEPRECATED_M2TS_SET_CA_PID_FAILED"},
++#endif
++#ifdef DRM_E_DEPRECATED_LICGEN_PERSISTENT_REMOTE_LICENSE
++{DRM_E_DEPRECATED_LICGEN_PERSISTENT_REMOTE_LICENSE, "DRM_E_DEPRECATED_LICGEN_PERSISTENT_REMOTE_LICENSE"},
++#endif
++#ifdef DRM_E_DEPRECATED_LICGEN_EXPIRE_AFTER_FIRST_PLAY_REMOTE_LICENSE
++{DRM_E_DEPRECATED_LICGEN_EXPIRE_AFTER_FIRST_PLAY_REMOTE_LICENSE, "DRM_E_DEPRECATED_LICGEN_EXPIRE_AFTER_FIRST_PLAY_REMOTE_LICENSE"},
++#endif
++#ifdef DRM_E_DEPRECATED_LICGEN_LOCAL_LICENSE_WITH_REMOTE_CERTIFICATE
++{DRM_E_DEPRECATED_LICGEN_LOCAL_LICENSE_WITH_REMOTE_CERTIFICATE, "DRM_E_DEPRECATED_LICGEN_LOCAL_LICENSE_WITH_REMOTE_CERTIFICATE"},
++#endif
++#ifdef DRM_E_DEPRECATED_LICGEN_PLAY_ENABLER_REMOTE_LICENSE
++{DRM_E_DEPRECATED_LICGEN_PLAY_ENABLER_REMOTE_LICENSE, "DRM_E_DEPRECATED_LICGEN_PLAY_ENABLER_REMOTE_LICENSE"}
++#endif
+-- 
+2.34.1
+
