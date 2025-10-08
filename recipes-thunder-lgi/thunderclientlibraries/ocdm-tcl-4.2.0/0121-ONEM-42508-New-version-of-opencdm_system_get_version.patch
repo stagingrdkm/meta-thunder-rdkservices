@@ -1,0 +1,47 @@
+aiswarya-krishnan-infosys <aikrishnan.ext@libertyglobal.com>
+[ONEM-42508] New version of opencdm_system_get_version() function
+
+diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
+index 7da72fe..a325f4d 100644
+--- a/Source/ocdm/open_cdm.h
++++ b/Source/ocdm/open_cdm.h
+@@ -356,6 +356,9 @@ EXTERNAL OpenCDMError opencdm_system_get_metadata(struct OpenCDMSystem* system,
+ EXTERNAL OpenCDMError opencdm_system_get_version(struct OpenCDMSystem* system,
+     char versionStr[]);
+ 
++EXTERNAL OpenCDMError opencdm_system_get_version_v2(const char keySystem[],
++    char versionStr[]);
++
+ /**
+  * \brief Returns time according to DRM system.
+  * Some systems (e.g. PlayReady) keep their own clocks, for example to prevent
+diff --git a/Source/ocdm/open_cdm_ext.cpp b/Source/ocdm/open_cdm_ext.cpp
+index f6f6970..9e24d0d 100644
+--- a/Source/ocdm/open_cdm_ext.cpp
++++ b/Source/ocdm/open_cdm_ext.cpp
+@@ -94,10 +94,23 @@ OpenCDMError opencdm_system_get_version(struct OpenCDMSystem* system,
+ {
+     OpenCDMError result(OpenCDMError::ERROR_INVALID_ARG);
+     ASSERT(system != nullptr);
++
++    if (system != nullptr) {
++        const std::string& keySystem = system->keySystem();
++        result = opencdm_system_get_version_v2(keySystem.c_str(), versionStr);
++    }
++
++    return result;
++}
++
++OpenCDMError opencdm_system_get_version_v2(const char keySystem[], char versionStr[])
++{
++    OpenCDMError result(OpenCDMError::ERROR_INVALID_ARG);
++    ASSERT(keySystem != nullptr);
+     ASSERT(versionStr != nullptr);
+ 
+-    if ((system != nullptr) && (versionStr != nullptr)) {
+-        std::string versionStdStr = OpenCDMAccessor::Instance()->GetVersionExt(system->keySystem());
++    if ((keySystem != nullptr) && (versionStr != nullptr)) {
++        std::string versionStdStr = OpenCDMAccessor::Instance()->GetVersionExt(keySystem);
+         assert(versionStdStr.length() < 64);
+         strcpy(versionStr, versionStdStr.c_str());
+         result = OpenCDMError::ERROR_NONE;
