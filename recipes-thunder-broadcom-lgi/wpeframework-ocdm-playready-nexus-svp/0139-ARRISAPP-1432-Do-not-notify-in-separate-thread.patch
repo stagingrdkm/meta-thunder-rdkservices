@@ -1,0 +1,156 @@
+From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+
+ARRISAPP-1432 Notification sent out to OCDM client is not using separate
+thread any more. Use of separate thread led to seg faults since there
+was no synchronisation between thread resetting callback function and
+thread using it for notification.
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 5d169e2..fcdbabe 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -106,8 +106,7 @@ void OutputProtection::setMaxResDecode(uint32_t width, uint32_t height)
+ }
+ namespace CDMi {
+ 
+-    MediaKeySession::DecryptContext::DecryptContext(IMediaKeySessionCallback* mcallback)
+-    : callback(mcallback)
++    MediaKeySession::DecryptContext::DecryptContext()
+     {
+         ZEROMEM(&drmDecryptContext, sizeof(DRM_DECRYPT_CONTEXT));
+     }
+@@ -382,7 +381,7 @@ MediaKeySession::MediaKeySession(
+         , m_keySystem(keySystem)
+         , m_licenseType(licenseType) {
+ 
+-    LOGGER(LINFO_, "Construction of MediaKeySession, LicenseType: %d, Build: %s", licenseType, __TIMESTAMP__ );
++    LOGGER(LINFO_, "Construction of MediaKeySession (%s), LicenseType: %d, Build: %s", keySystem.c_str(), licenseType, __TIMESTAMP__ );
+ 
+     DRM_RESULT dr = DRM_SUCCESS;
+     DRM_ID oSessionID;
+@@ -610,7 +609,7 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+     dr = ProcessLicenseResponse(f_pbKeyMessageResponse, f_cbKeyMessageResponse, oLicenseResponse);
+     ChkDR(dr);
+ 
+-    newDecryptContext = std::make_shared<DecryptContext>(m_piCallback);
++    newDecryptContext = std::make_shared<DecryptContext>();
+     LOGGER(LINFO_, "Binding License...");
+     while ((dr = Drm_Reader_Bind(m_poAppContext,
+                         g_rgpdstrRights,
+diff --git a/MediaSession.h b/MediaSession.h
+index 3ec0d87..bc8e401 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -135,8 +135,7 @@ public:
+         uint64_t expirationBeginDate{};
+         uint64_t expirationEndDate{};
+         bool isRealTimeExpiration{};
+-        IMediaKeySessionCallback* callback;
+-        DecryptContext(IMediaKeySessionCallback* mcallback);
++        DecryptContext();
+     };
+     typedef std::map<std::vector<uint8_t>, std::shared_ptr<DecryptContext> > DecryptContextMap;
+ 
+@@ -228,6 +227,7 @@ private:
+     void PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize, bool flush);
+     DRM_RESULT ProcessLicenseResponse(const uint8_t* licenseData, uint32_t licenseDataSize, DRM_LICENSE_RESPONSE& oLicenseResponse);
+     void UpdateLicenseProps();
++    void UpdateSession(const DecryptContext* decryptContext);
+ 
+     // IMediaSessionMetrics overrides
+     // ------------------------------------------------------------------------------------------
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 12ee69d..06eb362 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -64,63 +64,25 @@ extern WPEFramework::Core::CriticalSection drmAppContextMutex_;
+ namespace CDMi {
+ const DRM_CONST_STRING  *g_rgpdstrRightsExt[1] = {&g_dstrWMDRM_RIGHT_PLAYBACK};
+ 
+-struct CallbackInfo
++void MediaKeySession::UpdateSession(const DecryptContext* decryptContext)
+ {
+-    IMediaKeySessionCallback * _callback;
+-    uint16_t _compressedVideo;
+-    uint16_t _uncompressedVideo;
+-    uint16_t _analogVideo;
+-    uint16_t _compressedAudio;
+-    uint16_t _uncompressedAudio;
+-    uint32_t _maxDecodeWidth;
+-    uint32_t _maxDecodeHeight;
+-};
+-
+-static void * PlayLevelUpdateCallback(void * data)
+-{
+-    CallbackInfo * callbackInfo = static_cast<CallbackInfo *>(data);
+-
+-    // When a detached thread terminates, its resources are automatically released back to the system 
+-    // (i.e. without the need for another thread to join with it).
+-    pthread_detach(pthread_self());
+-
+-    std::stringstream keyMessage;
+-    keyMessage << "{";
+-    keyMessage << "\"compressed-video\": " << callbackInfo->_compressedVideo << ",";
+-    keyMessage << "\"uncompressed-video\": " << callbackInfo->_uncompressedVideo << ",";
+-    keyMessage << "\"analog-video\": " << callbackInfo->_analogVideo << ",";
+-    keyMessage << "\"compressed-audio\": " << callbackInfo->_compressedAudio << ",";
+-    keyMessage << "\"uncompressed-audio\": " << callbackInfo->_uncompressedAudio << ",";
+-    keyMessage << "\"max-decode-width\": " << callbackInfo->_maxDecodeWidth << ",";
+-    keyMessage << "\"max-decode-height\": " << callbackInfo->_maxDecodeHeight;
+-    keyMessage << "}";
+-
+-    std::string keyMessageStr = keyMessage.str();
+-    const uint8_t * messageBytes = reinterpret_cast<const uint8_t *>(keyMessageStr.c_str());
+-
+-    callbackInfo->_callback->OnKeyMessage(messageBytes, keyMessageStr.length() + 1, "properties");
+-    delete callbackInfo;
+-
+-    return nullptr;
+-}
+-
+-void UpdateSession(const MediaKeySession::DecryptContext* decryptContext)
+-{
+-    if (decryptContext->callback != nullptr) {
+-        CallbackInfo * callbackInfo = new CallbackInfo;
+-        callbackInfo->_callback = const_cast<IMediaKeySessionCallback *>(decryptContext->callback);
+-        callbackInfo->_compressedVideo = decryptContext->outputProtection.compressedDigitalVideoLevel;
+-        callbackInfo->_uncompressedVideo = decryptContext->outputProtection.uncompressedDigitalVideoLevel;
+-        callbackInfo->_analogVideo = decryptContext->outputProtection.analogVideoLevel;
+-        callbackInfo->_compressedAudio = decryptContext->outputProtection.compressedDigitalAudioLevel;
+-        callbackInfo->_uncompressedAudio = decryptContext->outputProtection.uncompressedDigitalAudioLevel;
+-        callbackInfo->_maxDecodeWidth = decryptContext->outputProtection.maxResDecodeWidth;
+-        callbackInfo->_maxDecodeHeight = decryptContext->outputProtection.maxResDecodeHeight;
+-
+-        // Run on a new thread, so we don't go too deep in the IPC callstack.
+-        pthread_t threadId;
+-        pthread_create(&threadId, nullptr, PlayLevelUpdateCallback, callbackInfo);
+-    } 
++    if (m_piCallback) {
++        std::stringstream keyMessage;
++        keyMessage << "{";
++        keyMessage << "\"compressed-video\": " << decryptContext->outputProtection.compressedDigitalVideoLevel << ",";
++        keyMessage << "\"uncompressed-video\": " << decryptContext->outputProtection.uncompressedDigitalVideoLevel << ",";
++        keyMessage << "\"analog-video\": " << decryptContext->outputProtection.analogVideoLevel << ",";
++        keyMessage << "\"compressed-audio\": " << decryptContext->outputProtection.compressedDigitalAudioLevel << ",";
++        keyMessage << "\"uncompressed-audio\": " << decryptContext->outputProtection.uncompressedDigitalAudioLevel << ",";
++        keyMessage << "\"max-decode-width\": " << decryptContext->outputProtection.maxResDecodeWidth << ",";
++        keyMessage << "\"max-decode-height\": " << decryptContext->outputProtection.maxResDecodeHeight;
++        keyMessage << "}";
++
++        std::string keyMessageStr = keyMessage.str();
++        const uint8_t * messageBytes = reinterpret_cast<const uint8_t *>(keyMessageStr.c_str());
++
++        m_piCallback->OnKeyMessage(messageBytes, keyMessageStr.length() + 1, "properties");
++    }
+ }
+ 
+ void PrintExtendedRestriction(const DRM_VOID *callbackData)
+@@ -425,7 +387,7 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+             return result;
+         }
+ 
+-        std::shared_ptr<DecryptContext> newDecryptContext = std::make_shared<DecryptContext>(m_piCallback);
++        std::shared_ptr<DecryptContext> newDecryptContext = std::make_shared<DecryptContext>();
+         PolicyCallbackUserData callbackUserData;
+         callbackUserData.mediaSession = this;
+         callbackUserData.decryptContext = newDecryptContext.get();
