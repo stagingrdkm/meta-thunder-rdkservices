@@ -100,6 +100,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://ARRISEOS-47853-setup-of-group-read-permissions.patch \
             file://ARRISEOS-48078-Check-IWorkerPool-Instance-to-prevent-crash.patch \
             file://0165-ONEM-41412-thunder-leaking-sockets.patch \
+            file://0166-ONEM-43007-Fix-double-free-AWCProxyContainer-destructor.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:

@@ -1,0 +1,131 @@
+From 4815afd7673a7d5c59d35c65f83cfd3bbd75111c Mon Sep 17 00:00:00 2001
+From: krishnan-nair-infosys <knair.ext@libertyglobal.com>
+Date: Mon, 17 Nov 2025 18:42:02 +0100
+Subject: [PATCH] Spike of crashes from WPEFramework
+
+---
+ .../AWCImplementation/AWCContainerAdministrator.cpp   |  3 ++-
+ .../AWCImplementation/AWCContainerAdministrator.h     |  3 ++-
+ .../AWCImplementation/AWCProxyContainer.cpp           | 11 ++++++++---
+ .../AWCImplementation/AWCProxyContainer.h             |  5 +++--
+ .../implementations/AWCImplementation/dbus/Client.cpp |  7 +++++--
+ 5 files changed, 20 insertions(+), 9 deletions(-)
+
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWCContainerAdministrator.cpp
+===================================================================
+--- git.orig/Source/processcontainers/implementations/AWCImplementation/AWCContainerAdministrator.cpp
++++ git/Source/processcontainers/implementations/AWCImplementation/AWCContainerAdministrator.cpp
+@@ -45,6 +45,7 @@ PluginConfig::PluginConfig(const std::st
+ 
+ AWCContainerAdministrator::AWCContainerAdministrator()
+     : BaseContainerAdministrator()
++    , dbusClient_(std::make_shared<dbus::Client>())
+ {
+     TRACE_L1("%p", this);
+     awcClient_ = awc::AWCClient::getInstance();
+@@ -86,7 +87,7 @@ IContainer* AWCContainerAdministrator::C
+ 
+     if(!container && cfg.useProxy)
+     {
+-        container = new AWCProxyContainer(name, cfg, &dbusClient_);
++        container = new AWCProxyContainer(name, cfg, dbusClient_);
+     }
+     else if(!container)
+     {
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWCContainerAdministrator.h
+===================================================================
+--- git.orig/Source/processcontainers/implementations/AWCImplementation/AWCContainerAdministrator.h
++++ git/Source/processcontainers/implementations/AWCImplementation/AWCContainerAdministrator.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <memory>
+ #include <mutex>
+ #include <vector>
+ 
+@@ -33,7 +34,7 @@ class AWCContainerAdministrator:
+ private:
+     awc::AWCClient * awcClient_;
+     std::shared_ptr<AWCListener> awcClientListener_;
+-    dbus::Client dbusClient_;
++    std::shared_ptr<dbus::Client> dbusClient_;
+     AWCContainerAdministrator();
+ public:
+     AWCContainerAdministrator(const AWCContainerAdministrator&) = delete;
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
+===================================================================
+--- git.orig/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
++++ git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
+@@ -72,7 +72,7 @@ bool AWCProxyContainer::IsStopInProgress
+ }
+ 
+ AWCProxyContainer::AWCProxyContainer(
+-    const string& name, const PluginConfig &cfg, dbus::Client *client):
++    const string& name, const PluginConfig &cfg, std::shared_ptr<dbus::Client> client):
+         AWCContainerBase(name),
+         startTimeout_{cfg.startTimeout},
+         stopTimeout_{cfg.stopTimeout},
+@@ -90,8 +90,13 @@ AWCProxyContainer::~AWCProxyContainer()
+     TRACE_L1("id=%s(%p)", Id().c_str(), this);
+ 
+     if(IsRunning()) Stop(2000);
+-    CHECK(client_);
+-    client_->unbind(dbusInterface_);
++
++    // Safe unbind - shared_ptr ensures client remains valid during unbind
++    if(client_) {
++        client_->unbind(dbusInterface_);
++        TRACE_L1("Unbinding dbusInterface_");
++    }
++
+     static_cast<AWCContainerAdministrator&>(
+         AWCContainerAdministrator::Instance()).RemoveContainer(this);
+ }
+@@ -147,7 +152,7 @@ bool AWCProxyContainer::Start(const stri
+ 
+     const auto now = Clock::now();
+ 
+-    if(!dbusInterface_->startContainer(client_, command, cmd, startTimeout_))
++    if(!dbusInterface_->startContainer(client_.get(), command, cmd, startTimeout_))
+     {
+         TRACE_L1("failed to start id=%s(%p)", Id().c_str(), this);
+         return false;
+@@ -189,7 +194,7 @@ bool AWCProxyContainer::Stop(const uint3
+     }
+ 
+     SetStopInProgress(true);
+-    bool res = dbusInterface_->stopContainer(client_, stopTimeout_);
++    bool res = dbusInterface_->stopContainer(client_.get(), stopTimeout_);
+     SetStopInProgress(false);
+ 
+     if (!res)
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h
+===================================================================
+--- git.orig/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h
++++ git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include <condition_variable>
++#include <memory>
+ #include <mutex>
+ #include <thread>
+ 
+@@ -30,7 +31,7 @@ class AWCProxyContainer: public AWCConta
+ 
+     friend class AWCContainerAdministrator;
+ 
+-    AWCProxyContainer(const string &name, const PluginConfig &, dbus::Client *);
++    AWCProxyContainer(const string &name, const PluginConfig &, std::shared_ptr<dbus::Client>);
+ 
+     bool waitForStateChange(Lock &, AppState, milliseconds);
+     void SetStopInProgress(bool);
+@@ -53,7 +54,7 @@ protected:
+     // those values can be overwritten by config
+     const milliseconds startTimeout_;
+     const milliseconds stopTimeout_;
+-    dbus::Client *const client_;
++    std::shared_ptr<dbus::Client> client_;
+     bool stopInProgress_{false};
+ };
+ 
