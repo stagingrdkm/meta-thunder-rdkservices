@@ -1,0 +1,24 @@
+From ea9f8fdc22b1d4274082f7811d668cb66bf8cc9c Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Wed, 26 Nov 2025 10:25:47 +0530
+Subject: [PATCH] ONEM-42848-Update OCDM license bind callback
+
+---
+ Source/ocdm/open_cdm.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Source/ocdm/open_cdm.h b/Source/ocdm/open_cdm.h
+index a325f4d..7761cb5 100644
+--- a/Source/ocdm/open_cdm.h
++++ b/Source/ocdm/open_cdm.h
+@@ -224,6 +224,7 @@ typedef struct {
+     uint64_t expirationBeginDate;
+     uint64_t expirationEndDate;
+     bool isRealTimeExpiration;
++    bool isHdcpTypeRestricted;
+     uint16_t uncompressedContentOplLevel;
+ } BindCallbackData;
+ 
+-- 
+2.34.1
+

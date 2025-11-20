@@ -28,6 +28,7 @@ SRC_URI += "file://0119-ARRISEOS-48273-Decryption-of-small-chunks-corrected.patc
 SRC_URI += "file://0120-ONEM-42412-Implement-opencdm_gstreamer_session_decrypt_buffer.patch"
 SRC_URI += "file://0121-ONEM-42508-New-version-of-opencdm_system_get_version.patch"
 SRC_URI += "file://0122-ARRISEOS-48136-WPE-Process-crash-ocdm-stop-fixed.patch"
+SRC_URI += "file://0123-ONEM-42848-Update-OCDM-license-bind-callback.patch"
 
 EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
 

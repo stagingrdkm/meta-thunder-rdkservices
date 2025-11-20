@@ -1,0 +1,75 @@
+From 98b14bbb8dbc33dbb40d1e8e30461e4956390c3e Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Wed, 26 Nov 2025 10:22:53 +0530
+Subject: [PATCH] ONEM-42848-Update OCDM license bind callback
+
+Change-Id: Ia026bb21a7ead2cdec1f1b1e4d0377fbeaaba82a
+---
+ MediaSession.cpp    | 6 ++++++
+ MediaSession.h      | 2 ++
+ MediaSessionExt.cpp | 2 ++
+ 3 files changed, 10 insertions(+)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index fcdbabe..c7eaef6 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -88,6 +88,7 @@ OutputProtection::OutputProtection()
+     , uncompressedDigitalAudioLevel(0)
+     , maxResDecodeWidth(0)
+     , maxResDecodeHeight(0)
++    , isHdcpTypeRestricted(false)
+ {}
+ 
+ void OutputProtection::setOutputLevels(const DRM_MINIMUM_OUTPUT_PROTECTION_LEVELS& opLevels)
+@@ -104,6 +105,11 @@ void OutputProtection::setMaxResDecode(uint32_t width, uint32_t height)
+     maxResDecodeWidth  = width;
+     maxResDecodeHeight = height;
+ }
++
++void OutputProtection::setHdcpTypeRestricted(bool isHdcpRestricted)
++{
++    isHdcpTypeRestricted = isHdcpRestricted;
++}
+ namespace CDMi {
+ 
+     MediaKeySession::DecryptContext::DecryptContext()
+diff --git a/MediaSession.h b/MediaSession.h
+index bc8e401..cb24e56 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -98,9 +98,11 @@ struct OutputProtection {
+     uint16_t uncompressedDigitalAudioLevel; //!< Uncompressed digital audio output protection level.
+     uint32_t maxResDecodeWidth;             //!< Max res decode width in pixels.
+     uint32_t maxResDecodeHeight;            //!< Max res decode height in pixels.
++    bool isHdcpTypeRestricted;              //!< HDCP type restriction value.
+     OutputProtection();
+     void setOutputLevels(const DRM_MINIMUM_OUTPUT_PROTECTION_LEVELS& mopLevels);
+     void setMaxResDecode(uint32_t width, uint32_t height);
++    void setHdcpTypeRestricted(bool isHdcpRestricted);
+ };
+ namespace CDMi {
+ 
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 1ca1945..ea1d560 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -193,6 +193,7 @@ DRM_RESULT MediaKeySession::PolicyCallback(
+ #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+                         hdcpType  = bswap_32(hdcpType);
+ #endif
++                        userData->decryptContext->outputProtection.setHdcpTypeRestricted(static_cast<bool>(hdcpType));
+                         LOGGER_NO_THIS(LINFO_, "HDCP Type restriction: %d", hdcpType);
+                     }
+                 }
+@@ -408,6 +409,7 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+                     newDecryptContext->expirationBeginDate,
+                     newDecryptContext->expirationEndDate,
+                     newDecryptContext->isRealTimeExpiration,
++                    newDecryptContext->outputProtection.isHdcpTypeRestricted,
+                     std::max(newDecryptContext->outputProtection.uncompressedDigitalVideoLevel, newDecryptContext->outputProtection.uncompressedDigitalAudioLevel)};
+             m_piCallback->OnBindLicense(PRD30_BIND_CALLBACK, serializer.writer.data(), serializer.writer.size());
+         }
+-- 
+2.34.1
+

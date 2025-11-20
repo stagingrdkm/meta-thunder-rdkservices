@@ -1,0 +1,50 @@
+From 0692d90d458409448eb703f96cea75c142cab22b Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Wed, 26 Nov 2025 10:19:39 +0530
+Subject: [PATCH] ONEM-42848-Update OCDM license bind callback
+
+---
+ interfaces/DRMCallbackData.h      | 1 +
+ interfaces/DRMCallbackSerialize.h | 6 +++---
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/interfaces/DRMCallbackData.h b/interfaces/DRMCallbackData.h
+index 5585fc4..8767141 100644
+--- a/interfaces/DRMCallbackData.h
++++ b/interfaces/DRMCallbackData.h
+@@ -14,6 +14,7 @@ struct PRD30_BIND_CALLBACK_DATA {
+     uint64_t expirationBeginDate;
+     uint64_t expirationEndDate;
+     bool isRealTimeExpiration;
++    bool isHdcpTypeRestricted;
+     uint16_t uncompressedContentOplLevel;
+ };
+ 
+diff --git a/interfaces/DRMCallbackSerialize.h b/interfaces/DRMCallbackSerialize.h
+index 8e2c75a..b3512dc 100644
+--- a/interfaces/DRMCallbackSerialize.h
++++ b/interfaces/DRMCallbackSerialize.h
+@@ -85,9 +85,9 @@ namespace CDMi {
+     {
+         BufferWriter<sizeof(PRD30_BIND_CALLBACK_DATA)> writer;
+ 
+-        PRD30_BIND_CALLBACK_DATA_Serializer(const uint8_t *kid, const uint8_t *lid, uint64_t expirationBeginDate, uint64_t expirationEndDate, bool isRealTimeExpiration, uint16_t uncompressedContentOplLevel)
++        PRD30_BIND_CALLBACK_DATA_Serializer(const uint8_t *kid, const uint8_t *lid, uint64_t expirationBeginDate, uint64_t expirationEndDate, bool isRealTimeExpiration, bool isHdcpTypeRestricted, uint16_t uncompressedContentOplLevel)
+         {
+-            serializeArgs(writer, std::make_pair(kid, 16), std::make_pair(lid, 16), expirationBeginDate, expirationEndDate, isRealTimeExpiration, uncompressedContentOplLevel);
++            serializeArgs(writer, std::make_pair(kid, 16), std::make_pair(lid, 16), expirationBeginDate, expirationEndDate, isRealTimeExpiration, isHdcpTypeRestricted, uncompressedContentOplLevel);
+         }
+     };
+ 
+@@ -98,7 +98,7 @@ namespace CDMi {
+         PRD30_BIND_CALLBACK_DATA_Deserializer(const uint8_t *data, size_t sz)
+         {
+             BufferReader reader {data, sz};
+-            deserializeArgs(reader, std::make_pair(obj.kid, 16), std::make_pair(obj.lid, 16), &obj.expirationBeginDate, &obj.expirationEndDate, &obj.isRealTimeExpiration, &obj.uncompressedContentOplLevel);
++            deserializeArgs(reader, std::make_pair(obj.kid, 16), std::make_pair(obj.lid, 16), &obj.expirationBeginDate, &obj.expirationEndDate, &obj.isRealTimeExpiration, &obj.isHdcpTypeRestricted, &obj.uncompressedContentOplLevel);
+         }
+     };
+ }
+-- 
+2.34.1
+
