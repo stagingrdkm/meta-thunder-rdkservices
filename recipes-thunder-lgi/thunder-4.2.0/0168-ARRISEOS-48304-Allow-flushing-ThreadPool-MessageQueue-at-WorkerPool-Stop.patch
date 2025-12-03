@@ -1,0 +1,67 @@
+From 47fd7416da4f4ffaef8f35386e7d2f5e176ecbba Mon Sep 17 00:00:00 2001
+From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+Date: Wed, 3 Dec 2025 15:59:41 +0000
+Subject: [PATCH] ARRISEOS-48304 Allow flushing ThreadPool MessageQueue at WorkerPool Stop
+
+In case of OCDM stop it was observed that late Messages where handled after
+some resources where already freed.
+
+---
+ Source/core/ThreadPool.h | 5 ++++-
+ Source/core/WorkerPool.h | 5 +++--
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/Source/core/ThreadPool.h b/Source/core/ThreadPool.h
+index 39f3604d..02cfad10 100644
+--- a/Source/core/ThreadPool.h
++++ b/Source/core/ThreadPool.h
+@@ -653,7 +653,7 @@ POP_WARNING()
+                 index++;
+             }
+         }
+-        void Stop()
++        void Stop(bool withFlush = false)
+         {
+             _queue.Disable();
+             std::list<Executor>::iterator index = _units.begin();
+@@ -661,6 +661,9 @@ POP_WARNING()
+                 index->Stop();
+                 index++;
+             }
++            if (withFlush) {
++                _queue.Flush();
++            }
+         }
+ 
+         #ifdef __CORE_WARNING_REPORTING__
+diff --git a/Source/core/WorkerPool.h b/Source/core/WorkerPool.h
+index 34191da3..705b1772 100644
+--- a/Source/core/WorkerPool.h
++++ b/Source/core/WorkerPool.h
+@@ -112,6 +112,7 @@ namespace Core {
+         virtual uint32_t Revoke(const Core::ProxyType<IDispatch>& job, const uint32_t waitTime = Core::infinite) = 0;
+         virtual void Join() = 0;
+         virtual const Metadata& Snapshot() const = 0;
++        virtual void Stop(bool withFlush = false) = 0;
+     };
+ 
+     class EXTERNAL WorkerPool : public IWorkerPool {
+@@ -425,13 +426,13 @@ POP_WARNING()
+             _dispatchedJobMonitor.Start();
+             #endif
+         }
+-        void Stop()
++        void Stop(bool withFlush = false) override
+         {
+             #ifdef __CORE_WARNING_REPORTING__
+             _dispatchedJobMonitor.Stop();
+             _threadPool.ResetDispatchedJobMonitor();
+             #endif
+-            _threadPool.Stop();
++            _threadPool.Stop(withFlush);
+         }
+ 
+     private:
+-- 
+2.30.0
+
