@@ -101,6 +101,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://ARRISEOS-48078-Check-IWorkerPool-Instance-to-prevent-crash.patch \
             file://0165-ONEM-41412-thunder-leaking-sockets.patch \
             file://0166-ONEM-43007-Fix-double-free-AWCProxyContainer-destructor.patch \
+            file://0167-ARRISAPP-1462-Thunder-do-not-resubmit-cleanup-task.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:
