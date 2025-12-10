@@ -1,0 +1,56 @@
+From 365d2f5fbcd58691e319735aaed0f79f6334ce9f Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Wed, 10 Dec 2025 16:21:33 +0100
+Subject: [PATCH] ARRISAPP-1462 Thunder: do not resubmit cleanup task
+
+With _connectionCheckTimer set to 0 ('idletime' config setting)
+when TriggerCleanup is called quickly, eg. because some
+client disconnected & more than 1 channel has been closed,
+it might happen that the 'cleanup task' (ChannelMap::_job) is
+being added again before it had a chance to start execution,
+and before it was removed from ThreadPool queue.
+This results in the same object being added another time to
+ThreadPool _queue, which results in ASSERT like:
+
+wpeframework.sh[3410]: ===== $$ [2]: ASSERT [/usr/src/debug/lib32-thunder/4.2.0-r0/git/Source/core/../core/ThreadPool.h:615] (_queue.HasEntry(job) == false)
+
+This fix makes sure that the task is not already in SUBMITTED
+state before adding it again.
+---
+ Source/WPEFramework/PluginServer.h | 5 ++++-
+ Source/core/ThreadPool.h           | 3 +++
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
+index a2092350..7dde69ce 100644
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -3458,7 +3458,10 @@ POP_WARNING()
+             }
+             void TriggerCleanup()
+             {
+-                if (_connectionCheckTimer == 0) {
++                // do not try to submit the task if it's already submitted to threadpool but haven't started executing
++                // otherwise we'll end up adding the same _job object to task queue twice, which results in
++                // ASSERT in ThreadPool (_queue.HasEntry(job) == false)
++                if (_connectionCheckTimer == 0 && !_job.IsSubmitted()) {
+                     Core::ProxyType<Core::IDispatch> job(_job.Reschedule(Core::Time::Now()));
+                     if (job.IsValid() == true) {
+                         _parent.Submit(job);
+diff --git a/Source/core/ThreadPool.h b/Source/core/ThreadPool.h
+index 39f3604d..1d496ff7 100644
+--- a/Source/core/ThreadPool.h
++++ b/Source/core/ThreadPool.h
+@@ -226,6 +226,9 @@ POP_WARNING()
+             bool IsIdle() const {
+                 return (_state == IDLE);
+             }
++            bool IsSubmitted() const {
++                return (_state == SUBMITTED);
++            }
+             ProxyType<IDispatch> Idle() {
+ 
+                 state idle = IDLE;
+-- 
+2.43.0
+
