@@ -16,8 +16,8 @@ index 49cffcd..a191f46 100644
  #include "gst_svp_meta.h"
  #endif
  
-+#define MAX_DECRYPT_PRODUCER_BUFFER_RETRY 5
-+#define REQUEST_PRODUCE_TIMEOUT 5000
++#define MAX_DECRYPT_PRODUCER_BUFFER_RETRY 2
++#define REQUEST_PRODUCE_TIMEOUT 3000
 +
  using namespace WPEFramework;
  
