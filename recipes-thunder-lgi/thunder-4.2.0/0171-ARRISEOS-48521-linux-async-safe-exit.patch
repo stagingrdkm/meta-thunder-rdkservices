@@ -1,0 +1,217 @@
+From d935a80a3be29ed173439bf4cea8647fdeb274c1 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Tue, 27 Jan 2026 11:05:16 +0100
+Subject: [PATCH] linux async-safe exit
+
+Thunder's ExitDaemonHandler was creating a new thread from
+SIGTERM handler, which is undefined behaviour.
+With this change, ExitHandler is created at startup by the
+main thread, starts and blocks on a semaphore. ExitHandler::StartShutdown
+only signals the semaphore, which is async-signal-safe:
+
+https://www.man7.org/linux/man-pages/man7/signal-safety.7.html
+https://www.man7.org/linux/man-pages/man3/sem_post.3.html
+
+---
+ Source/WPEFramework/PluginHost.cpp | 60 +++++++++++++++++++-----------
+ Source/core/Sync.cpp               | 23 ++++++++++++
+ Source/core/Sync.h                 | 19 ++++++++++
+ 3 files changed, 80 insertions(+), 22 deletions(-)
+
+Index: git/Source/WPEFramework/PluginHost.cpp
+===================================================================
+--- git.orig/Source/WPEFramework/PluginHost.cpp
++++ git/Source/WPEFramework/PluginHost.cpp
+@@ -18,8 +18,11 @@
+  */
+ 
+ #include "PluginServer.h"
++#include "core/Sync.h"
+ #include <fstream>
+ 
++#include <atomic>
++
+ #ifndef __WINDOWS__
+ #include <dlfcn.h> // for dladdr
+ #include <syslog.h>
+@@ -152,7 +155,7 @@ POP_WARNING()
+ 
+         ExitHandler(PluginHost::Server* destructor)
+             : Core::Thread(Core::Thread::DefaultStackSize(), nullptr)
+-            , _destructor(destructor)
++            , _destructor(destructor), _exiting(true)
+         {
+             ASSERT(_destructor != nullptr);
+         }
+@@ -160,49 +163,62 @@ POP_WARNING()
+     public:
+         ~ExitHandler() override
+         {
++            _adminLock.Lock();
++            _destructor = nullptr;
++            _adminLock.Unlock();
++            _exiting.Unlock();
+             Stop();
+             Wait(Core::Thread::STOPPED, Core::infinite);
+         }
+ 
+         static void StartShutdown() {
+-            _adminLock.Lock();
+-            if ((_dispatcher != nullptr) && (_instance == nullptr)) {
+-                _instance = new WPEFramework::PluginHost::ExitHandler(_dispatcher);
+-                _dispatcher = nullptr;
+-                _instance->Run();
+-            }
+-            _adminLock.Unlock();
++            // this will be called from signal handler (on linux), so we can't use most of the pthreads sync primitives
++            // since they're not async-signal-safe (https://www.man7.org/linux/man-pages/man7/signal-safety.7.html)
++            _instance->_exiting.Unlock();
+         }
+-        static void Destruct() {
+ 
++        static void Destruct() {
+             _adminLock.Lock();
+ 
+-            if (_instance == nullptr) {
+-
+-                PluginHost::Server* destructor = _dispatcher;
+-
+-                _dispatcher = nullptr;
++            PluginHost::Server* destructor = _dispatcher;
++            _dispatcher = nullptr;
+ 
+-                _adminLock.Unlock();
++            _adminLock.Unlock();
+ 
+-                if (destructor != nullptr) {
+-                    CloseDown (destructor);
+-                }
++            if (destructor != nullptr) {
++                CloseDown (destructor);
+             }
+-            else {
++
++            if (_instance != nullptr) {
++                _adminLock.Lock();
+                 ExitHandler* destructor = _instance;
+                 _instance = nullptr;
+- 
+                 _adminLock.Unlock();
+ 
+                 delete destructor; //It will wait till the worker execution completed
+             }
+         }
+ 
++        static void InitializeExitHandler() {
++            _adminLock.Lock();
++            _instance = new WPEFramework::PluginHost::ExitHandler(_dispatcher);
++            // the thread is started right away; it will initially block on _exiting semaphore
++            _instance->Run();
++            _adminLock.Unlock();
++        }
++
+     private:
+         virtual uint32_t Worker() override
+         {
+-            CloseDown(_destructor);
++            _exiting.Lock();
++
++            _adminLock.Lock();
++            _dispatcher = nullptr;
++            _adminLock.Unlock();
++
++            // Core::WorkerPool::Instance().Join() in the main thread will exit after stopping the WorkerPool
++            // just before PluginHost::Server gets destroyed
++            if (_destructor) CloseDown (_destructor);
+             Block();
+             return (Core::infinite);
+         }
+@@ -264,7 +280,7 @@ POP_WARNING()
+ 
+     private:
+         PluginHost::Server* _destructor;
+-
++        WPEFramework::Core::AsyncSafeBinarySemaphore _exiting;
+         static ExitHandler* _instance;
+         static Core::CriticalSection _adminLock;
+     };
+@@ -318,7 +334,6 @@ POP_WARNING()
+                 fprintf(stderr, EXPAND_AND_QUOTE(APPLICATION_NAME) " shutting down due to a SIGTERM or SIGQUIT signal. No regular shutdown.\nErrors to follow are collateral damage errors !!!!!!\n");
+                 fflush(stderr);
+             }
+-
+             ExitHandler::StartShutdown();
+         }
+     }
+@@ -661,6 +676,7 @@ static void dslogCallback(int priority,c
+ 
+             // Startup/load/initialize what we found in the configuration.
+             _dispatcher = new PluginHost::Server(*_config, _background);
++            ExitHandler::InitializeExitHandler();
+ 
+             SYSLOG_GLOBAL(Logging::Startup, (_T(EXPAND_AND_QUOTE(APPLICATION_NAME) " actively listening.")));
+ 
+Index: git/Source/core/Sync.cpp
+===================================================================
+--- git.orig/Source/core/Sync.cpp
++++ git/Source/core/Sync.cpp
+@@ -1030,5 +1030,29 @@ namespace Core {
+ #endif
+ #endif
+ 
++#if defined(__LINUX__)
++
++    AsyncSafeBinarySemaphore::AsyncSafeBinarySemaphore(bool bLocked)
++    {
++        sem_init(&_sem, 0, bLocked ? 0 : 1);
++    }
++    AsyncSafeBinarySemaphore::~AsyncSafeBinarySemaphore()
++    {
++        sem_destroy(&_sem);
++    }
++    uint32_t AsyncSafeBinarySemaphore::Lock()
++    {
++        sem_wait(&_sem);
++        return Core::ERROR_NONE;
++    }
++    uint32_t AsyncSafeBinarySemaphore::Unlock()
++    {
++        sem_post(&_sem);
++        return Core::ERROR_NONE;
++    }
++#endif
++
++
++
+ }
+ } // namespace Solution::Core
+Index: git/Source/core/Sync.h
+===================================================================
+--- git.orig/Source/core/Sync.h
++++ git/Source/core/Sync.h
+@@ -181,6 +181,25 @@ namespace Core {
+     // For Windows platform compatibility
+     typedef CountingSemaphore Semaphore;
+ 
++#if defined(__LINUX__)
++    /* the async-signal-safe semaphore that can be used in Linux signal handler
++        implemented with POSIX semaphores
++         */
++    class EXTERNAL AsyncSafeBinarySemaphore {
++        public:
++            AsyncSafeBinarySemaphore(bool blLocked);
++            ~AsyncSafeBinarySemaphore();
++            uint32_t Lock();
++            uint32_t Unlock();
++        private:
++            sem_t _sem;
++    };
++#else
++    /* at the moment assuming other platforms signal handlers do not need special semaphore */
++    typedef BinairySemaphore AsyncSafeBinarySemaphore;
++#endif
++
++
+     // ===========================================================================
+     // class Event
+     // ===========================================================================

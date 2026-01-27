@@ -104,6 +104,9 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0168-ARRISEOS-48304-Allow-flushing-ThreadPool-MessageQueue-at-WorkerPool-Stop.patch \
             file://0169-ARRISEOS-48868-protect-singletonlist-concurrent-access.patch \
             file://0170-ARRISEOS-48744-allow-some-time-for-Activate-Deactiva.patch \
+            file://0171-ARRISEOS-48521-linux-async-safe-exit.patch \
+            file://0172-ARRISEOS-48521-shutdown-notifier.patch \
+            file://0173-ARRISEOS-48521-thunder-BlockLibrariesUnloading.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:

@@ -1,0 +1,59 @@
+From ca4eba93ccd148a7319c599e04eb88cbe4e52b9d Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Wed, 18 Feb 2026 15:53:43 +0100
+Subject: [PATCH] ARRISEOS-48521 thunder: BlockLibrariesUnloading
+
+During shutdown, plugin libraries are sometimes
+released too early, before the plugin base destructors
+have the chance to finish. Adding new method to block
+libraries unloading on idle when already in shutdown.
+The last references are still in the static list:
+ServiceAdministrator::_systemServiceAdministrator::_unreferencedLibraries
+and will still be released & properly unloaded in
+static deinitialization phase.
+---
+ Source/WPEFramework/PluginServer.cpp |  1 +
+ Source/WPEFramework/PluginServer.h   | 10 ++++++++--
+ 2 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/Source/WPEFramework/PluginServer.cpp b/Source/WPEFramework/PluginServer.cpp
+index c332ead0..a8456794 100644
+--- a/Source/WPEFramework/PluginServer.cpp
++++ b/Source/WPEFramework/PluginServer.cpp
+@@ -970,6 +970,7 @@ POP_WARNING()
+     void Server::Close()
+     {
+         _services.BlockPluginActivation();
++        _dispatcher.BlockLibrariesUnloading();
+         Plugin::Controller* destructor(_controller->ClassType<Plugin::Controller>());
+         destructor->AddRef();
+         _connections.Close(100);
+diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
+index 4834fd96..de82da43 100644
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -137,13 +137,19 @@ namespace PluginHost {
+             }
+ 
+         public:
++            void BlockLibrariesUnloading() {
++                blockedLibrariesUnloading = true;
++            }
+             void Idle() {
+-                // Could be that we can now drop the dynamic library...
+-                Core::ServiceAdministrator::Instance().FlushLibraries();
++                if (!blockedLibrariesUnloading) {
++                    // Could be that we can now drop the dynamic library...
++                    Core::ServiceAdministrator::Instance().FlushLibraries();
++                }
+             }
+ 
+         private:
+             Dispatcher _dispatch;
++            std::atomic_bool blockedLibrariesUnloading {false};
+         };
+ 
+         class FactoriesImplementation : public IFactories {
+-- 
+2.43.0
+
