@@ -1,0 +1,252 @@
+From 7bdd3fb529e660c4499c4f9f6c4816445465ad60 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Tue, 27 Jan 2026 11:21:58 +0100
+
+Currently following happens on reboot:
+
+1/ system shutdown is started
+2/ ocdm is stopped; awc eagerly tells wpeframework to
+   restart the service
+3/ AWCProxyContainer tries to start ocdm container & starts
+   waiting for the container state change (AWCProxyContainer::waitForStateChange)
+   note: the container start will be blocked in such case, but thunder is
+   not notified about that
+4/ wpeframework gets SIGTERM and starts shutting down before
+   the state change happened
+
+In such case, wpeframework shutdown is blocked on AWCProxyContainer::waitForStateChange
+until timeout (6 seconds), delaying the shutdown (and risking getting SIGKILL'ed by systemd)
+
+This patch introduces a mechanism for
+AWCProxyContainer::waitForStateChange to
+be notified about thunder exit, and break the waiting loop.
+
+
+---
+ Source/WPEFramework/PluginHost.cpp            |  2 +
+ Source/core/CMakeLists.txt                    |  1 +
+ Source/core/ShutdownNotifier.cpp              | 12 +++
+ Source/core/ShutdownNotifier.h                | 74 +++++++++++++++++++
+ .../AWCImplementation/AWCProxyContainer.cpp   | 13 +++-
+ 5 files changed, 99 insertions(+), 3 deletions(-)
+ create mode 100644 Source/core/ShutdownNotifier.cpp
+ create mode 100644 Source/core/ShutdownNotifier.h
+
+Index: git/Source/WPEFramework/PluginHost.cpp
+===================================================================
+--- git.orig/Source/WPEFramework/PluginHost.cpp
++++ git/Source/WPEFramework/PluginHost.cpp
+@@ -18,6 +18,7 @@
+  */
+ 
+ #include "PluginServer.h"
++#include "core/ShutdownNotifier.h"
+ #include "core/Sync.h"
+ #include <fstream>
+ 
+@@ -234,6 +235,7 @@ POP_WARNING()
+                 fflush(stderr);
+             }
+ 
++            WPEFramework::Core::ShutdownNotifier::Instance().notifyShuttingDown();
+             destructor->Close();
+             delete destructor;
+             delete _config;
+Index: git/Source/core/CMakeLists.txt
+===================================================================
+--- git.orig/Source/core/CMakeLists.txt
++++ git/Source/core/CMakeLists.txt
+@@ -55,6 +55,7 @@ add_library(${TARGET} SHARED
+         WorkerPool.cpp
+         XGetopt.cpp
+         ResourceMonitor.cpp
++        ShutdownNotifier.cpp
+         )
+ 
+ 
+Index: git/Source/core/ShutdownNotifier.cpp
+===================================================================
+--- /dev/null
++++ git/Source/core/ShutdownNotifier.cpp
+@@ -0,0 +1,12 @@
++#include "ShutdownNotifier.h"
++#include "Singleton.h"
++
++namespace WPEFramework {
++
++    namespace Core {
++
++        ShutdownNotifier& ShutdownNotifier::Instance() {
++            return SingletonType<ShutdownNotifier>::Instance();
++        }
++
++}}
+\ No newline at end of file
+Index: git/Source/core/ShutdownNotifier.h
+===================================================================
+--- /dev/null
++++ git/Source/core/ShutdownNotifier.h
+@@ -0,0 +1,74 @@
++#include "Module.h"
++#include "Portability.h"
++
++#include <functional>
++#include <map>
++#include <atomic>
++#include <mutex>
++
++namespace WPEFramework {
++
++    namespace Core {
++
++        class EXTERNAL ShutdownNotifier {
++
++            public:
++
++                using ShutdownHandler = std::function<void(void)>;
++                using Handle = unsigned int;
++
++                class NotificationGuard {
++
++                    int handler_idx_;
++
++                    public:
++                        NotificationGuard(ShutdownHandler handler) : handler_idx_(ShutdownNotifier::Instance().addShutdownHandler(handler)) {
++                        }
++
++                        ~NotificationGuard() {
++                            ShutdownNotifier::Instance().removeShutdownHandler(handler_idx_);
++                        }
++                };
++
++                Handle addShutdownHandler(ShutdownHandler e) {
++                    static std::atomic_uint globalidx {0};
++                    unsigned int idx = ++globalidx;
++                    std::unique_lock<std::mutex> lock(m_);
++                    handlers_[idx] = e;
++                    return idx;
++                }
++
++                void removeShutdownHandler(Handle idx) {
++                    std::unique_lock<std::mutex> lock(m_);
++                    handlers_.erase(idx);
++                }
++
++                ~ShutdownNotifier() {
++                    // TODO: should we run the handlers?
++                }
++
++                static ShutdownNotifier& Instance();
++
++                void notifyShuttingDown() {
++                    std::unique_lock<std::mutex> lock(m_);
++                    if (!shuttingDown) {
++                        shuttingDown = true;
++                        for (auto& e : handlers_) {
++                            e.second();
++                        }
++                    }
++                }
++
++                bool isShuttingDown() {
++                    return shuttingDown;
++                }
++
++            private:
++
++                std::map<Handle, ShutdownHandler> handlers_;
++                std::mutex m_;
++                std::atomic_bool shuttingDown {false};
++        };
++
++    }
++}
+\ No newline at end of file
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
+===================================================================
+--- git.orig/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
++++ git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.cpp
+@@ -1,5 +1,6 @@
+ #include "AWCContainerAdministrator.h"
+ #include "AWCProxyContainer.h"
++#include "core/ShutdownNotifier.h"
+ 
+ #define CHECK(cond) ASSERT((cond))
+ 
+@@ -33,7 +34,7 @@ void AWCProxyContainer::DBusInterface::o
+ }
+ 
+ bool AWCProxyContainer::waitForStateChange(
+-    Lock &lock, AppState state, milliseconds timeout)
++    Lock &lock, AppState state, milliseconds timeout, bool cancelOnShutdown)
+ {
+     TRACE_L1(
+         "begin, curr: %s, desired: %s (timeout %d)",
+@@ -41,20 +42,36 @@ bool AWCProxyContainer::waitForStateChan
+         int(timeout.count()));
+ 
+     using namespace std::chrono;
++    using ShutdownNotifier = WPEFramework::Core::ShutdownNotifier;
+ 
++    if (cancelOnShutdown && ShutdownNotifier::Instance().isShuttingDown()) {
++        TRACE_L1("cancelOnShutdown set and already shutting down; exit");
++        return false;
++    }
+     const auto timestamp = Clock::now();
+ 
+     auto r = appState_ == state;
++    ShutdownNotifier::Handle hdl;
++    if (cancelOnShutdown) {
++        hdl = ShutdownNotifier::Instance().addShutdownHandler([&]() {
++           cond_.notify_one();
++        });
++    }
+ 
+     if(!r)
+     {
+-        r = cond_.wait_for(lock, timeout, [=](){return appState_ == state;});
++        r = cond_.wait_for(lock, timeout, [=](){
++            return appState_ == state || cancelOnShutdown && ShutdownNotifier::Instance().isShuttingDown();});
+ 
+         if(!r) TRACE_L1("timeout");
++        if (ShutdownNotifier::Instance().isShuttingDown()) TRACE_L1("shutting down");
++        if (cancelOnShutdown) {
++            ShutdownNotifier::Instance().removeShutdownHandler(hdl);
++        }
+     }
+ 
+     const auto diff = duration_cast<milliseconds>(Clock::now() - timestamp);
+-
++    r = appState_ == state;
+     TRACE_L1("end, elapsed=%dms result=%d", int(diff.count()), r);
+     return r;
+ }
+@@ -163,7 +180,7 @@ bool AWCProxyContainer::Start(const stri
+     if(diff >= startTimeout_) return false;
+ 
+     std::unique_lock<std::mutex> lock(mutex_);
+-    return waitForStateChange(lock, AppState::STARTED, startTimeout_ - diff);
++    return waitForStateChange(lock, AppState::STARTED, startTimeout_ - diff, true);
+ }
+ 
+ /* provided timeout is not used. Thunder provides 0ms timeout by default
+@@ -208,5 +225,5 @@ bool AWCProxyContainer::Stop(const uint3
+     if(diff >= stopTimeout_) return false;
+ 
+     std::unique_lock<std::mutex> lock(mutex_);
+-    return waitForStateChange(lock, AppState::STOPPED, stopTimeout_ - diff);
++    return waitForStateChange(lock, AppState::STOPPED, stopTimeout_ - diff, false);
+ }
+Index: git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h
+===================================================================
+--- git.orig/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h
++++ git/Source/processcontainers/implementations/AWCImplementation/AWCProxyContainer.h
+@@ -33,7 +33,7 @@ class AWCProxyContainer: public AWCConta
+ 
+     AWCProxyContainer(const string &name, const PluginConfig &, std::shared_ptr<dbus::Client>);
+ 
+-    bool waitForStateChange(Lock &, AppState, milliseconds);
++    bool waitForStateChange(Lock &, AppState, milliseconds, bool);
+     void SetStopInProgress(bool);
+     bool IsStopInProgress() const;
+ public:
