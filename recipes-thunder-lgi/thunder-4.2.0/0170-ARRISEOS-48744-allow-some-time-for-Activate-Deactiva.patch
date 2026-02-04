@@ -1,0 +1,119 @@
+From 30f253e2f3e968d2d66f5d6c844d1868421f6672 Mon Sep 17 00:00:00 2001
+From: tomasz-karczewski-red <tomasz.karczewski@redembedded.com>
+Date: Wed, 4 Feb 2026 11:03:43 +0100
+Subject: [PATCH] ARRISEOS-48744 allow some time for Activate/Deactivate to
+finish, before failing with ERROR_ILLEGAL_STATE
+
+---
+ Source/WPEFramework/PluginServer.cpp | 25 ++++++++++++++++++++++++-
+ Source/WPEFramework/PluginServer.h   |  3 +++
+ 2 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/Source/WPEFramework/PluginServer.cpp b/Source/WPEFramework/PluginServer.cpp
+index 7aa874ee..eaea11e8 100644
+--- a/Source/WPEFramework/PluginServer.cpp
++++ b/Source/WPEFramework/PluginServer.cpp
+@@ -316,6 +316,11 @@ namespace PluginHost
+ 
+         IShell::state currentState(State());
+ 
++        if (currentState == IShell::DEACTIVATION) {
++            // give the plugin some time to finish with the deactivation to avoid ERROR_ILLEGAL_STATE
++            currentState = waitForInitializationStateChange(500);
++        }
++
+         if (currentState == IShell::ACTIVATION) {
+             Unlock();
+             result = Core::ERROR_INPROGRESS;
+@@ -399,6 +404,7 @@ namespace PluginHost
+ 
+                 State(ACTIVATION);
+                 _administrator.Activation(callSign, this);
++                _initDeinitDone.ResetEvent();
+                 Unlock();
+ 
+                 // Before we dive into the "new" initialize lets see if this has a pending OOP running, if so forcefully kill it now, no time to wait !
+@@ -464,9 +470,9 @@ namespace PluginHost
+                         stateControl->Request(PluginHost::IStateControl::RESUME);
+                         stateControl->Release();
+                     }
+-
+                     Unlock();
+                 }
++                _initDeinitDone.SetEvent();
+             }
+         } else {
+             Unlock();
+@@ -525,6 +531,11 @@ namespace PluginHost
+ 
+         IShell::state currentState(State());
+ 
++        if (currentState == IShell::ACTIVATION && why != IShell::INITIALIZATION_FAILED) {
++            // give the plugin some time to finish current activation (to avoid ERROR_ILLEGAL_STATE)
++            currentState = waitForInitializationStateChange(500);
++        }
++
+         if (currentState == IShell::DEACTIVATION) {
+             result = Core::ERROR_INPROGRESS;
+         } else if ((currentState == IShell::ACTIVATION && why != IShell::INITIALIZATION_FAILED) || (currentState == IShell::DESTROYED)) {
+@@ -541,6 +552,8 @@ namespace PluginHost
+                 ASSERT(_handler != nullptr);
+ 
+                 State(DEACTIVATION);
++                _initDeinitDone.ResetEvent();
++
+                 _administrator.Deactivation(callSign, this);
+                 if( currentState == IShell::ACTIVATED ) {
+                 _administrator.Deactivated(callSign, this);
+@@ -564,6 +577,7 @@ namespace PluginHost
+                 REPORT_DURATION_WARNING( { _handler->Deinitialize(this); }, WarningReporting::TooLongPluginState, WarningReporting::TooLongPluginState::StateChange::DEACTIVATION, callSign.c_str());
+ 
+                 Lock();
++                _initDeinitDone.SetEvent();
+ 
+                 PluginHost::IDispatcher* dispatcher = dynamic_cast<PluginHost::IDispatcher*>(_handler);
+ 
+@@ -704,6 +718,15 @@ namespace PluginHost
+         _administrator.Notification(forwarder);
+     }
+ 
++    // the caller needs to hold _adminLock!
++    IShell::state Server::Service::waitForInitializationStateChange(int timeMaxMs) {
++        // gives the plugin some time to finish with current ACTIVATION or DEACTIVATION to avoid ERROR_ILLEGAL_STATE
++        Unlock();
++        _initDeinitDone.Lock(timeMaxMs);
++        Lock();
++        return State();
++    }
++
+     uint32_t Server::ServiceMap::FromLocator(const string& identifier, Core::ProxyType<PluginHost::Server::Service>& service, bool& serviceCall)
+     {
+         uint32_t result = Core::ERROR_BAD_REQUEST;
+diff --git a/Source/WPEFramework/PluginServer.h b/Source/WPEFramework/PluginServer.h
+index 4834fd96..ac3ee4cb 100644
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -590,6 +590,7 @@ namespace PluginHost {
+                 , _lastId(0)
+                 , _metadata()
+                 , _administrator(administrator)
++                , _initDeinitDone(true, true)
+             {
+             }
+             ~Service() override
+@@ -1291,10 +1292,12 @@ namespace PluginHost {
+                     currentIF->Release();
+                 }
+             }
++            IShell::state waitForInitializationStateChange(int timeMaxMs);
+ 
+         private:
+             const mode _mode;
+             mutable Core::CriticalSection _pluginHandling;
++            mutable Core::Event _initDeinitDone;
+ 
+             // The handlers that implement the actual logic behind the service
+             IPlugin* _handler;
+-- 
+2.43.0
+
