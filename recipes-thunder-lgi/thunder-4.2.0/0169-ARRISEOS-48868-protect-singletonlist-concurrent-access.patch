@@ -1,0 +1,65 @@
+ARRISEOS-48868 Protect SingletonList against concurrent access
+Author: volodymyr.ogorodnik@consult.red
+Date: 09.02.2026
+
+SingletoneList is based on std::list implementation that does not
+handle concurrent access, so the list could be corrputed as a result.
+Added critical section primitive to synchronise the access.
+
+
+Index: git/Source/core/Singleton.cpp
+===================================================================
+--- git.orig/Source/core/Singleton.cpp
++++ git/Source/core/Singleton.cpp
+@@ -36,31 +36,39 @@ namespace Core {
+ 
+     /* virtual */ Singleton::SingletonList::~SingletonList()
+     {
++        m_ListLock.Lock();
+         // Dispose was not called before main application was ended
+         if (!m_Singletons.empty()) {
+             TRACE_L1("%s !!! singleton list is not empty !!!", __FUNCTION__);
+         }
++        m_ListLock.Unlock();
+         Dispose();
+     }
+ 
+     void Singleton::SingletonList::Dispose()
+     {
++        m_ListLock.Lock();
+         // Iterate over all singletons and delete...
+         while (m_Singletons.empty() == false) {
+             Singleton* element(*(m_Singletons.begin()));
+             TRACE_L1("Singleton destructing %s", element->ImplementationName().c_str());
+             delete element;
+         }
++        m_ListLock.Unlock();
+     }
+ 
+     void Singleton::SingletonList::Register(Singleton* singleton)
+     {
++        m_ListLock.Lock();
+         m_Singletons.push_front(singleton);
++        m_ListLock.Unlock();
+     }
+ 
+     void Singleton::SingletonList::Unregister(Singleton* singleton)
+     {
++        m_ListLock.Lock();
+         m_Singletons.remove(singleton);
++        m_ListLock.Unlock();
+     }
+ }
+ } // namespace Solution::Core
+Index: git/Source/core/Singleton.h
+===================================================================
+--- git.orig/Source/core/Singleton.h
++++ git/Source/core/Singleton.h
+@@ -51,6 +51,7 @@ namespace Core {
+ 
+         private:
+             std::list<Singleton*> m_Singletons;
++            CriticalSection m_ListLock;
+         };
+ 
+     private:

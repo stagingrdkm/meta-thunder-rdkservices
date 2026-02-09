@@ -102,6 +102,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0166-ONEM-43007-Fix-double-free-AWCProxyContainer-destructor.patch \
             file://0167-ARRISAPP-1462-Thunder-do-not-resubmit-cleanup-task.patch \
             file://0168-ARRISEOS-48304-Allow-flushing-ThreadPool-MessageQueue-at-WorkerPool-Stop.patch \
+            file://0169-ARRISEOS-48868-protect-singletonlist-concurrent-access.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:
