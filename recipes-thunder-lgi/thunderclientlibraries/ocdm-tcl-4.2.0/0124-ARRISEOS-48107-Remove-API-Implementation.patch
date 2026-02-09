@@ -1,0 +1,25 @@
+From 270f8cf0fd9b9c1f3cd252157c3e4ecf9a70b7dc Mon Sep 17 00:00:00 2001
+From: Santhosh-Kumar-infosys <sakumar.ext@libertyglobal.com>
+Date: Mon, 9 Feb 2026 09:27:16 +0530
+Subject: [PATCH] ARRISEOS-48107: Remove API Implementation
+
+---
+ Source/ocdm/open_cdm_impl.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index fc2289e..773644a 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -812,7 +812,7 @@ inline int Remove()
+ 
+         ASSERT(_session != nullptr);
+ 
+-        return (_session->Remove() == 0);
++        return (_session->Remove());
+     }
+     inline int Load()
+     {
+-- 
+2.43.0
+
