@@ -52,3 +52,4 @@ SRC_URI += "file://0137-ARRISAPP-1370-Reinitialize-ctx-when-store-not-present.pa
 SRC_URI += "file://0138-ARRISEOS-48192-ARRISEOS-48324-Improve-Playready-ODH-reporting.patch"
 SRC_URI += "file://0139-ARRISAPP-1432-Do-not-notify-in-separate-thread.patch"
 SRC_URI += "file://0140-ONEM-42848-Update-OCDM-license-bind-callback.patch"
+SRC_URI += "file://0141-ARRISEOS-48107-Remove-API-Implementation.patch"

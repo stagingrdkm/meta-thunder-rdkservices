@@ -1,0 +1,73 @@
+From 84c049ee19d1a76954a8a0a640c8421fe547628c Mon Sep 17 00:00:00 2001
+From: Santhosh-Kumar-infosys <sakumar.ext@libertyglobal.com>
+Date: Mon, 9 Mar 2026 09:58:37 +0530
+Subject: [PATCH] ARRISEOS-48107: Remove API Implementation
+
+---
+ MediaSession.cpp | 13 +++++++++----
+ MediaSession.h   |  3 ++-
+ 2 files changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 118e921..04007e7 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -699,16 +699,21 @@ ErrorExit:
+ 
+ CDMi_RESULT MediaKeySession::Remove(void)
+ {
+-    return CDMi_S_FALSE;
++    return CleanUpResources(true);
+ }
+ 
+ CDMi_RESULT MediaKeySession::Close(void)
++{
++    return CleanUpResources(false);
++}
++
++CDMi_RESULT MediaKeySession::CleanUpResources(bool forceRemove)
+ {
+     m_eKeyState = KEY_CLOSED;
+ 
+     {
+         SafeCriticalSection systemLock(drmAppContextMutex_);
+-        CleanLicenseStore();
++        DeleteLicenses(forceRemove);
+ 
+         CleanDecryptContexts();
+     }
+@@ -1051,7 +1056,7 @@ ErrorExit:
+     return rc;
+ }
+ 
+-void MediaKeySession::CleanLicenseStore()
++void MediaKeySession::DeleteLicenses(bool forceRemove)
+ {
+     if (m_hasInMemoryLicenses) {
+         LOGGER(LINFO_, "In memory licenses cleanup");
+@@ -1064,7 +1069,7 @@ void MediaKeySession::CleanLicenseStore()
+         } else {
+             m_hasInMemoryLicenses = false;
+         }
+-    } else if ((m_licenseType == Temporary) && m_hasPersistentLicenses && (!m_kids.empty())) {
++    } else if (((m_licenseType == Temporary) || forceRemove) && m_hasPersistentLicenses && (!m_kids.empty())) {
+         DRM_DWORD removedCount{};
+         DRM_DWORD licensesRemoved{};
+         m_hasPersistentLicenses = false;
+diff --git a/MediaSession.h b/MediaSession.h
+index f54c4b0..52431b3 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -196,7 +196,8 @@ private:
+ 
+     bool LoadRevocationList(const char *revListFile);
+ 
+-    void CleanLicenseStore();
++    void DeleteLicenses(bool forceRemove);
++    CDMi_RESULT CleanUpResources(bool forceRemove);
+     void CleanDecryptContexts();
+ 
+     struct PolicyCallbackUserData
+-- 
+2.43.0
+
