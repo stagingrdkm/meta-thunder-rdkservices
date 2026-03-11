@@ -53,3 +53,4 @@ SRC_URI += "file://0138-ARRISEOS-48192-ARRISEOS-48324-Improve-Playready-ODH-repo
 SRC_URI += "file://0139-ARRISAPP-1432-Do-not-notify-in-separate-thread.patch"
 SRC_URI += "file://0140-ONEM-42848-Update-OCDM-license-bind-callback.patch"
 SRC_URI += "file://0141-ARRISEOS-48107-Remove-API-Implementation.patch"
+SRC_URI += "file://0142-ARRISEOS-48979-Remove-refCount-from-KeySystemCtx.patch"
