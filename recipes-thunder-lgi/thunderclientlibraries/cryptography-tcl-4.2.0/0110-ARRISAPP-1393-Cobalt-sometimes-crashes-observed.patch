@@ -1,0 +1,97 @@
+From 76f629740444932edc322e8d0ce5be779122ba2f Mon Sep 17 00:00:00 2001
+From: Suresh Khurdiya <skhurdiya.ext@libertyglobal.com>
+Date: Thu, 26 Mar 2026 09:19:06 +0530
+Subject: [PATCH] [ARRISAPP-1393]: [Cobalt] sometimes crashes observed on
+ entering standby while running YouTube application
+
+---
+ .../Icrypto-nexus/CobaltSecurity/Vault.cpp    | 22 ++++++++++++++-----
+ 1 file changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/Vault.cpp b/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/Vault.cpp
+index a9f7178..a85da4e 100644
+--- a/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/Vault.cpp
++++ b/Source/cryptography/implementation/Icrypto-nexus/CobaltSecurity/Vault.cpp
+@@ -50,6 +50,7 @@
+ #include "../../../Module.h"
+ #include "../Administrator.h"
+ #include "../Nexus.h"
++#include <mutex>
+ 
+ namespace Implementation {
+ 
+@@ -113,12 +114,17 @@ namespace Cobalt {
+ 
+         uint32_t Load(const char locator[], uint32_t* id) override
+         {
++            std::lock_guard<std::mutex> lock(m_loadMutex);
+             if (m_loaded == true)
+             {
+                 TRACE_L1(_T("already initialized - return previous initialization handle"));
+-                *id = (uint32_t)m_handle;
++                *id = reinterpret_cast<uintptr_t>(m_handle);
+                 return WPEFramework::Core::ERROR_NONE;
+             }
++            if (locator == nullptr) {
++                TRACE_L1(_T("locator is null"));
++                return WPEFramework::Core::ERROR_GENERAL;
++            }
+             int len = strlen(locator);
+             if (len > 255)
+             {
+@@ -145,23 +151,27 @@ namespace Cobalt {
+             StarBoardTl_GetDefaultSettings(&m_settings);
+             memcpy(m_settings.drm_binfile_path, locator, len);
+             m_settings.drm_binfile_path[len] = 0;
++
++            m_handle = nullptr;
+             BERR_Code ret = StarBoardTl_Init(&m_handle, &m_settings);
+             uint32_t result = WPEFramework::Core::ERROR_NONE;
+-            if (ret == BERR_SUCCESS)
++            if (ret == BERR_SUCCESS && m_handle != nullptr)
+             {
+                 TRACE_L1(_T("Starboard initialized m_handle=%p"), m_handle);
+-                *id = (uint32_t)m_handle; // propagate StarBoardTl_Handle
++                *id = reinterpret_cast<uintptr_t>(m_handle); // propagate StarBoardTl_Handle
+                 m_loaded = true;
+             }
+             else
+             {
+                 TRACE_L1(_T("Starboard initialization failed m_handle=%p ret=%d"), m_handle, ret);
+                 m_loaded = false;
++                m_handle = nullptr;
+                 result = WPEFramework::Core::ERROR_GENERAL;
+             }
+             return result;
+         }
+ 
++
+         uint32_t Create(const char locator[],const key_type keyType,uint32_t* id) override
+         {
+             return WPEFramework::Core::ERROR_UNAVAILABLE;
+@@ -169,11 +179,12 @@ namespace Cobalt {
+ 
+         uint32_t Flush() override
+         {
++            std::lock_guard<std::mutex> lock(m_loadMutex);
+             uint32_t result = WPEFramework::Core::ERROR_NONE;
+-            if (m_loaded == true && m_handle != 0)
++            if (m_loaded == true && m_handle != nullptr)
+             {
+                 StarBoardTl_Uninit(m_handle);
+-                m_handle = 0;
++                m_handle = nullptr;
+                 m_loaded = false;
+             }
+             else
+@@ -187,6 +198,7 @@ namespace Cobalt {
+             StarBoardTl_Handle m_handle = 0;
+             StarBoardSettings m_settings;
+             bool m_loaded = false;
++            std::mutex m_loadMutex;
+     }; // class VaultImplementation
+ 
+     class VaultFactory : public VaultFactoryType<cryptographyvault::CRYPTOGRAPHY_VAULT_COBALT, Vault> {
+-- 
+2.34.1
+

@@ -13,6 +13,7 @@ SRC_URI += "file://0106-extra-linking-for-testcases.patch"
 SRC_URI += "file://0107-extra-linking-for-cobalt-and-lgiplatform-tests.patch"
 SRC_URI += "file://0108-ONEM-32195-Hash-HMAC-testcases-starts-to-fail-in-cgf.patch"
 SRC_URI += "file://0109-ONEM-33184-switch-key-generation-to-dev-urandom.patch"
+SRC_URI += "file://0110-ARRISAPP-1393-Cobalt-sometimes-crashes-observed.patch"
 
 # other options OpenSSL, SecApi, Thunder
 CRYPTOGRAPHY_IMPLEMENTATION="Icrypto-nexus"
