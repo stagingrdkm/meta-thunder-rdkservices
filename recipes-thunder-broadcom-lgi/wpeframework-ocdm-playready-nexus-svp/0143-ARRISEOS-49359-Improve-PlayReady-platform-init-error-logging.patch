@@ -1,0 +1,49 @@
+From cf9291a6c8abc8f8382b7f4dbc19aeef44e20b5f Mon Sep 17 00:00:00 2001
+From: Remya Das Pankan <rdaspankan.ext@libertyglobal.com>
+Date: Tue, 21 Apr 2026 12:04:08 +0530
+Subject: [PATCH] ARRISEOS-49359 Improve PlayReady platform init error logging
+
+Change-Id: I42d267951d483aed25756f7fbc7cbd9bd52be962
+---
+ MediaSystem.cpp | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/MediaSystem.cpp b/MediaSystem.cpp
+index 0287c64..e939643 100644
+--- a/MediaSystem.cpp
++++ b/MediaSystem.cpp
+@@ -194,6 +194,7 @@ public:
+         , m_storeLocation()
+         , m_meteringCertificate(nullptr)
+         , m_meteringCertificateSize(0)
++        , m_lastSystemInitResult(DRM_SUCCESS)
+     {
+         NxClient_JoinSettings joinSettings;
+         NxClient_AllocSettings nxAllocSettings;
+@@ -374,9 +375,13 @@ public:
+         if (DRM_FAILED(dr))
+         {
+             cr = MapDrmErrorToCDMiResult(dr, CDMi_INIT_FAILED);
+-            LOGGER_ODH(dr, "","Playready System Initialize failed");
++            if (m_lastSystemInitResult != dr) {
++                LOGGER_ODH(dr, "","Playready System Initialize failed");
++            } else {
++                LOGGER(LERROR_, "Playready System Initialize failed, error: 0x%08X", static_cast<unsigned int>(dr));
++            }
+         }
+-
++        m_lastSystemInitResult = dr;
+         return cr;
+     }
+ 
+@@ -1161,6 +1166,7 @@ private:
+     std::string m_storeLocation;
+     DRM_BYTE* m_meteringCertificate;
+     uint32_t m_meteringCertificateSize;
++    DRM_RESULT m_lastSystemInitResult;
+ };
+ 
+ static SystemFactoryType<PlayReady> g_instance({"video/x-h264", "audio/mpeg"});
+-- 
+2.34.1
+
