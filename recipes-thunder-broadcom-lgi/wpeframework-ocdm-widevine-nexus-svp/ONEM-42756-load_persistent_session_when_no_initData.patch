@@ -1,0 +1,96 @@
+From 4a260abb0434322b8ceb69325359074988f1786f Mon Sep 17 00:00:00 2001
+From: pradeep-raveendranpillai-infosys <ppillai.ext@libertyglobal.com>
+Date: Tue, 19 May 2026 14:06:18 +0530
+Subject: [ONEM-42756] Load persistent session when no initData
+
+---
+ MediaSession.cpp | 53 ++++++++++++++++++++++++++++--------------------
+ 1 file changed, 31 insertions(+), 22 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 55672ce..7ca76ae 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -195,28 +195,30 @@ void MediaKeySession::Run(const IMediaKeySessionCallback *f_piMediaKeySessionCal
+   if (f_piMediaKeySessionCallback) {
+     m_piCallback = const_cast<IMediaKeySessionCallback*>(f_piMediaKeySessionCallback);
+
+-    widevine::Cdm::Status status = m_cdm->generateRequest(m_sessionId, m_initDataType, m_initData);
+-    if (widevine::Cdm::kSuccess != status) {
+-       printf("generateRequest failed\n");
+-       WIDEVINE_ODH_REPORT("generateRequest failed\n");
++    if (!(m_initData.empty() && (m_licenseType == widevine::Cdm::kPersistentLicense))) {
++      widevine::Cdm::Status status = m_cdm->generateRequest(m_sessionId, m_initDataType, m_initData);
++      if (widevine::Cdm::kSuccess != status) {
++        printf("generateRequest failed\n");
++        WIDEVINE_ODH_REPORT("generateRequest failed\n");
+ #if CENC_VERSION < 15
+ #ifdef HANDLE_DEVICE_PROVISIONING_REQUEST
+-       while(!_cdm_request.empty()) {
+-           std::string request = _cdm_request;
+-           std::string response;
+-
+-           _cdm_request.clear();
+-           sendPostRequest(request, response);
+-           if (widevine::Cdm::kSuccess != m_cdm->update(m_sessionId, response)) {
+-               printf("updating response failed\n");
+-               WIDEVINE_ODH_REPORT("updating response failed\n");
+-           } else {
+-               printf("device provisioned.\n");
+-           }
+-       }
++         while(!_cdm_request.empty()) {
++             std::string request = _cdm_request;
++             std::string response;
++
++             _cdm_request.clear();
++             sendPostRequest(request, response);
++             if (widevine::Cdm::kSuccess != m_cdm->update(m_sessionId, response)) {
++                 printf("updating response failed\n");
++                 WIDEVINE_ODH_REPORT("updating response failed\n");
++             } else {
++                 printf("device provisioned.\n");
++             }
++         }
+ #endif
+ #endif
+-       m_piCallback->OnKeyMessage((const uint8_t *) "", 0, "");
++         m_piCallback->OnKeyMessage((const uint8_t *) "", 0, "");
++      }
+     }
+   }
+   else {
+@@ -364,10 +366,12 @@ CDMi_RESULT MediaKeySession::Load(void) {
+   CDMi_RESULT ret = CDMi_S_FALSE;
+   g_lock.Lock();
+   widevine::Cdm::Status status = m_cdm->load(m_sessionId);
+-  if (widevine::Cdm::kSuccess != status)
++  if (widevine::Cdm::kSuccess != status) {
+     onKeyStatusError(status);
+-  else
++  }
++  else {
+     ret = CDMi_SUCCESS;
++  }
+   g_lock.Unlock();
+   return ret;
+ }
+@@ -443,8 +447,13 @@ CDMi_RESULT MediaKeySession::Init(
+   if (f_pbInitData && f_cbInitData)
+     m_initData.assign((const char*) f_pbInitData, f_cbInitData);
+
+-  if (f_pbCDMData && f_cbCDMData)
+-    m_CDMData.assign((const char*) f_pbCDMData, f_cbCDMData);
++  if (f_pbCDMData && f_cbCDMData) {
++    if (!(m_initData.empty() && (m_licenseType == widevine::Cdm::kPersistentLicense)))
++      m_CDMData.assign((const char*) f_pbCDMData, f_cbCDMData);
++    else {
++      m_sessionId.assign((const char*) f_pbCDMData, f_cbCDMData);
++    }
++  }
+   return CDMi_SUCCESS;
+ }
+
+--
+2.34.1
+

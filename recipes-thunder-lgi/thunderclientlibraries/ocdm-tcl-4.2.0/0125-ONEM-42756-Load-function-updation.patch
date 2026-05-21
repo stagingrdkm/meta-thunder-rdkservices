@@ -1,0 +1,25 @@
+From 5200770cd7dc0150fe8812f9b984484a012a5680 Mon Sep 17 00:00:00 2001
+From: pradeep-raveendranpillai-infosys <ppillai.ext@libertyglobal.com>
+Date: Thu, 21 May 2026 20:20:41 +0530
+Subject: [PATCH 2/2] ONEM-42756: Load function updation
+
+---
+ Source/ocdm/open_cdm_impl.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Source/ocdm/open_cdm_impl.h b/Source/ocdm/open_cdm_impl.h
+index 773644a..ee77ab9 100644
+--- a/Source/ocdm/open_cdm_impl.h
++++ b/Source/ocdm/open_cdm_impl.h
+@@ -819,7 +819,7 @@ inline void SetParameter(const std::string& name, const std::string& value)
+
+         ASSERT(_session != nullptr);
+
+-        return (_session->Load() == 0);
++        return (_session->Load());
+     }
+     inline void Update(const uint8_t* pbResponse, const uint16_t cbResponse)
+     {
+--
+2.34.1
+

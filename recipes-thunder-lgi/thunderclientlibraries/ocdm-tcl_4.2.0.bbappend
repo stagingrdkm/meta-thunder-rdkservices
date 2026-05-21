@@ -30,6 +30,7 @@ SRC_URI += "file://0121-ONEM-42508-New-version-of-opencdm_system_get_version.pat
 SRC_URI += "file://0122-ARRISEOS-48136-WPE-Process-crash-ocdm-stop-fixed.patch"
 SRC_URI += "file://0123-ONEM-42848-Update-OCDM-license-bind-callback.patch"
 SRC_URI += "file://0124-ARRISEOS-48107-Remove-API-Implementation.patch"
+SRC_URI += "file://0125-ONEM-42756-Load-function-updation.patch"
 
 EXTRA_OECMAKE_append = " -DOCDM_IMPLEMENTATION_PATH=adapter/broadcom-svp "
 
