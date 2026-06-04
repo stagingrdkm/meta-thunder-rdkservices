@@ -1,0 +1,26 @@
+From 2eb7011fc0d78fd1eefb100e93b6c88d21377b42 Mon Sep 17 00:00:00 2001
+From: pradeep-raveendranpillai-infosys <ppillai.ext@libertyglobal.com>
+Date: Thu, 4 Jun 2026 11:58:28 +0530
+Subject: [ARRISAPOL-3791] Remove resetting of IV
+
+---
+ MediaSession.cpp | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 7ca76ae..bd4defa 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -651,9 +651,6 @@ CDMi_RESULT MediaKeySession::Decrypt(
+
+       input.is_video = true;
+       input.block_offset = 0;
+-      for (int ii = 15, counter = 0; ii >= 12; ii--, counter = counter >> 8) {
+-          m_IV[ii] = counter & 0xFF;
+-      }
+
+       input.first_subsample = true;
+       input.last_subsample  = true;
+--
+2.34.1
+
