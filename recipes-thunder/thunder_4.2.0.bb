@@ -35,6 +35,7 @@ SRC_URI += "file://0001-Thunder_json_quoted_string_parsing_fix.patch \
             file://ONEM-31782_R4.patch \
             file://dsmanagerplugin;subdir=git/Source \
             file://ONEM-33502-Add-DSManagerPlugin.patch \
+            file://ARRISAPP-1491-UnknownProxy-shutdown-socket-on-IPC-invoke-timeout.patch \
             "
 
 inherit systemd update-rc.d python3native
