@@ -1,0 +1,32 @@
+From 719224a41b5b77a552f611a53d8859340345cd17 Mon Sep 17 00:00:00 2001
+From: Marcin Mielczarczyk <marcin.mielczarczyk@redembedded.com>
+Date: Tue, 21 Jul 2026 17:54:45 +0200
+Subject: [PATCH] ARRISEOS-50099: Fix invalid free in
+ BaseContainerAdministrator destructor
+
+~BaseContainerAdministrator() unconditionally called
+_containers.pop_back() after _containers.back()->Release(), assuming
+the container it just released was still the list's back element.
+---
+ Source/processcontainers/common/BaseAdministrator.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Source/processcontainers/common/BaseAdministrator.h b/Source/processcontainers/common/BaseAdministrator.h
+index 5b187e9c..d1b50ce1 100644
+--- a/Source/processcontainers/common/BaseAdministrator.h
++++ b/Source/processcontainers/common/BaseAdministrator.h
+@@ -40,8 +40,9 @@ namespace ProcessContainers {
+                 TRACE_L1("There are still active containers when shutting down administrator!");
+ 
+                 while (_containers.size() > 0) {
+-                    _containers.back()->Release();
+-                    _containers.pop_back();
++                    CONTAINER* container = _containers.back();
++                    container->Release();
++                    _containers.remove(container);
+                 }
+             }
+         }
+-- 
+2.30.0
+
