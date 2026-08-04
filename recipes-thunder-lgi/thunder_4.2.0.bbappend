@@ -107,6 +107,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0171-ARRISEOS-48521-linux-async-safe-exit.patch \
             file://0172-ARRISEOS-48521-shutdown-notifier.patch \
             file://0173-ARRISEOS-48521-thunder-BlockLibrariesUnloading.patch \
+            file://0175-ARRISEOS-48521-Add-extended-interface-pointer-lock.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:

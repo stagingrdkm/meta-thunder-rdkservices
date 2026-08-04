@@ -1,0 +1,73 @@
+From: Marcin Mielczarczyk <marcin.mielczarczyk@redembedded.com>
+Date: Tue, 4 Aug 2026 08:54:45 +0200
+Subject: [PATCH] ARRISEOS-48521: Add _extended interface pointer lock
+
+Server::Service::Subscribe() and Server::Service::Unsubscribe() read and call
+_extended interface pointer with no locking at all and in the same time
+ReleaseInterfaces() can be called from a separate thread which releases the
+_extended object through Release() call and that can lead to core dump.
+The fix is to add a lock mechanism for _extended interface pointer.
+---
+
+--- a/Source/WPEFramework/PluginServer.h
++++ b/Source/WPEFramework/PluginServer.h
+@@ -659,17 +659,35 @@
+ #if THUNDER_RESTFULL_API
+                 bool result = PluginHost::Service::Subscribe(channel);
+
+-                if ((result == true) && (_extended != nullptr)) {
+-                    _extended->Attach(channel);
++                if (result == true) {
++                    _pluginHandling.Lock();
++                    IPluginExtended* extended(_extended);
++                    if (extended != nullptr) {
++                        extended->AddRef();
++                    }
++                    _pluginHandling.Unlock();
++
++                    if (extended != nullptr) {
++                        extended->Attach(channel);
++                        extended->Release();
++                    }
+                 }
+
+                 return (result);
+ #else
+-                if (_extended != nullptr) {
+-                    _extended->Attach(channel);
++                _pluginHandling.Lock();
++                IPluginExtended* extended(_extended);
++                if (extended != nullptr) {
++                    extended->AddRef();
++                }
++                _pluginHandling.Unlock();
++
++                if (extended != nullptr) {
++                    extended->Attach(channel);
++                    extended->Release();
+                 }
+
+-                return (_extended != nullptr);
++                return (extended != nullptr);
+ #endif
+             }
+             inline void Unsubscribe(Channel& channel)
+@@ -677,8 +695,16 @@
+ #if THUNDER_RESTFULL_API
+                 PluginHost::Service::Unsubscribe(channel);
+ #endif
+-                if (_extended != nullptr) {
+-                    _extended->Detach(channel);
++                _pluginHandling.Lock();
++                IPluginExtended* extended(_extended);
++                if (extended != nullptr) {
++                    extended->AddRef();
++                }
++                _pluginHandling.Unlock();
++
++                if (extended != nullptr) {
++                    extended->Detach(channel);
++                    extended->Release();
+                 }
+             }
+             inline void Configuration(const string& config)
