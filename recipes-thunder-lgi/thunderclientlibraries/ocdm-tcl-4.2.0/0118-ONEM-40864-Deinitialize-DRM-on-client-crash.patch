@@ -1,6 +1,7 @@
 From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
 
 ONEM-40864 - Deinitialize DRM on client crash
+ARRISEOS-48979 - Context initilization in separate function
 
 ---
  Source/ocdm/open_cdm.h       | 15 +++++----
@@ -147,7 +148,7 @@ index 6f7617c..5db2a27 100644
   private:
      std::string _keySystem;
      std::string _metadata;
-@@ -192,6 +203,20 @@ public:
+@@ -192,6 +203,29 @@ public:
          return (result);
      }
  
@@ -158,7 +159,16 @@ index 6f7617c..5db2a27 100644
 +
 +         _adminLock.Lock();
 +         if (_remote != nullptr) {
-+             result = _remote->CreateContext(keySystem, cleanOnDestroy, context);
++             Exchange::IOCDMContext* localCtx = nullptr;
++             result = _remote->CreateContext(keySystem, cleanOnDestroy, localCtx);
++             if (localCtx != nullptr && result == OpenCDMError::ERROR_NONE) {
++                 result = localCtx->Init();
++                 if (result == OpenCDMError::ERROR_NONE) {
++                     context = localCtx;
++                 } else {
++                     localCtx->Release();
++                 }
++             }
 +         }
 +         _adminLock.Unlock();
 +
@@ -168,7 +178,7 @@ index 6f7617c..5db2a27 100644
      // Create a MediaKeySession using the supplied init data and CDM data.
      virtual Exchange::OCDM_RESULT
      CreateSession(const string& keySystem, const int32_t licenseType,
-@@ -450,35 +475,6 @@ public:
+@@ -450,35 +484,6 @@ public:
      }
  
      void SystemBeingDestructed(OpenCDMSystem* system);

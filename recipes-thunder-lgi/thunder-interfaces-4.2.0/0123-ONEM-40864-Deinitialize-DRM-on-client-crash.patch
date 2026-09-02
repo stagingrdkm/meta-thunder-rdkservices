@@ -1,32 +1,26 @@
 From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
 
 ONEM-40864 - Deinitialize DRM on client crash
-
----
- interfaces/IOCDM.h | 12 +++++++++++--
- interfaces/Ids.h   |  1 +
- 2 files changed, 12 insertions(+), 2 deletions(-)
+ARRISEOS-48979 - Context initilization in separate function
 
 diff --git a/interfaces/IOCDM.h b/interfaces/IOCDM.h
 index 803ec23..36a4113 100644
 --- a/interfaces/IOCDM.h
 +++ b/interfaces/IOCDM.h
-@@ -186,6 +186,14 @@ struct ISessionExt : virtual public Core::IUnknown {
+@@ -186,6 +186,12 @@ struct ISessionExt : virtual public Core::IUnknown {
      virtual OCDM_RESULT CleanDecryptContext() = 0;
  };
  
 +struct IOCDMContext : virtual public Core::IUnknown {
 +    enum { ID = ID_OCDM_CONTEXT };
 +
-+    //The function is defined just to make IOCDMContext object properly passed through IPC
-+    // from server to the client with thunder mechanisms.
-+    virtual void dummy() = 0;
++    virtual OCDM_RESULT Init() = 0;
 +};
 +
  struct IAccessorOCDM : virtual public Core::IUnknown {
  
      enum { ID = ID_ACCESSOROCDM };
-@@ -205,6 +212,10 @@ struct IAccessorOCDM : virtual public Core::IUnknown {
+@@ -205,6 +210,10 @@ struct IAccessorOCDM : virtual public Core::IUnknown {
          uint8_t buffer[] /* @out @length:bufferSize */) const
          = 0;
  
@@ -37,7 +31,7 @@ index 803ec23..36a4113 100644
      // Create a MediaKeySession using the supplied init data and CDM data.
      virtual OCDM_RESULT
      CreateSession(const string& keySystem, const int32_t licenseType,
-@@ -267,8 +278,6 @@ struct IAccessorOCDM : virtual public Core::IUnknown {
+@@ -267,8 +276,6 @@ struct IAccessorOCDM : virtual public Core::IUnknown {
          = 0;
  
      virtual OCDM_RESULT CleanSecureStore(const std::string& keySystem) = 0;
@@ -58,6 +52,3 @@ index fd192dd..c95b7c1 100644
  
          //Butler
          ID_BUTLER                                    = 0x00000410,
--- 
-2.30.0
-
