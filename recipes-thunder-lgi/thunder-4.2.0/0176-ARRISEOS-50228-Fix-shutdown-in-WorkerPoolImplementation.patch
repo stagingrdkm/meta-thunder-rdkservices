@@ -1,0 +1,77 @@
+From c2d2a8c23f4e2f9639a9d8e13b7f8321a58185f8 Mon Sep 17 00:00:00 2001
+From: Marcin Mielczarczyk <marcin.mielczarczyk@redembedded.com>
+Date: Wed, 2 Sep 2026 11:39:53 +0200
+Subject: [PATCH] ARRISEOS-50228: Fix shutdown in WorkerPoolImplementation
+
+On a forced shutdown (e.g. SIGTERM -> ProcessFlow::Abort()) the
+WorkerPool is stopped and _engine is released. In such case
+WorkerPoolImplementation is destroyed before the plugin's own global
+objects gets torn down. That teardown happens later which invokes
+Destructed() callback again where _parent and _job objects may already
+be freed. Protect that with static ActiveFlag() check.
+---
+ Source/WPEProcess/Process.cpp | 30 ++++++++++++++++++++++++++----
+ 1 file changed, 26 insertions(+), 4 deletions(-)
+
+diff --git a/Source/WPEProcess/Process.cpp b/Source/WPEProcess/Process.cpp
+index 24a3409..5fb37be 100644
+--- a/Source/WPEProcess/Process.cpp
++++ b/Source/WPEProcess/Process.cpp
+@@ -3,6 +3,8 @@
+ 
+ #include "Module.h"
+ 
++#include <atomic>
++
+ #ifdef USE_BREAKPAD
+ #include <client/linux/handler/exception_handler.h>
+ #endif
+@@ -93,14 +95,31 @@ POP_WARNING()
+                 }
+             }
+             void Destructed() override {
+-                Core::ProxyType<Core::IDispatch> job(_job.Submit());
+-
+-                if (job.IsValid() == true) {
+-                    _parent.Submit(job);
++                // On a forced shutdown (e.g. SIGTERM -> ProcessFlow::Abort()) the
++                // WorkerPool is stopped and _engine is released. In such case WorkerPoolImplementation
++                // is destroyed before the plugin's own global objects gets torn down.
++                // That teardown happens later which invokes this callback again where _parent and _job
++                // may already be freed. Protect that with static ActiveFlag() check.
++                if (ActiveFlag().load() == true) {
++                    Core::ProxyType<Core::IDispatch> job(_job.Submit());
++
++                    if (job.IsValid() == true) {
++                        _parent.Submit(job);
++                    }
+                 }
+             }
++            static void Deactivate()
++            {
++                ActiveFlag().store(false);
++            }
+ 
+         private:
++            static std::atomic<bool>& ActiveFlag()
++            {
++                static std::atomic<bool> active(true);
++                return active;
++            }
++
+             WorkerPoolImplementation& _parent;
+             Core::ThreadPool::JobType<Sink&> _job;
+         };
+@@ -127,6 +146,9 @@ POP_WARNING()
+ 
+         ~WorkerPoolImplementation()
+         {
++            // Mark that deactivation has started
++            Sink::Deactivate();
++
+             Core::ServiceAdministrator::Instance().Callback(nullptr);
+ 
+             // Disable the queue so the minions can stop, even if they are processing and waiting for work..
+-- 
+2.43.0
+

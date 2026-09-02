@@ -109,6 +109,7 @@ SRC_URI += "file://wpeframework.service.xdial.in \
             file://0173-ARRISEOS-48521-thunder-BlockLibrariesUnloading.patch \
             file://0174-ARRISEOS-50099-Fix-invalid-free-in-BaseContainerAdmi.patch \
             file://0175-ARRISEOS-48521-Add-extended-interface-pointer-lock.patch \
+            file://0176-ARRISEOS-50228-Fix-shutdown-in-WorkerPoolImplementation.patch \
 "
 
 # OMWAPPI-1798 NOTES for two introduced patches:
