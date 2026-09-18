@@ -1,0 +1,109 @@
+From eb807f14e5a5b40dceaf930be951220079834d2e Mon Sep 17 00:00:00 2001
+From: Marcin Mielczarczyk <marcin.mielczarczyk@redembedded.com>
+Date: Fri, 18 Sep 2026 10:58:11 +0200
+Subject: [PATCH] WPEProcess: Fix double free on IUnknown inherited reference
+
+The root cause of the crash is a race between two independent paths.
+Both drop references on a remote IUnknown interface (Exchange::IOCDMContext).
+* regular path (1st) - processes an explicit release message which unconditionally calls "implementation->Release()"
+* lost connection path (2nd) - on socket close or disconnection Administrator::DeleteChannel() is being called which leads to second release call
+If a channel's connection drops at the same moment an explicit release
+for that same interface is still in progress, Administrator::DeleteChannel()
+will call Release() and destroy the object and explicit release call will
+try to free already freed pointer.
+---
+ Source/com/Administrator.cpp |  5 +++--
+ Source/com/Administrator.h   | 10 +++++++---
+ Source/com/IUnknown.cpp      | 16 ++++++++--------
+ 3 files changed, 18 insertions(+), 13 deletions(-)
+
+diff --git a/Source/com/Administrator.cpp b/Source/com/Administrator.cpp
+index 7c1d7e9..c5d4125 100644
+--- a/Source/com/Administrator.cpp
++++ b/Source/com/Administrator.cpp
+@@ -87,8 +87,9 @@ namespace RPC {
+             ASSERT(implementation != nullptr);
+ 
+             if (implementation != nullptr) {
+-                UnregisterInterface(channel, implementation, interfaceId, dropCount);
+-                implementation->Release();
++                if (UnregisterInterface(channel, implementation, interfaceId, dropCount) == true) {
++                    implementation->Release();
++                }
+             }
+         } else {
+             // Oops this is an unknown interface, Do not think this could happen.
+diff --git a/Source/com/Administrator.h b/Source/com/Administrator.h
+index 308f67a..ab71c9b 100644
+--- a/Source/com/Administrator.h
++++ b/Source/com/Administrator.h
+@@ -213,8 +213,10 @@ namespace RPC {
+             RegisterUnknownInterface(channel, Convert(const_cast<void*>(source), id), id);
+         }
+ 
+-        void UnregisterInterface(Core::ProxyType<Core::IPCChannel>& channel, const Core::IUnknown* source, const uint32_t interfaceId, const uint32_t dropCount)
++        bool UnregisterInterface(Core::ProxyType<Core::IPCChannel>& channel, const Core::IUnknown* source, const uint32_t interfaceId, const uint32_t dropCount)
+         {
++            bool owned = false;
++
+             _adminLock.Lock();
+ 
+             ReferenceMap::iterator index(_channelReferenceMap.find(channel.operator->()));
+@@ -226,9 +228,9 @@ namespace RPC {
+                     element++;
+                 }
+ 
+-                ASSERT(element != index->second.end());
+-
+                 if (element != index->second.end()) {
++                    owned = true;
++
+                     if (element->Decrement(dropCount) == false) {
+                         index->second.erase(element);
+                         if (index->second.size() == 0) {
+@@ -243,6 +245,8 @@ namespace RPC {
+             }
+ 
+             _adminLock.Unlock();
++
++            return (owned);
+         }
+         void UnregisterProxy(const ProxyStub::UnknownProxy& proxy);
+         
+diff --git a/Source/com/IUnknown.cpp b/Source/com/IUnknown.cpp
+index 4095535..6304138 100644
+--- a/Source/com/IUnknown.cpp
++++ b/Source/com/IUnknown.cpp
+@@ -58,21 +58,21 @@ namespace ProxyStub {
+ 
+                 // Get the amount of Release we have to do..
+                 uint32_t dropReleases(reader.Number<uint32_t>());
+-                uint32_t result;
++                uint32_t result = Core::ERROR_NONE;
+ 
+                 ASSERT(dropReleases > 0);
+ 
+                 // This is an external referenced interface that we handed out, so it should
+                 // be registered. Lets unregister this reference, it is dropped
+                 // Dropping the ReceoverSey, if applicable
+-                RPC::Administrator::Instance().UnregisterInterface(channel, implementation, InterfaceId(), dropReleases);
++                if (RPC::Administrator::Instance().UnregisterInterface(channel, implementation, InterfaceId(), dropReleases) == true) {
++                    do {
++                       result = implementation->Release();
++                       dropReleases--;
++                    } while ((dropReleases != 0) && (result == Core::ERROR_NONE));
+ 
+-                do {
+-                   result = implementation->Release();
+-                   dropReleases--;
+-                } while ((dropReleases != 0) && (result == Core::ERROR_NONE));
+-
+-                ASSERT(dropReleases == 0);
++                    ASSERT(dropReleases == 0);
++                }
+ 
+                 response.Number<uint32_t>(result);
+                 break;
+-- 
+2.43.0
+
