@@ -1,0 +1,148 @@
+From: Piotr Andrzejewski <piotr.andrzejewski@redembedded.com>
+Delete in memory licenses always when destroying MediaKeySession with
+temporary type.
+
+Change-Id: I576f054b08b14611824f2d502079b15dcb4eeeaa
+
+diff --git a/MediaSession.cpp b/MediaSession.cpp
+index 04007e7..f37bc86 100644
+--- a/MediaSession.cpp
++++ b/MediaSession.cpp
+@@ -645,7 +645,6 @@ void MediaKeySession::Update(const uint8_t *f_pbKeyMessageResponse, uint32_t  f_
+     }
+     ChkDR(dr);
+ 
+-    UpdateLicenseProps();
+     ChkDR( Drm_Reader_Commit( m_poAppContext, nullptr, nullptr ) );
+ 
+     mapInsertResult = mDecryptContextMap.insert(std::make_pair(singleSessionKeyIdVec, newDecryptContext));
+@@ -1058,7 +1057,7 @@ ErrorExit:
+ 
+ void MediaKeySession::DeleteLicenses(bool forceRemove)
+ {
+-    if (m_hasInMemoryLicenses) {
++    if ((m_licenseType == Temporary) || forceRemove) {
+         LOGGER(LINFO_, "In memory licenses cleanup");
+         // Delete all the licenses added by this session
+         DRM_RESULT dr = Drm_StoreMgmt_DeleteInMemoryLicenses(m_poAppContext, &mBatchId);
+@@ -1066,36 +1065,36 @@ void MediaKeySession::DeleteLicenses(bool forceRemove)
+         // them all. Ignore DRM_E_NOMORE returned from Drm_StoreMgmt_DeleteInMemoryLicenses.
+         if (DRM_FAILED(dr) && (dr != DRM_E_NOMORE)) {
+             LOGGER_ODH(dr, m_keySystem.c_str(), "Error in Drm_StoreMgmt_DeleteInMemoryLicenses");
+-        } else {
+-            m_hasInMemoryLicenses = false;
+         }
+-    } else if (((m_licenseType == Temporary) || forceRemove) && m_hasPersistentLicenses && (!m_kids.empty())) {
+-        DRM_DWORD removedCount{};
+-        DRM_DWORD licensesRemoved{};
+-        m_hasPersistentLicenses = false;
+-        LOGGER(LINFO_,"Persistent licenses cleanup");
+-        for (auto const& kid: m_kids) {
+-            DRM_WCHAR wEncodedKid[CCH_BASE64_EQUIV(DRM_ID_SIZE)] = {0};
+-            DRM_DWORD cchEncodedKidSize = CCH_BASE64_EQUIV(DRM_ID_SIZE);
+-            DRM_RESULT dr = DRM_B64_EncodeW(kid.data(), sizeof(DRM_KID), wEncodedKid, &cchEncodedKidSize, 0);
+-            if (!DRM_FAILED(dr)) {
+-
+-                PrintBase64(DRM_ID_SIZE, kid.data(), "KID");
+-                DRM_CONST_STRING cstrKid = DRM_EMPTY_DRM_STRING;
+-                cstrKid.pwszString = wEncodedKid;
+-                cstrKid.cchString = cchEncodedKidSize;
+-
+-                dr = Drm_StoreMgmt_DeleteLicenses(m_poAppContext, &cstrKid, nullptr, &removedCount);
+-                if DRM_FAILED(dr) {
+-                    LOGGER_ODH(dr, m_keySystem.c_str(), "Error in Drm_StoreMgmt_DeleteLicenses");
++
++        if (m_hasPersistentLicenses && (!m_kids.empty())) {
++            DRM_DWORD removedCount{};
++            DRM_DWORD licensesRemoved{};
++            m_hasPersistentLicenses = false;
++            LOGGER(LINFO_,"Persistent licenses cleanup");
++            for (auto const& kid: m_kids) {
++                DRM_WCHAR wEncodedKid[CCH_BASE64_EQUIV(DRM_ID_SIZE)] = {0};
++                DRM_DWORD cchEncodedKidSize = CCH_BASE64_EQUIV(DRM_ID_SIZE);
++                DRM_RESULT dr = DRM_B64_EncodeW(kid.data(), sizeof(DRM_KID), wEncodedKid, &cchEncodedKidSize, 0);
++                if (!DRM_FAILED(dr)) {
++
++                    PrintBase64(DRM_ID_SIZE, kid.data(), "KID");
++                    DRM_CONST_STRING cstrKid = DRM_EMPTY_DRM_STRING;
++                    cstrKid.pwszString = wEncodedKid;
++                    cstrKid.cchString = cchEncodedKidSize;
++
++                    dr = Drm_StoreMgmt_DeleteLicenses(m_poAppContext, &cstrKid, nullptr, &removedCount);
++                    if DRM_FAILED(dr) {
++                        LOGGER_ODH(dr, m_keySystem.c_str(), "Error in Drm_StoreMgmt_DeleteLicenses");
++                    } else {
++                        licensesRemoved += removedCount;
++                    }
+                 } else {
+-                    licensesRemoved += removedCount;
++                    LOGGER_ODH(dr, m_keySystem.c_str(), "Error in base64-encoding KID");
+                 }
+-            } else {
+-                LOGGER_ODH(dr, m_keySystem.c_str(), "Error in base64-encoding KID");
+             }
++            LOGGER(LINFO_, "Number of licenses removed :%d",licensesRemoved);
+         }
+-        LOGGER(LINFO_, "Number of licenses removed :%d",licensesRemoved);
+     }
+ }
+ 
+diff --git a/MediaSession.h b/MediaSession.h
+index 52431b3..37d9de4 100644
+--- a/MediaSession.h
++++ b/MediaSession.h
+@@ -229,7 +229,6 @@ private:
+     CDMi_RESULT SelectDrmHeader(DRM_APP_CONTEXT *pDrmAppCtx, const uint32_t headerLength, const uint8_t header[]);
+     void PrivateCopy(void *pDest, const void *pSrc, uint32_t nSize, bool flush);
+     DRM_RESULT ProcessLicenseResponse(const uint8_t* licenseData, uint32_t licenseDataSize, DRM_LICENSE_RESPONSE& oLicenseResponse);
+-    void UpdateLicenseProps();
+     void UpdateSession(const DecryptContext* decryptContext);
+ 
+     // IMediaSessionMetrics overrides
+@@ -267,7 +266,6 @@ private:
+ 
+     NEXUS_DmaJobHandle mDmaJob;
+     NEXUS_DmaHandle mDmaHandle;
+-    bool m_hasInMemoryLicenses{false};
+     bool m_hasPersistentLicenses{false};
+     std::vector<std::vector<uint8_t>> m_kids;
+     int32_t m_licenseType;
+diff --git a/MediaSessionExt.cpp b/MediaSessionExt.cpp
+index 84f9144..896383c 100644
+--- a/MediaSessionExt.cpp
++++ b/MediaSessionExt.cpp
+@@ -418,7 +418,6 @@ CDMi_RESULT MediaKeySession::SelectKeyId(const uint8_t keyLength, const uint8_t
+             LOGGER_ODH(err, m_keySystem.c_str(), "Drm_Reader_Bind failed");
+             return MapDrmErrorToCDMiResult(err);
+         }
+-        UpdateLicenseProps();
+ 
+         // Commit all secure store transactions to the DRM store file. For the
+         // Netflix use case, Drm_Reader_Commit only needs to be called after
+@@ -656,19 +655,6 @@ DRM_RESULT MediaKeySession::ProcessLicenseResponse(const uint8_t* licenseData, u
+     return dr;
+ }
+ 
+-void MediaKeySession::UpdateLicenseProps()
+-{
+-    DRM_DWORD cannotPersist = 0;
+-    //License property can be retrieved on a bound license
+-    DRM_RESULT dr = Drm_License_GetProperty(m_poAppContext, DRM_LGP_CANNOT_PERSIST, nullptr, nullptr, &cannotPersist);
+-    if (!DRM_FAILED(dr)) {
+-        LOGGER(LINFO_, "Has can not persist licenses: %d", cannotPersist);
+-        m_hasInMemoryLicenses = m_hasInMemoryLicenses || cannotPersist;
+-    } else {
+-        LOGGER(LINFO_, "Failed retrieving can not persist property, error == 0x%08lX", dr);
+-    }
+-}
+-
+ CDMi_RESULT MapDrmErrorToCDMiResult(DRM_RESULT dr, CDMi_RESULT defaultError)
+ {
+     CDMi_RESULT result = defaultError;
+@@ -707,4 +693,4 @@ CDMi_RESULT MapDrmErrorToCDMiResult(DRM_RESULT dr, CDMi_RESULT defaultError)
+     return result;
+ }
+ 
+-}
+\ No newline at end of file
++}
